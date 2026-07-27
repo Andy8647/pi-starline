@@ -74,6 +74,8 @@ describe("mergeConfig", () => {
 			copyFriendly: false,
 		});
 		expect(config.footerSegments).toEqual({
+			model: false,
+			thinking: false,
 			cwd: true,
 			sessionName: true,
 			gitBranch: true,
@@ -681,6 +683,8 @@ describe("mergeConfig", () => {
 
 	it("accepts valid footer segment preferences and ignores invalid values", () => {
 		expect(mergeConfig({ footerSegments: { cwd: false, tokens: false } }).footerSegments).toEqual({
+			model: false,
+			thinking: false,
 			cwd: false,
 			sessionName: true,
 			gitBranch: true,
@@ -702,6 +706,8 @@ describe("mergeConfig", () => {
 			mergeConfig({ footerSegments: { cost: "off", gitBranch: false, gitStatus: false } })
 				.footerSegments,
 		).toEqual({
+			model: false,
+			thinking: false,
 			cwd: true,
 			sessionName: true,
 			gitBranch: false,
@@ -916,6 +922,8 @@ describe("mergeConfig", () => {
 			const raw = JSON.parse(readFileSync(path, "utf8"));
 
 			expect(config.footerSegments).toEqual({
+				model: false,
+				thinking: false,
 				cwd: true,
 				sessionName: true,
 				gitBranch: true,
@@ -953,6 +961,8 @@ describe("mergeConfig", () => {
 			const raw = JSON.parse(readFileSync(path, "utf8"));
 
 			expect(config.footerSegments).toEqual({
+				model: false,
+				thinking: false,
 				cwd: true,
 				sessionName: true,
 				gitBranch: true,

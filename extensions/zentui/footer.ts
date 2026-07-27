@@ -152,6 +152,27 @@ function composeFooterContent(
 	return `${left}${" ".repeat(leftPadding)}${middle}${" ".repeat(rightPadding)}${right}`;
 }
 
+/**
+ * Theme colour key for a thinking level. Mirrors the editor metadata line, so
+ * the level reads the same whether it sits above the editor or in the footer.
+ */
+export function thinkingThemeKey(level: string): string {
+	switch (level.toLowerCase()) {
+		case "minimal":
+			return "thinkingMinimal";
+		case "low":
+			return "thinkingLow";
+		case "medium":
+			return "thinkingMedium";
+		case "high":
+			return "thinkingHigh";
+		case "xhigh":
+			return "thinkingXhigh";
+		default:
+			return "thinkingOff";
+	}
+}
+
 export function installFooter(
 	ctx: ExtensionContext,
 	state: FooterState,
@@ -161,6 +182,7 @@ export function installFooter(
 		scheduleProjectRefresh: (ctx: ExtensionContext) => void;
 		setExtensionStatusesGetter?: (fn: (() => ReadonlyMap<string, string>) | undefined) => void;
 		getLiveContext?: () => LiveContextOverride | undefined;
+		getThinkingLevel?: () => string | undefined;
 	},
 ): void {
 	ctx.ui.setFooter((tui, theme, footerData) => {
@@ -199,6 +221,20 @@ export function installFooter(
 						depth: config.pathDisplay.depth,
 					}),
 				);
+				const modelLabel = state.modelLabel
+					? renderStyleForSource(theme, colorSource, config.colors.model, state.modelLabel)
+					: "";
+				// "off" reads as no thinking at all, matching the editor metadata line.
+				const thinkingLevel = hooks.getThinkingLevel?.() ?? "";
+				const thinkingText = thinkingLevel.toLowerCase() === "off" ? "" : thinkingLevel;
+				const thinkingLabel = thinkingText
+					? renderStyleForSource(
+							theme,
+							colorSource,
+							config.colors.thinking ?? thinkingThemeKey(thinkingText),
+							thinkingText,
+						)
+					: "";
 				const needsSessionName = config.footerFormat
 					? /(?:\$session_name\b|\$\{session_name\})/.test(config.footerFormat)
 					: config.footerSegments.sessionName;
@@ -275,6 +311,10 @@ export function installFooter(
 				const renderVariable = (name: string): string => {
 					const canonical = FOOTER_FORMAT_ALIASES[name] ?? name;
 					switch (canonical) {
+						case "model":
+							return modelLabel;
+						case "thinking":
+							return thinkingLabel;
 						case "cwd":
 							return cwdLabel;
 						case "session_name":
@@ -504,6 +544,8 @@ export function installFooter(
 						)
 					: "";
 				const left = [
+					config.footerSegments.model ? modelLabel : "",
+					config.footerSegments.thinking ? thinkingLabel : "",
 					osSegment,
 					usernameSegment,
 					config.footerSegments.cwd ? cwdLabel : "",

@@ -123,6 +123,8 @@ const featureSettingDescriptions: Record<FeatureSettingId, string> = {
 };
 
 const footerSegmentSettingLabels: Record<FooterSegmentSettingId, string> = {
+	model: "Model name",
+	thinking: "Thinking level",
 	cwd: "Current directory",
 	sessionName: "Session name",
 	gitBranch: "Git branch",
@@ -142,6 +144,10 @@ const footerSegmentSettingLabels: Record<FooterSegmentSettingId, string> = {
 };
 
 const footerSegmentSettingDescriptions: Record<FooterSegmentSettingId, string> = {
+	model:
+		"Show the active model on the left. Off by default because the editor metadata line already shows it — drop $model from editorMetadataFormat to move it down here rather than showing it twice.",
+	thinking:
+		"Show the current thinking level on the left, coloured by level. Hidden while thinking is off. Off by default for the same reason as the model segment.",
 	cwd: "Show or hide the current working directory segment on the left.",
 	sessionName: "Show or hide the current Pi session name on the left, after the current directory.",
 	gitBranch: "Show or hide the git branch name on the left.",

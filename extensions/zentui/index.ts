@@ -339,6 +339,7 @@ export default function (pi: ExtensionAPI) {
 				getActiveExtensionStatuses = fn ?? (() => new Map());
 			},
 			getLiveContext: () => liveContext.get(),
+			getThinkingLevel,
 		});
 		footerInstalled = true;
 		stopProjectRefresh();

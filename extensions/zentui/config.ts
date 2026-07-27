@@ -66,6 +66,8 @@ export type UiFeaturesConfig = {
 };
 
 export type FooterSegmentsConfig = {
+	model: boolean;
+	thinking: boolean;
 	cwd: boolean;
 	sessionName: boolean;
 	gitBranch: boolean;
@@ -136,6 +138,9 @@ export type PolishedTuiConfig = {
 	gitBranch: GitBranchConfig;
 	icons: ResolvedIcons;
 	colors: {
+		model: ColorSpec;
+		/** Unset derives the colour from the level via the theme's thinking* keys. */
+		thinking?: ColorSpec;
 		cwd: ColorSpec;
 		sessionName: ColorSpec;
 		gitBranch: ColorSpec;
@@ -182,6 +187,8 @@ export type PolishedTuiConfig = {
  * are written as `$name` or `${name}`.
  */
 export const FOOTER_FORMAT_VARIABLES = [
+	"model",
+	"thinking",
 	"cwd",
 	"session_name",
 	"git_branch",
@@ -237,6 +244,7 @@ export const defaultConfig: PolishedTuiConfig = {
 		...NERD_DEFAULT_ICONS,
 	},
 	colors: {
+		model: "bold blue",
 		cwd: "bold cyan",
 		sessionName: "bold green",
 		gitBranch: "bold purple",
@@ -269,6 +277,8 @@ export const defaultConfig: PolishedTuiConfig = {
 		copyFriendly: false,
 	},
 	footerSegments: {
+		model: false,
+		thinking: false,
 		cwd: true,
 		sessionName: true,
 		gitBranch: true,
@@ -509,6 +519,8 @@ export function expandPaletteInRecord(
 
 function normalizeColors(record: Record<string, unknown>): Partial<PolishedTuiConfig["colors"]> {
 	return definedColors({
+		model: colorValue(record, "model"),
+		thinking: colorValue(record, "thinking"),
 		cwd: colorValue(record, "cwd") ?? colorValue(record, "cwdText"),
 		sessionName: colorValue(record, "sessionName"),
 		gitBranch: colorValue(record, "gitBranch") ?? colorValue(record, "git"),
@@ -561,6 +573,8 @@ function normalizeUiFeatures(record: Record<string, unknown>): UiFeaturesConfig 
 
 function normalizeFooterSegments(record: Record<string, unknown>): FooterSegmentsConfig {
 	return {
+		model: footerSegmentValue(record, "model"),
+		thinking: footerSegmentValue(record, "thinking"),
 		cwd: footerSegmentValue(record, "cwd"),
 		sessionName: footerSegmentValue(record, "sessionName"),
 		gitBranch: footerSegmentValue(record, "gitBranch"),
