@@ -40,7 +40,7 @@ import {
 } from "./fixed-editor";
 import { installFooter } from "./footer";
 import { buildSessionDurationLabel, invalidateUsageTotalsCache } from "./format";
-import { emptyGitStatus, readGitStatus } from "./git";
+import { emptyGitStatus, readGitHost, readGitStatus } from "./git";
 import { LiveContextController } from "./live-context";
 import { readPackageVersionResult } from "./package-version";
 import {
@@ -140,7 +140,7 @@ export default function (pi: ExtensionAPI) {
 			((segments.gitCommit || formatNeedsCommit) && gitCommitConfig.showTag) || formatNeedsTag;
 		const wantMetrics = segments.gitMetrics || formatNeedsMetrics;
 		const wantPackage = segments.packageVersion || formatNeedsPackage;
-		const [git, runtime, packageVersion] = await Promise.all([
+		const [git, runtime, packageVersion, gitHost] = await Promise.all([
 			readGitStatus(cwd, {
 				readExactTag: wantExactTag,
 				readMetrics: wantMetrics,
@@ -148,12 +148,14 @@ export default function (pi: ExtensionAPI) {
 			}),
 			readRuntimeInfo(cwd),
 			wantPackage ? readPackageVersionResult(cwd) : Promise.resolve(undefined),
+			currentConfig.gitHostIcon ? readGitHost(cwd) : Promise.resolve(undefined),
 		]);
 		if (!sessionLifecycle.isCurrent(generation)) return;
 		lastProjectCwd = applyProjectRefreshToState(state, {
 			cwd,
 			previousCwd: lastProjectCwd,
 			git,
+			gitHost,
 			runtime,
 			packageVersion,
 		});

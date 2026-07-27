@@ -1,4 +1,4 @@
-import type { GitReadResult } from "./git";
+import type { GitHost, GitReadResult } from "./git";
 import { emptyGitStatus } from "./git";
 import type { PackageVersionReadResult } from "./package-version";
 import type { RuntimeReadResult } from "./runtime";
@@ -16,6 +16,7 @@ export function applyProjectRefreshToState(
 		cwd: string;
 		previousCwd: string | undefined;
 		git: GitReadResult;
+		gitHost?: GitHost;
 		runtime: RuntimeReadResult;
 		packageVersion?: PackageVersionReadResult;
 	},
@@ -25,8 +26,14 @@ export function applyProjectRefreshToState(
 	if (cwdChanged) {
 		Object.assign(state, emptyGitStatus());
 		state.runtime = undefined;
+		state.gitHost = undefined;
 		state.packageVersion = undefined;
 	}
+
+	// Undefined means "not asked for this refresh" — keep the last-good value
+	// rather than dropping the icon whenever gitHostIcon is off.
+	if (args.gitHost !== undefined) state.gitHost = args.gitHost;
+	if (args.git.kind === "not_a_repo") state.gitHost = undefined;
 
 	if (args.git.kind === "ok") {
 		Object.assign(state, args.git.status);

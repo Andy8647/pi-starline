@@ -382,3 +382,70 @@ export async function readGitStatus(
 		}
 	}
 }
+
+/**
+ * Which forge an `origin` remote points at, for the branch segment's icon.
+ * `generic` covers self-hosted and unrecognised forges.
+ */
+export type GitHost = "github" | "gitlab" | "bitbucket" | "generic";
+
+/** Cached for minutes: a repo's origin remote effectively never changes mid-session. */
+const GIT_HOST_TTL_MS = 10 * 60_000;
+
+const gitHostCache = new Map<string, { host: GitHost | undefined; expiresAt: number }>();
+
+/** Classify a remote URL. Handles scp-style (`git@host:path`) and URL forms. */
+export function parseGitRemoteHost(url: string): GitHost | undefined {
+	const trimmed = url.trim();
+	if (!trimmed) return undefined;
+
+	let hostname: string | undefined;
+	const scpLike = /^[A-Za-z0-9._-]+@([^:/\s]+):/.exec(trimmed);
+	if (scpLike) {
+		hostname = scpLike[1];
+	} else {
+		try {
+			hostname = new URL(trimmed).hostname;
+		} catch {
+			return undefined;
+		}
+	}
+	if (!hostname) return undefined;
+
+	const host = hostname.toLowerCase();
+	// Subdomain prefixes catch the usual self-hosted naming (gitlab.acme.com).
+	if (host === "github.com" || host.endsWith(".github.com") || host.startsWith("github."))
+		return "github";
+	if (host === "gitlab.com" || host.endsWith(".gitlab.com") || host.startsWith("gitlab."))
+		return "gitlab";
+	if (host === "bitbucket.org" || host.endsWith(".bitbucket.org") || host.startsWith("bitbucket."))
+		return "bitbucket";
+	return "generic";
+}
+
+/**
+ * Resolve the forge behind `origin`, or undefined when there is no origin
+ * remote or git is unavailable. Cached so the icon costs nothing per frame.
+ */
+export async function readGitHost(cwd: string): Promise<GitHost | undefined> {
+	const cached = gitHostCache.get(cwd);
+	if (cached && cached.expiresAt > Date.now()) return cached.host;
+
+	let host: GitHost | undefined;
+	try {
+		const { stdout } = await execFileAsync("git", ["remote", "get-url", "origin"], {
+			cwd,
+			timeout: GIT_COMMAND_TIMEOUT_MS,
+		});
+		host = parseGitRemoteHost(typeof stdout === "string" ? stdout : String(stdout));
+	} catch {
+		host = undefined;
+	}
+
+	gitHostCache.set(cwd, { host, expiresAt: Date.now() + GIT_HOST_TTL_MS });
+	return host;
+}
+
+export function __resetGitHostCacheForTests(): void {
+	gitHostCache.clear();
+}

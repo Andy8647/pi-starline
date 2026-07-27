@@ -146,6 +146,8 @@ export type PolishedTuiConfig = {
 	contextThresholds: ContextThresholds;
 	pathDisplay: PathDisplayConfig;
 	gitBranch: GitBranchConfig;
+	/** Replace the branch icon with the origin remote's forge logo. */
+	gitHostIcon: boolean;
 	icons: ResolvedIcons;
 	colors: {
 		model: ColorSpec;
@@ -251,6 +253,7 @@ export const defaultConfig: PolishedTuiConfig = {
 	contextThresholds: { warning: 70, error: 90 },
 	pathDisplay: { mode: "basename", depth: 0 },
 	gitBranch: { maxLength: "full" },
+	gitHostIcon: false,
 	icons: {
 		mode: "auto",
 		...NERD_DEFAULT_ICONS,
@@ -878,6 +881,7 @@ export function mergeConfig(parsed: unknown): PolishedTuiConfig {
 		contextThresholds: parseContextThresholds(config.contextThresholds),
 		pathDisplay: parsePathDisplay(config.pathDisplay),
 		gitBranch,
+		gitHostIcon: config.gitHostIcon === true,
 		icons: resolveConfiguredIcons(iconMode, iconOverrides),
 		colors: {
 			...defaultConfig.colors,

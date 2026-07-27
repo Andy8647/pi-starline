@@ -26,7 +26,8 @@ import {
 	formatTimeLabel,
 	formatUsernameHostLabel,
 } from "./format";
-import { resolveRuntimeSymbol } from "./icons";
+import type { GitHost } from "./git";
+import { type ResolvedIcons, resolveRuntimeSymbol } from "./icons";
 import type { LiveContextOverride } from "./live-context";
 import { collectPillInputs, renderPillBar } from "./pill";
 import type { FooterState } from "./state";
@@ -157,6 +158,26 @@ function composeFooterContent(
 	return `${left}${" ".repeat(leftPadding)}${middle}${" ".repeat(rightPadding)}${right}`;
 }
 
+/** Forge logo for the branch segment. Empty in ascii mode, which has no glyphs. */
+export function gitHostIconGlyph(icons: ResolvedIcons, host: GitHost): string {
+	switch (host) {
+		case "github":
+			return icons.gitHostGithub;
+		case "gitlab":
+			return icons.gitHostGitlab;
+		case "bitbucket":
+			return icons.gitHostBitbucket;
+		default:
+			return icons.gitHostGeneric;
+	}
+}
+
+/** Prefix a label with an icon, collapsing to the label when there is no icon. */
+function withIcon(icon: string, label: string): string {
+	if (!label) return "";
+	return icon ? `${icon} ${label}` : label;
+}
+
 /**
  * Theme colour key for a thinking level. Mirrors the editor metadata line, so
  * the level reads the same whether it sits above the editor or in the footer.
@@ -227,7 +248,12 @@ export function installFooter(
 					}),
 				);
 				const modelLabel = state.modelLabel
-					? renderStyleForSource(theme, colorSource, config.colors.model, state.modelLabel)
+					? renderStyleForSource(
+							theme,
+							colorSource,
+							config.colors.model,
+							withIcon(config.icons.model, state.modelLabel),
+						)
 					: "";
 				// "off" reads as no thinking at all, matching the editor metadata line.
 				const thinkingLevel = hooks.getThinkingLevel?.() ?? "";
@@ -237,7 +263,7 @@ export function installFooter(
 							theme,
 							colorSource,
 							config.colors.thinking ?? thinkingThemeKey(thinkingText),
-							thinkingText,
+							withIcon(config.icons.thinking, thinkingText),
 						)
 					: "";
 				const needsSessionName = config.footerFormat
@@ -275,11 +301,20 @@ export function installFooter(
 						: tier === "warning"
 							? config.colors.contextWarning
 							: config.colors.contextNormal;
+				const contextDisplay = withIcon(config.icons.context, contextLabel);
+				const tokensDisplay = withIcon(config.icons.tokens, state.tokenLabel);
+				const costDisplay = withIcon(config.icons.cost, state.costLabel);
 				const gitColor = (text: string) =>
 					renderStyleForSource(theme, colorSource, config.colors.gitBranch, text);
 				const gitStatusColor = (text: string) =>
 					renderStyleForSource(theme, colorSource, config.colors.gitStatus, text);
-				const gitIcon = config.icons.git ? gitColor(config.icons.git) : "";
+				// With gitHostIcon on, the branch icon becomes the origin remote's forge
+				// logo. Repos with no origin, and ascii mode (whose host glyphs are all
+				// empty), fall back to the plain branch icon.
+				const gitHostGlyph =
+					config.gitHostIcon && state.gitHost ? gitHostIconGlyph(config.icons, state.gitHost) : "";
+				const gitGlyph = gitHostGlyph || config.icons.git;
+				const gitIcon = gitGlyph ? gitColor(gitGlyph) : "";
 				const gitCounts = config.footerSegments.gitCounts;
 				const stashLabel =
 					state.stashed > 0
@@ -375,16 +410,11 @@ export function installFooter(
 								formatTimeLabel(config.icons.time),
 							);
 						case "context":
-							return renderStyleForSource(theme, colorSource, contextColor, contextLabel);
+							return renderStyleForSource(theme, colorSource, contextColor, contextDisplay);
 						case "tokens":
-							return renderStyleForSource(
-								theme,
-								colorSource,
-								config.colors.tokens,
-								state.tokenLabel,
-							);
+							return renderStyleForSource(theme, colorSource, config.colors.tokens, tokensDisplay);
 						case "cost":
-							return renderStyleForSource(theme, colorSource, config.colors.cost, state.costLabel);
+							return renderStyleForSource(theme, colorSource, config.colors.cost, costDisplay);
 						case "package":
 							return formatPackageVersionSegment(
 								theme,
@@ -575,13 +605,13 @@ export function installFooter(
 					: "";
 				const right = [
 					config.footerSegments.context
-						? renderStyleForSource(theme, colorSource, contextColor, contextLabel)
+						? renderStyleForSource(theme, colorSource, contextColor, contextDisplay)
 						: "",
 					config.footerSegments.tokens
-						? renderStyleForSource(theme, colorSource, config.colors.tokens, state.tokenLabel)
+						? renderStyleForSource(theme, colorSource, config.colors.tokens, tokensDisplay)
 						: "",
 					config.footerSegments.cost
-						? renderStyleForSource(theme, colorSource, config.colors.cost, state.costLabel)
+						? renderStyleForSource(theme, colorSource, config.colors.cost, costDisplay)
 						: "",
 					timeSegment,
 				]

@@ -29,6 +29,20 @@ export type IconGlyphs = {
 	time: string;
 	os: string;
 	package: string;
+	/**
+	 * Segments upstream draws without an icon. Default to empty in every mode so
+	 * the text footer is unchanged; set one to opt in (most useful in pill mode).
+	 */
+	model: string;
+	thinking: string;
+	context: string;
+	cost: string;
+	tokens: string;
+	/** Forge logos for the branch segment, used only when gitHostIcon is on. */
+	gitHostGithub: string;
+	gitHostGitlab: string;
+	gitHostBitbucket: string;
+	gitHostGeneric: string;
 };
 
 export type ResolvedIcons = IconGlyphs & { mode: IconMode };
@@ -54,6 +68,15 @@ export const ICON_GLYPH_KEYS = [
 	"time",
 	"os",
 	"package",
+	"model",
+	"thinking",
+	"context",
+	"cost",
+	"tokens",
+	"gitHostGithub",
+	"gitHostGitlab",
+	"gitHostBitbucket",
+	"gitHostGeneric",
 ] as const satisfies readonly (keyof IconGlyphs)[];
 
 /**
@@ -86,6 +109,15 @@ export const NERD_DEFAULT_ICONS: IconGlyphs = {
 	os: "",
 	// Starship Nerd Font preset — `package` module glyph.
 	package: "",
+	model: "",
+	thinking: "",
+	context: "",
+	cost: "",
+	tokens: "",
+	gitHostGithub: "",
+	gitHostGitlab: "",
+	gitHostBitbucket: "",
+	gitHostGeneric: "",
 };
 
 export const ASCII_DEFAULT_ICONS: IconGlyphs = {
@@ -109,6 +141,16 @@ export const ASCII_DEFAULT_ICONS: IconGlyphs = {
 	time: "t",
 	os: "o",
 	package: "pkg",
+	model: "",
+	thinking: "",
+	context: "",
+	cost: "",
+	tokens: "",
+	// gitHostIcon is a Nerd Font feature; it disables itself in ascii mode.
+	gitHostGithub: "",
+	gitHostGitlab: "",
+	gitHostBitbucket: "",
+	gitHostGeneric: "",
 };
 
 export const OS_PLATFORM_ICONS_NERD: Record<string, string> = {
