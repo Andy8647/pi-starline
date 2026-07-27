@@ -10,6 +10,7 @@ import { installPrototypePatch } from "./prototype-patch-registry";
 import {
 	EDITOR_ACCENT_FALLBACK,
 	EDITOR_BORDER_FALLBACK,
+	renderStyleForSource,
 	renderStyleForSourceOrFallback,
 } from "./style";
 
@@ -74,6 +75,8 @@ function getUserMessageConfigKey(config: PolishedTuiConfig): string {
 		config.colorSources.userMessages,
 		config.colors.editorAccent ?? "",
 		config.colors.editorBorder ?? "",
+		config.colors.userMessageBorder ?? "",
+		config.colors.userMessageText ?? "",
 		config.icons.rail,
 	].join("\0");
 }
@@ -171,7 +174,15 @@ function renderZentuiUserMessage(
 	const railWidth = visibleWidth(renderPromptBoxRail(theme, config));
 	const contentWidth = Math.max(1, width - railWidth);
 	const renderer = new Markdown(text, 0, 0, makeMarkdownTheme(theme), {
-		color: (content) => themeFg(theme, "userMessageText", content),
+		color: (content) =>
+			theme && config.colors.userMessageText
+				? renderStyleForSource(
+						theme,
+						config.colorSources.userMessages,
+						config.colors.userMessageText,
+						content,
+					)
+				: themeFg(theme, "userMessageText", content),
 	});
 	const body = renderer.render(contentWidth);
 	const contentLines = body.length > 0 ? body : [""];
@@ -179,7 +190,7 @@ function renderZentuiUserMessage(
 		? renderStyleForSourceOrFallback(
 				theme,
 				config.colorSources.userMessages,
-				config.colors.editorBorder,
+				config.colors.userMessageBorder ?? config.colors.editorBorder,
 				EDITOR_BORDER_FALLBACK,
 				"─".repeat(width),
 			)

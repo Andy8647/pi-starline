@@ -186,6 +186,10 @@ export type PolishedTuiConfig = {
 		editorAccent?: ColorSpec;
 		editorPrompt?: ColorSpec;
 		editorBorder?: ColorSpec;
+		/** Unset falls back to editorBorder, which is upstream's behaviour. */
+		userMessageBorder?: ColorSpec;
+		/** Unset follows the theme's userMessageText colour. */
+		userMessageText?: ColorSpec;
 		editorModel?: ColorSpec;
 		editorProvider?: ColorSpec;
 		editorThinking?: ColorSpec;
@@ -567,6 +571,8 @@ function normalizeColors(record: Record<string, unknown>): Partial<PolishedTuiCo
 		username: colorValue(record, "username"),
 		time: colorValue(record, "time"),
 		os: colorValue(record, "os"),
+		userMessageBorder: colorValue(record, "userMessageBorder"),
+		userMessageText: colorValue(record, "userMessageText"),
 		editorAccent: colorValue(record, "editorAccent"),
 		editorPrompt: colorValue(record, "editorPrompt"),
 		editorBorder: colorValue(record, "editorBorder"),
