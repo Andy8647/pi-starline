@@ -9,6 +9,7 @@ import {
 	visibleWidth,
 } from "@earendil-works/pi-tui";
 import type { PolishedTuiConfig } from "./config";
+import { applyEditorCursorStyleToLines } from "./editor-cursor";
 import { renderEditorMetadataFormat } from "./editor-metadata-format";
 import {
 	EDITOR_ACCENT_FALLBACK,
@@ -271,7 +272,10 @@ function renderPolishedFrame({
 			: [];
 	if (editorFrame.length < 2) return clampRenderedLines(baseRendered, width);
 
-	const editorLines = ownedFrame?.editorLines ?? editorFrame.slice(1, -1);
+	const editorLines = applyEditorCursorStyleToLines(
+		ownedFrame?.editorLines ?? editorFrame.slice(1, -1),
+		config.editorCursor,
+	);
 	const meta = renderEditorMetadataFormat(
 		config.editorMetadataFormat,
 		{

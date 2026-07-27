@@ -241,10 +241,29 @@ export default function (pi: ExtensionAPI) {
 		prototypePatchesInstalled = false;
 	};
 
+	/**
+	 * `editorCursor: "terminal"` hides the software cursor so the real one shows
+	 * through, which needs the hardware cursor to actually be on. The fixed-editor
+	 * compositor emits it itself; without the compositor it follows a Pi-level
+	 * setting, so turn it on here — the user asking for the terminal cursor is
+	 * exactly the intent. Nothing is touched in the other modes.
+	 */
+	const syncHardwareCursor = (tui: TUI) => {
+		if (getCurrentConfig().editorCursor !== "terminal") return;
+		try {
+			(tui as TUI & { setShowHardwareCursor?: (on: boolean) => void }).setShowHardwareCursor?.(
+				true,
+			);
+		} catch {
+			// Older Pi builds may not expose it; the software cursor stays hidden either way.
+		}
+	};
+
 	const makeEditorFactory = (ctx: ExtensionContext): ZentuiEditorFactory => {
 		const sessionTheme = ctx.ui.theme;
-		const factory = ((tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) =>
-			new PolishedEditor(
+		const factory = ((tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) => {
+			syncHardwareCursor(tui);
+			return new PolishedEditor(
 				tui,
 				theme,
 				keybindings,
@@ -258,7 +277,8 @@ export default function (pi: ExtensionAPI) {
 					sessionName: ctx.sessionManager.getSessionName() ?? "",
 				}),
 				getThinkingLevel,
-			)) as ZentuiEditorFactory;
+			);
+		}) as ZentuiEditorFactory;
 		factory[ZENTUI_EDITOR_FACTORY] = true;
 		return factory;
 	};
@@ -268,8 +288,9 @@ export default function (pi: ExtensionAPI) {
 		baseFactory: EditorFactory,
 	): ZentuiEditorFactory => {
 		const sessionTheme = ctx.ui.theme;
-		const factory = ((tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) =>
-			new WrappedPolishedEditor(
+		const factory = ((tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) => {
+			syncHardwareCursor(tui);
+			return new WrappedPolishedEditor(
 				baseFactory(tui, theme, keybindings),
 				sessionTheme,
 				getCurrentConfig,
@@ -281,7 +302,8 @@ export default function (pi: ExtensionAPI) {
 					sessionName: ctx.sessionManager.getSessionName() ?? "",
 				}),
 				getThinkingLevel,
-			)) as ZentuiEditorFactory;
+			);
+		}) as ZentuiEditorFactory;
 		factory[ZENTUI_EDITOR_FACTORY] = true;
 		factory[ZENTUI_EDITOR_BASE_FACTORY] = baseFactory;
 		return factory;

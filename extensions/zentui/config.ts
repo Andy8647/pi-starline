@@ -15,6 +15,7 @@ import {
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { type EditorCursorStyle, parseEditorCursorStyle } from "./editor-cursor";
 import {
 	ICON_GLYPH_KEYS,
 	type IconGlyphs,
@@ -153,6 +154,7 @@ export type PolishedTuiConfig = {
 	contextStyle: ContextStyle;
 	segmentOptions: SegmentOptionsConfig;
 	editorModelLabel: ModelLabelSource;
+	editorCursor: EditorCursorStyle;
 	contextThresholds: ContextThresholds;
 	pathDisplay: PathDisplayConfig;
 	gitBranch: GitBranchConfig;
@@ -265,6 +267,7 @@ export const defaultConfig: PolishedTuiConfig = {
 	contextStyle: "text",
 	segmentOptions: { context: { format: "full" }, tokens: { cache: "percent" } },
 	editorModelLabel: "id",
+	editorCursor: "block",
 	contextThresholds: { warning: 70, error: 90 },
 	pathDisplay: { mode: "basename", depth: 0 },
 	gitBranch: { maxLength: "full" },
@@ -909,6 +912,7 @@ export function mergeConfig(parsed: unknown): PolishedTuiConfig {
 		contextStyle: parseContextStyle(config.contextStyle),
 		segmentOptions: normalizeSegmentOptions(config.segmentOptions),
 		editorModelLabel: parseEditorModelLabel(config.editorModelLabel),
+		editorCursor: parseEditorCursorStyle(config.editorCursor),
 		contextThresholds: parseContextThresholds(config.contextThresholds),
 		pathDisplay: parsePathDisplay(config.pathDisplay),
 		gitBranch,
