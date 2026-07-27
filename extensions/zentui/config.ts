@@ -444,6 +444,69 @@ function normalizeIconOverrides(record: Record<string, unknown>): Partial<IconGl
 	) as Partial<IconGlyphs>;
 }
 
+/**
+ * A named colour palette, so a whole scheme can be restated in one place
+ * instead of repeating hex values across every segment.
+ *
+ * Expansion is scoped to colour records only — `footerFormat` and
+ * `editorMetadataFormat` use `$name` for their own format variables and must
+ * never be touched by it.
+ */
+export type Palette = Record<string, string>;
+
+const PALETTE_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]*$/;
+const PALETTE_REF_PATTERN = /\$\{([A-Za-z_][A-Za-z0-9_-]*)\}|\$([A-Za-z_][A-Za-z0-9_-]*)/g;
+const PALETTE_MAX_DEPTH = 8;
+
+export function normalizePalette(value: unknown): Palette {
+	if (!isRecord(value)) return {};
+	const palette: Palette = {};
+	for (const [name, entry] of Object.entries(value)) {
+		if (typeof entry === "string" && PALETTE_NAME_PATTERN.test(name)) palette[name] = entry;
+	}
+	return palette;
+}
+
+function expandWithGuard(
+	spec: string,
+	palette: Palette,
+	visiting: Set<string>,
+	depth: number,
+): string {
+	if (depth > PALETTE_MAX_DEPTH || !spec.includes("$")) return spec;
+	return spec.replace(PALETTE_REF_PATTERN, (match, braced?: string, bare?: string) => {
+		const name = braced ?? bare;
+		if (name === undefined) return match;
+		const value = palette[name];
+		// An unknown name, or one already being expanded further up the chain,
+		// stays literal: it then fails isSupportedColorSpec and renders unstyled,
+		// which surfaces the typo instead of silently resolving to nothing.
+		if (value === undefined || visiting.has(name)) return match;
+		visiting.add(name);
+		const expanded = expandWithGuard(value, palette, visiting, depth + 1);
+		visiting.delete(name);
+		return expanded;
+	});
+}
+
+/** Expand `$name` and `${name}` in a ColorSpec against the palette. */
+export function expandPaletteRefs(spec: string, palette: Palette): string {
+	return expandWithGuard(spec, palette, new Set(), 0);
+}
+
+/** Expand palette references in every string value of a colour record. */
+export function expandPaletteInRecord(
+	record: Record<string, unknown>,
+	palette: Palette,
+): Record<string, unknown> {
+	if (Object.keys(palette).length === 0) return record;
+	const expanded: Record<string, unknown> = { ...record };
+	for (const [key, value] of Object.entries(record)) {
+		if (typeof value === "string") expanded[key] = expandPaletteRefs(value, palette);
+	}
+	return expanded;
+}
+
 function normalizeColors(record: Record<string, unknown>): Partial<PolishedTuiConfig["colors"]> {
 	return definedColors({
 		cwd: colorValue(record, "cwd") ?? colorValue(record, "cwdText"),
@@ -747,8 +810,9 @@ export function mergeConfig(parsed: unknown): PolishedTuiConfig {
 	const iconsRecord = isRecord(config.icons) ? (config.icons as Record<string, unknown>) : {};
 	const iconMode = normalizeIconMode(iconsRecord.mode);
 	const iconOverrides = normalizeIconOverrides(iconsRecord);
+	const palette = normalizePalette(config.palette);
 	const colors = isRecord(config.colors)
-		? normalizeColors(config.colors as Record<string, unknown>)
+		? normalizeColors(expandPaletteInRecord(config.colors as Record<string, unknown>, palette))
 		: {};
 	const colorSources = isRecord(config.colorSources)
 		? normalizeColorSources(config.colorSources as Record<string, unknown>)
