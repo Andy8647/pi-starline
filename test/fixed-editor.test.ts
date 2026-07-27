@@ -261,6 +261,7 @@ describe("Pi fixed-editor compatibility", () => {
 			enabled: true,
 			mouseScroll: true,
 			copyNotice: true,
+			copyOnSelect: true,
 		}));
 
 		expect(compositor.install()).toBe(true);
@@ -306,6 +307,7 @@ describe("Pi fixed-editor compatibility", () => {
 			enabled: true,
 			mouseScroll: false,
 			copyNotice: true,
+			copyOnSelect: true,
 		}));
 
 		expect(compositor.install()).toBe(false);
@@ -325,6 +327,7 @@ describe("Pi fixed-editor compatibility", () => {
 			enabled: true,
 			mouseScroll: true,
 			copyNotice: true,
+			copyOnSelect: true,
 		}));
 		expect(compositor.install()).toBe(true);
 		const patchedRender = fixture.tui.render;
@@ -355,6 +358,7 @@ describe("Pi fixed-editor compatibility", () => {
 				enabled: true,
 				mouseScroll: true,
 				copyNotice: true,
+				copyOnSelect: true,
 			}));
 			expect(compositor.install()).toBe(true);
 			fixture.getInputListener()?.("\u001b[<2;1;1M");

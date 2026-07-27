@@ -11,7 +11,6 @@
  * @internal
  */
 
-import { copyToClipboard } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 import { renderCluster } from "./cluster";
@@ -22,6 +21,7 @@ import type {
 	PiRenderableCapability,
 } from "./pi-compat";
 import { highlightSelection, SelectionState } from "./selection";
+import { overlayHintOnBorder, SelectionController } from "./selection-controller";
 import {
 	CLEAR_LINE,
 	cursorTo,
@@ -112,6 +112,8 @@ export class TerminalSplitCompositor {
 
 	/** Selection state for app-level drag-to-select. */
 	private readonly selection = new SelectionState();
+	/** Selection and copy policy. Kept out of here so this file stays near upstream. */
+	private readonly selectionController: SelectionController;
 	/** Timer for right-click context menu mouse reporting pause. */
 	private mouseResumeTimer: ReturnType<typeof setTimeout> | null = null;
 	private cursorVisible = true;
@@ -131,6 +133,16 @@ export class TerminalSplitCompositor {
 		this.getConfig = getConfig;
 		this.onCopy = onCopy ?? null;
 		this.onDismissNotice = onDismissNotice ?? null;
+		this.selectionController = new SelectionController({
+			selection: this.selection,
+			getRootLines: () => this.rootLines,
+			getVisibleRootStart: () => this.visibleRootStart,
+			getVisibleScrollableRows: () => this.visibleScrollableRows,
+			getConfig: () => this.getConfig(),
+			requestRender: () => this.capabilities.requestRender?.(),
+			pauseMouseReporting: () => this.pauseMouseReporting(),
+			showCopyNotice: () => this.onCopy?.(),
+		});
 	}
 
 	install(): boolean {
@@ -381,7 +393,7 @@ export class TerminalSplitCompositor {
 		}
 
 		const keyboard = parseKeyboardScroll(data);
-		if (!keyboard) return undefined;
+		if (!keyboard) return this.selectionController.handleKey(data) ? { consume: true } : undefined;
 
 		if (keyboard.action === "jumpBottom") {
 			this.scrollOffset = 0;
@@ -415,62 +427,17 @@ export class TerminalSplitCompositor {
 	private handleMouseEvent(ev: { button: string; action: string; col: number; row: number }): void {
 		// Wheel scroll.
 		if (ev.button === "wheel-up" && ev.action === "press") {
-			this.selection.clear();
+			this.selectionController.clearSelection();
 			this.scrollBy(3);
 			return;
 		}
 		if (ev.button === "wheel-down" && ev.action === "press") {
-			this.selection.clear();
+			this.selectionController.clearSelection();
 			this.scrollBy(-3);
 			return;
 		}
 
-		// Right-click: pause mouse reporting for native context menu.
-		if (ev.button === "right" && ev.action === "press") {
-			const selectedText = this.selection.active
-				? this.selection.getSelectedText(this.rootLines)
-				: "";
-			if (selectedText) {
-				void copyToClipboard(selectedText);
-			}
-			this.selection.clear();
-			this.pauseMouseReporting();
-			this.capabilities.requestRender?.();
-			return;
-		}
-
-		// Only left button is used for drag-select.
-		if (ev.button !== "left") return;
-
-		// Ignore clicks in the cluster region (below scrollable area).
-		if (ev.row > this.visibleScrollableRows) return;
-
-		// Map screen row to transcript line index.
-		const lineIndex = this.visibleRootStart + ev.row - 1;
-		const col = Math.max(0, ev.col - 1);
-
-		if (ev.action === "press") {
-			this.selection.start(lineIndex, col);
-			this.capabilities.requestRender?.();
-			return;
-		}
-		if (ev.action === "drag" && this.selection.isDragging) {
-			this.selection.extend(lineIndex, col + 1);
-			this.capabilities.requestRender?.();
-			return;
-		}
-		if (ev.action === "release" && this.selection.isDragging) {
-			this.selection.extend(lineIndex, col + 1);
-			this.selection.setDragging(false);
-			const text = this.selection.getSelectedText(this.rootLines);
-			this.selection.clear();
-			this.capabilities.requestRender?.();
-			if (text) {
-				void copyToClipboard(text);
-				if (this.getConfig().copyNotice) this.onCopy?.();
-			}
-			return;
-		}
+		this.selectionController.handleMouse(ev);
 	}
 
 	/** Temporarily disable mouse reporting so the terminal's native context menu works. */
@@ -498,9 +465,10 @@ export class TerminalSplitCompositor {
 	private paintCluster(cluster: ClusterRender, rawRows: number, width: number): string {
 		if (cluster.lines.length === 0) return "";
 		const startRow = Math.max(1, rawRows - cluster.lines.length + 1);
+		const lines = overlayHintOnBorder(cluster.lines, this.selectionController.hintText(), width);
 		let buf = RESET_SCROLL_REGION;
-		for (let i = 0; i < cluster.lines.length; i++) {
-			buf += cursorTo(startRow + i, 1) + CLEAR_LINE + sanitizeLine(cluster.lines[i] ?? "", width);
+		for (let i = 0; i < lines.length; i++) {
+			buf += cursorTo(startRow + i, 1) + CLEAR_LINE + sanitizeLine(lines[i] ?? "", width);
 		}
 		if (cluster.cursor) {
 			buf += cursorTo(startRow + cluster.cursor.row, Math.max(1, cluster.cursor.col + 1));

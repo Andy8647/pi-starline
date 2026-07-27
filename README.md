@@ -564,6 +564,30 @@ Mouse wheel scrolling is enabled by default when the fixed editor is on. Disable
 
 **Warning**: Mouse scroll enables SGR mouse reporting, which disables native terminal text selection, URL click-through, and tmux/Herdr scrollback for the Pi session. Toggle off if you need those features.
 
+### Selection and copying
+
+Drag-select in the transcript area works whenever the fixed editor is on.
+
+```json
+{
+	"fixedEditor": {
+		"enabled": true,
+		"copyOnSelect": true,
+		"copyNotice": true
+	}
+}
+```
+
+- `copyOnSelect: true` (default) — releasing the mouse copies the selection and clears the highlight. `copyNotice` controls the "copied to clipboard" toast.
+- `copyOnSelect: false` — the highlight stays after release and nothing is written to the clipboard. The editor's bottom border shows `N characters selected, ctrl+c to copy` until you act on it.
+- `ctrl+c` copies the current selection under either setting. With no selection it falls through to Pi's normal ctrl+c, so interrupting still works.
+- Right-clicking inside a selection copies it outright; right-clicking anywhere else falls through to the terminal's native context menu as before.
+- Any other keystroke dismisses the highlight, so it never lingers over text that has scrolled on.
+- An explicit copy (ctrl+c, right click) shows no toast — the hint disappearing is the confirmation.
+- OSC 8 hyperlink targets are copied along with the visible text.
+
+Not yet ported from the powerline fork: selecting inside the editor box itself, and click-to-position within it. Selection is limited to the transcript area.
+
 ### Conflicts and limitations
 
 - **Incompatible with** `pi-powerline-footer`, `@tifan/pi-fixed-editor`, and `pi-sticky-input`. These packages patch the same Pi TUI internals; only one rendering owner can be active at a time.

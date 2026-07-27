@@ -105,11 +105,13 @@ describe("mergeConfig", () => {
 			enabled: false,
 			mouseScroll: true,
 			copyNotice: true,
+			copyOnSelect: true,
 		});
 		expect(defaultConfig.fixedEditor).toEqual({
 			enabled: false,
 			mouseScroll: true,
 			copyNotice: true,
+			copyOnSelect: true,
 		});
 	});
 
@@ -119,6 +121,7 @@ describe("mergeConfig", () => {
 				enabled: true,
 				mouseScroll: false,
 				copyNotice: true,
+				copyOnSelect: true,
 			},
 		);
 	});
@@ -128,6 +131,7 @@ describe("mergeConfig", () => {
 			enabled: false,
 			mouseScroll: true,
 			copyNotice: true,
+			copyOnSelect: true,
 		});
 	});
 
@@ -1348,7 +1352,12 @@ describe("saveFixedEditorPatch", () => {
 		try {
 			saveFixedEditorPatch({ enabled: true }, path);
 			const config = saveFixedEditorPatch({ mouseScroll: true }, path);
-			expect(config.fixedEditor).toEqual({ enabled: true, mouseScroll: true, copyNotice: true });
+			expect(config.fixedEditor).toEqual({
+				enabled: true,
+				mouseScroll: true,
+				copyNotice: true,
+				copyOnSelect: true,
+			});
 		} finally {
 			rmSync(dir, { recursive: true });
 		}

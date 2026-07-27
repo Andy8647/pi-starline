@@ -106,7 +106,10 @@ export type FooterSegmentsConfig = {
 export type FixedEditorConfig = {
 	enabled: boolean;
 	mouseScroll: boolean;
+	/** Show the "copied to clipboard" notice. Only fires for an automatic copy. */
 	copyNotice: boolean;
+	/** Copy on mouse release. When false the highlight waits for ctrl+c. */
+	copyOnSelect: boolean;
 };
 
 export type ExtensionStatusPlacement = "off" | "left" | "middle" | "right";
@@ -347,6 +350,7 @@ export const defaultConfig: PolishedTuiConfig = {
 		enabled: false,
 		mouseScroll: true,
 		copyNotice: true,
+		copyOnSelect: true,
 	},
 };
 
@@ -722,6 +726,10 @@ function normalizeFixedEditorConfig(record: Record<string, unknown>): FixedEdito
 			typeof record.copyNotice === "boolean"
 				? record.copyNotice
 				: defaultConfig.fixedEditor.copyNotice,
+		copyOnSelect:
+			typeof record.copyOnSelect === "boolean"
+				? record.copyOnSelect
+				: defaultConfig.fixedEditor.copyOnSelect,
 	};
 }
 
