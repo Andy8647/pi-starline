@@ -2,6 +2,8 @@
 
 A Starship-inspired statusline and Opencode-style TUI for [Pi](https://pi.dev).
 
+> Forked from [pi-zentui](https://github.com/lmilojevicc/pi-zentui) by Luka. This fork adds a pill footer style, a colour palette with `$ref` expansion, `model`/`thinking` footer segments, a git host icon, per-segment display options, and configurable editor cursor styles.
+
 ## Screenshots
 
 ![Zentui](https://raw.githubusercontent.com/lmilojevicc/pi-zentui/main/assets/zentui.png)
@@ -300,7 +302,136 @@ Default config values — copy this and change any value you want:
 - `editorBorder` styles the active editor and previous user-message top/bottom border color only; the border glyph stays `─`.
 - `editorModel`, `editorProvider`, and `editorThinking*` style the editor metadata. `editorThinking` applies to every non-`off` thinking level unless a level-specific key is set.
 
+- `userMessageBorder` styles the previous user-message border on its own. Omit it to keep borrowing `editorBorder`, which is the upstream behaviour.
+- `userMessageText` styles previous user-message body text. Omit it to follow the theme's `userMessageText` colour.
+- `model` styles the `model` footer segment; `thinking` styles the `thinking` segment. Omit `thinking` to colour it by level from the theme's `thinkingOff`/`thinkingMinimal`/`thinkingLow`/`thinkingMedium`/`thinkingHigh`/`thinkingXhigh` keys.
+
 Tip: when using copy-friendly mode, setting Pi's `editorPaddingX` to `1` in `~/.pi/agent/settings.json` keeps a small left gutter without copying a rail glyph.
+
+## Colors
+
+Every `colors.*` value is a space-separated style string. Four kinds of colour are accepted, and they have a defined precedence.
+
+| Written as | Example | Resolves to |
+| --- | --- | --- |
+| Theme colour key | `"accent"`, `"syntaxKeyword"` | Whatever your Pi theme maps that key to |
+| Terminal colour name | `"bold cyan"` | The theme key the name maps to, or the raw terminal colour when `colorSources` is `terminal` |
+| 256-colour index | `"208"` | That palette entry |
+| Hex literal | `"#cba6f7"` | Exactly that colour |
+
+**A hex literal or 256 index always wins over the theme, regardless of `colorSources`.** That is what lets you override one segment without leaving theme-driven colours everywhere else. Attributes `bold`, `italic`, `underline` and `dim` can be combined with any of them.
+
+Backgrounds use a `bg:` prefix, and `fg:` sets the foreground explicitly:
+
+```json
+{
+	"colors": {
+		"gitBranch": "bold bg:#cba6f7 fg:#1e1e2e",
+		"cwd": "bold syntaxFunction"
+	}
+}
+```
+
+### Palette
+
+Declare a scheme once and reference it, so switching schemes means editing one block rather than every segment. Both `$name` and `${name}` work, and palette entries may reference each other.
+
+```json
+{
+	"palette": {
+		"bg": "#24283b",
+		"fg": "#c0caf5",
+		"blue": "#7aa2f7",
+		"purple": "#bb9af7",
+		"green": "#9ece6a",
+		"gray": "#414868"
+	},
+	"colors": {
+		"cwd": "bold bg:$blue fg:$bg",
+		"gitBranch": "bold bg:$purple fg:$bg",
+		"context": "bold bg:$gray fg:$fg",
+		"cost": "bold bg:$green fg:$bg"
+	}
+}
+```
+
+A reference that does not resolve is left as written, so the segment renders unstyled and the typo is visible rather than silently becoming empty. Palette expansion applies to `colors` only — `footerFormat` and `editorMetadataFormat` use `$name` for their own variables and are never rewritten.
+
+**Known limitation:** hex literals are always emitted as truecolor. On a terminal without truecolor support they may render incorrectly, where theme colour keys degrade correctly because Pi picks the encoding. Use theme keys if you need 256-colour terminals to look right.
+
+## Pill footer
+
+`footerStyle: "pill"` renders the footer as coloured blocks joined by seamless powerline arrows instead of as coloured text. `footerStyle: "text"` is the default and leaves `footerFormat` and all existing behaviour untouched.
+
+```json
+{
+	"footerStyle": "pill",
+	"pill": {
+		"segments": [
+			"model",
+			"thinking",
+			"cwd",
+			"gitBranch",
+			"gitStatus",
+			"extensionStatus:balance",
+			"context",
+			"cost",
+			"extensionStatus"
+		],
+		"separator": "powerline",
+		"bold": true,
+		"caps": "round"
+	}
+}
+```
+
+| Key | Values | Meaning |
+| --- | --- | --- |
+| `segments` | `footerSegments` keys, `extensionStatus`, `extensionStatus:<key>` | Order, left to right |
+| `separator` | `powerline` (default), `powerline-thin`, `none` | Glyph between pills |
+| `bold` | `true` (default), `false` | Bold segment text |
+| `caps` | `round` (default), `right`, `none` | How the bar's ends are closed |
+
+Notes:
+
+- **Colours need no extra configuration.** A segment's existing `colors.*` entry, which is a foreground in text mode, becomes the pill background here. Text colour is picked automatically for legibility unless you set `fg:` yourself.
+- `extensionStatus` is not one segment but however many other extensions have registered (balance, automode, mcp, …). Listing it expands to all of them; `extensionStatus:<key>` places one specific status, and it is not repeated by a later `extensionStatus`.
+- A status configured with `colorMode: "original"` keeps the colours its own extension chose, on a neutral background.
+- `footerSegments` toggles still apply: a segment listed here but switched off there is skipped.
+- Unknown segment names are dropped rather than drawn as empty pills.
+- In `icons.mode: "ascii"` the arrows and caps disappear; the background transitions still separate the segments.
+
+## Segment display options
+
+```json
+{
+	"segmentOptions": {
+		"context": { "format": "full" },
+		"tokens": { "cache": "percent" }
+	}
+}
+```
+
+- `context.format` — `full` (default, `6%/200k`) or `percent` (`6%`). Orthogonal to `contextStyle`: the gauge is unaffected.
+- `tokens.cache` — `percent` (default, cache hit rate), `tokens` (raw cache-read count), or `off`.
+
+## Git host icon
+
+```json
+{ "gitHostIcon": false }
+```
+
+When enabled, the branch segment's icon becomes the `origin` remote's forge logo: GitHub, GitLab, Bitbucket, or a generic git mark for anything else, including self-hosted instances recognised by subdomain (`gitlab.acme.com`). Repos with no `origin` keep the plain branch icon. The remote is read once and cached for ten minutes, and only read at all when the option is on. Disabled in `icons.mode: "ascii"`.
+
+## Editor cursor
+
+```json
+{ "editorCursor": "block" }
+```
+
+- `block` (default) — Pi's reverse-video block
+- `underline` — an underline instead of the block
+- `terminal` — hide the software cursor and let the real terminal cursor show through, so its shape and blink follow your terminal's own configuration
 
 ## Editor Metadata Format
 
@@ -472,6 +603,8 @@ PI_BIN=/path/to/pi npm run pi:dev
 ```
 
 ## Credits
+
+Forked from [pi-zentui](https://github.com/lmilojevicc/pi-zentui) by Luka.
 
 Inspired by:
 
