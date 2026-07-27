@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultConfig, mergeConfig } from "../extensions/zentui/config";
+import { defaultConfig, getExtensionStatusIcon, mergeConfig } from "../extensions/zentui/config";
 import { gitHostIconGlyph } from "../extensions/zentui/footer";
 import { emptyGitStatus, parseGitRemoteHost } from "../extensions/zentui/git";
 import {
@@ -162,5 +162,33 @@ describe("per-segment icons", () => {
 	it("keeps an explicit override in ascii mode, as upstream does", () => {
 		expect(mergeConfig({ icons: { mode: "ascii", model: "◈" } }).icons.model).toBe("◈");
 		expect(mergeConfig({ icons: { mode: "ascii" } }).icons.gitHostGithub).toBe("");
+	});
+});
+
+describe("per-status icons", () => {
+	it("are unset by default", () => {
+		expect(defaultConfig.extensionStatuses.icons).toEqual({});
+	});
+
+	it("are read per status key", () => {
+		const config = mergeConfig({
+			extensionStatuses: { icons: { "provider-balance": "◈", "mcp-status": "◆" } },
+		});
+		expect(getExtensionStatusIcon(config, "provider-balance")).toBe("◈");
+		expect(getExtensionStatusIcon(config, "mcp-status")).toBe("◆");
+		expect(getExtensionStatusIcon(config, "unlisted")).toBe("");
+	});
+
+	it("drop out in ascii mode, like every other Nerd Font affordance", () => {
+		const config = mergeConfig({
+			icons: { mode: "ascii" },
+			extensionStatuses: { icons: { balance: "◈" } },
+		});
+		expect(getExtensionStatusIcon(config, "balance")).toBe("");
+	});
+
+	it("ignore non-string values", () => {
+		const config = mergeConfig({ extensionStatuses: { icons: { balance: 5 } } });
+		expect(getExtensionStatusIcon(config, "balance")).toBe("");
 	});
 });

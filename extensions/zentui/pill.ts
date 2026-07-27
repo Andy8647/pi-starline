@@ -62,10 +62,19 @@ export type PillInput = {
 function statusInput(
 	status: ExtensionStatusSegment,
 	statusSpec: (key: string) => ColorSpec,
+	statusIcon: (key: string) => string,
 ): PillInput {
-	return status.colorMode === "original"
-		? { key: status.key, text: status.text, spec: "", keepStyling: true }
-		: { key: status.key, text: status.text, spec: statusSpec(status.key) };
+	// colorMode "original" keeps the extension's own styling, so leave its text
+	// exactly as it arrived rather than splicing an icon into styled output.
+	if (status.colorMode === "original") {
+		return { key: status.key, text: status.text, spec: "", keepStyling: true };
+	}
+	const icon = statusIcon(status.key);
+	return {
+		key: status.key,
+		text: icon ? `${icon} ${status.text}` : status.text,
+		spec: statusSpec(status.key),
+	};
 }
 
 /**
@@ -81,6 +90,7 @@ export function collectPillInputs(
 	renderVariable: (name: string) => string,
 	specFor: (segment: string) => ColorSpec,
 	statusSpec: (key: string) => ColorSpec,
+	statusIcon: (key: string) => string = () => "",
 ): PillInput[] {
 	const placedKeys = new Set(
 		segments
@@ -92,7 +102,7 @@ export function collectPillInputs(
 	for (const segment of segments) {
 		if (segment === EXTENSION_STATUS_SEGMENT) {
 			for (const status of statuses) {
-				if (!placedKeys.has(status.key)) inputs.push(statusInput(status, statusSpec));
+				if (!placedKeys.has(status.key)) inputs.push(statusInput(status, statusSpec, statusIcon));
 			}
 			continue;
 		}
@@ -100,7 +110,7 @@ export function collectPillInputs(
 		if (segment.startsWith(EXTENSION_STATUS_PREFIX)) {
 			const key = segment.slice(EXTENSION_STATUS_PREFIX.length);
 			const status = statuses.find((candidate) => candidate.key === key);
-			if (status) inputs.push(statusInput(status, statusSpec));
+			if (status) inputs.push(statusInput(status, statusSpec, statusIcon));
 			continue;
 		}
 

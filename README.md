@@ -402,11 +402,15 @@ Notes:
 - Where two neighbouring pills resolve to the same background, the solid arrow would be invisible (it is the left colour drawn on the right colour), so a thin divider is drawn in the text colour instead. Several segments share a default colour, so this comes up more often than it sounds.
 - In `icons.mode: "ascii"` the arrows and caps disappear; the background transitions still separate the segments.
 
-Give each status its own colour with `extensionStatuses.colors`, keyed by status key — otherwise they all take `colors.extensionStatus` and read as one block:
+Give each status its own icon with `extensionStatuses.icons`, keyed by status key (statuses set to `colorMode: "original"` are left alone, since their text arrives pre-styled). Give each its own colour with `extensionStatuses.colors`, keyed the same way — otherwise they all take `colors.extensionStatus` and read as one block:
 
 ```json
 {
 	"extensionStatuses": {
+		"icons": {
+			"provider-balance": "",
+			"mcp-status": ""
+		},
 		"colors": {
 			"provider-balance": "bg:$yellow",
 			"pi-automode": "bg:$lavender",
@@ -448,11 +452,13 @@ When enabled, the branch segment's icon becomes the `origin` remote's forge logo
 - `underline` — an underline instead of the block
 - `terminal` — hide the software cursor and let the real terminal cursor show through, so its shape and blink follow your terminal's own configuration
 
-**`terminal` requires Pi's own hardware cursor to be on.** Pi defaults it off (`showHardwareCursor`, or `PI_HARDWARE_CURSOR=1`) and re-applies that setting at several points, so an extension cannot turn it on reliably. Without it the software cursor is hidden and nothing replaces it. Set it in `~/.pi/agent/settings.json`:
+**`terminal` requires Pi's own hardware cursor to be on.** Pi defaults it off (`showHardwareCursor`, or `PI_HARDWARE_CURSOR=1`) and re-applies that setting at several points, so an extension cannot turn it on reliably. Set it in `~/.pi/agent/settings.json`:
 
 ```json
 { "showHardwareCursor": true }
 ```
+
+With the fixed editor running, the compositor also re-asserts the cursor on every frame in this mode. Pi's own output passes through the compositor untouched and may contain a hide-cursor sequence the compositor never sees, so tracking visibility is not enough — that is why the cursor could vanish entirely.
 
 ## Editor Metadata Format
 

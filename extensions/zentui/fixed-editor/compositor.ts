@@ -472,7 +472,13 @@ export class TerminalSplitCompositor {
 		}
 		if (cluster.cursor) {
 			buf += cursorTo(startRow + cluster.cursor.row, Math.max(1, cluster.cursor.col + 1));
-			if (!this.cursorVisible) {
+			// Pi's own output passes through this write untouched and may contain a
+			// hide-cursor sequence we never see, leaving cursorVisible wrong. When the
+			// real cursor is the only cursor there is, assert it every frame instead.
+			if (this.getConfig().hardwareCursor) {
+				buf += SHOW_CURSOR;
+				this.cursorVisible = true;
+			} else if (!this.cursorVisible) {
 				buf += SHOW_CURSOR;
 				this.cursorVisible = true;
 			}

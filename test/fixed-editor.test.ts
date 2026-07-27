@@ -262,6 +262,7 @@ describe("Pi fixed-editor compatibility", () => {
 			mouseScroll: true,
 			copyNotice: true,
 			copyOnSelect: true,
+			hardwareCursor: false,
 		}));
 
 		expect(compositor.install()).toBe(true);
@@ -308,6 +309,7 @@ describe("Pi fixed-editor compatibility", () => {
 			mouseScroll: false,
 			copyNotice: true,
 			copyOnSelect: true,
+			hardwareCursor: false,
 		}));
 
 		expect(compositor.install()).toBe(false);
@@ -328,6 +330,7 @@ describe("Pi fixed-editor compatibility", () => {
 			mouseScroll: true,
 			copyNotice: true,
 			copyOnSelect: true,
+			hardwareCursor: false,
 		}));
 		expect(compositor.install()).toBe(true);
 		const patchedRender = fixture.tui.render;
@@ -348,6 +351,53 @@ describe("Pi fixed-editor compatibility", () => {
 		compositor.dispose();
 	});
 
+	// Pi's own output passes through the compositor's write untouched and can
+	// contain a hide-cursor sequence the compositor never observes, so tracking
+	// visibility is not enough: editorCursor "terminal" removes the software
+	// cursor, and without asserting the real one the editor showed no cursor at all.
+	it("asserts the hardware cursor every frame in terminal cursor mode", () => {
+		const fixture = makeValidPiFixture();
+		fixture.cluster[2].render = () => [`editor${CURSOR_MARKER}`];
+		const capabilities = inspectPiTui(fixture.tui);
+		if (!capabilities) throw new Error("expected valid fixture");
+		const compositor = new TerminalSplitCompositor(capabilities, () => ({
+			enabled: true,
+			mouseScroll: true,
+			copyNotice: true,
+			copyOnSelect: true,
+			hardwareCursor: true,
+		}));
+		expect(compositor.install()).toBe(true);
+
+		fixture.terminal.write("update");
+		expect(fixture.terminalWrite.mock.calls.at(-1)?.[0]).toContain(SHOW_CURSOR);
+		// Still asserted on the next frame, not just the first.
+		fixture.terminal.write("update");
+		expect(fixture.terminalWrite.mock.calls.at(-1)?.[0]).toContain(SHOW_CURSOR);
+
+		compositor.dispose();
+	});
+
+	it("leaves cursor visibility alone in the software cursor modes", () => {
+		const fixture = makeValidPiFixture();
+		fixture.cluster[2].render = () => [`editor${CURSOR_MARKER}`];
+		const capabilities = inspectPiTui(fixture.tui);
+		if (!capabilities) throw new Error("expected valid fixture");
+		const compositor = new TerminalSplitCompositor(capabilities, () => ({
+			enabled: true,
+			mouseScroll: true,
+			copyNotice: true,
+			copyOnSelect: true,
+			hardwareCursor: false,
+		}));
+		expect(compositor.install()).toBe(true);
+
+		fixture.terminal.write("update");
+		expect(fixture.terminalWrite.mock.calls.at(-1)?.[0]).not.toContain(SHOW_CURSOR);
+
+		compositor.dispose();
+	});
+
 	it("clears the right-click mouse-resume timer on disposal", () => {
 		vi.useFakeTimers();
 		try {
@@ -359,6 +409,7 @@ describe("Pi fixed-editor compatibility", () => {
 				mouseScroll: true,
 				copyNotice: true,
 				copyOnSelect: true,
+				hardwareCursor: false,
 			}));
 			expect(compositor.install()).toBe(true);
 			fixture.getInputListener()?.("\u001b[<2;1;1M");

@@ -29,6 +29,8 @@ export type CompositorConfig = {
 	mouseScroll: boolean;
 	copyNotice: boolean;
 	copyOnSelect: boolean;
+	/** editorCursor "terminal": the real cursor is the only cursor, so assert it. */
+	hardwareCursor: boolean;
 };
 
 /** Result of rendering the pinned cluster. */

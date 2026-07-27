@@ -4,6 +4,7 @@ import {
 	type ColorSpec,
 	FOOTER_FORMAT_ALIASES,
 	getExtensionStatusColor,
+	getExtensionStatusIcon,
 	type PolishedTuiConfig,
 	type SeparatorStyle,
 } from "./config";
@@ -693,6 +694,7 @@ export function installFooter(
 							renderVariable,
 							pillSpecFor,
 							(key) => getExtensionStatusColor(config, key) ?? config.colors.extensionStatus,
+							(key) => getExtensionStatusIcon(config, key),
 						),
 						theme,
 						colorSource,

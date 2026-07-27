@@ -142,6 +142,8 @@ export type ExtensionStatusesConfig = {
 	colorModes: Record<string, ExtensionStatusColorMode>;
 	/** Per-status colour, keyed by status key. Falls back to colors.extensionStatus. */
 	colors: Record<string, ColorSpec>;
+	/** Per-status icon, keyed by status key. Prefixed to the status text. */
+	icons: Record<string, string>;
 };
 
 const DEFAULT_PROJECT_REFRESH_INTERVAL_MS = 30_000;
@@ -346,6 +348,7 @@ export const defaultConfig: PolishedTuiConfig = {
 	extensionStatuses: {
 		defaultPlacement: "right",
 		colors: {},
+		icons: {},
 		placements: {},
 		colorModes: {},
 	},
@@ -724,11 +727,20 @@ function normalizeExtensionStatuses(
 			)
 		: {};
 
+	const icons = isRecord(record.icons)
+		? Object.fromEntries(
+				Object.entries(record.icons).filter(
+					(entry): entry is [string, string] => typeof entry[1] === "string",
+				),
+			)
+		: {};
+
 	return {
 		defaultPlacement,
 		placements,
 		colorModes,
 		colors,
+		icons,
 	};
 }
 
@@ -958,6 +970,7 @@ export function mergeConfig(parsed: unknown): PolishedTuiConfig {
 			placements: { ...extensionStatuses.placements },
 			colorModes: { ...extensionStatuses.colorModes },
 			colors: { ...extensionStatuses.colors },
+			icons: { ...extensionStatuses.icons },
 		},
 		fixedEditor,
 	};
@@ -976,6 +989,13 @@ export function getExtensionStatusColor(
 	key: string,
 ): ColorSpec | undefined {
 	return config.extensionStatuses.colors[key];
+}
+
+/** Icon for one status, or "" when none is configured. */
+export function getExtensionStatusIcon(config: PolishedTuiConfig, key: string): string {
+	// Icons are a Nerd Font affordance; ascii mode drops them, as elsewhere.
+	if (config.icons.mode === "ascii") return "";
+	return config.extensionStatuses.icons[key] ?? "";
 }
 
 export function getExtensionStatusColorMode(

@@ -355,3 +355,47 @@ describe("renderPillBar", () => {
 		expect(out.endsWith("\x1b[0m")).toBe(true);
 	});
 });
+
+describe("per-status icons in the bar", () => {
+	const statuses: ExtensionStatusSegment[] = [
+		{ key: "balance", text: "¥327", placement: "right", colorMode: "zentui" },
+		{ key: "mcp", text: "3", placement: "right", colorMode: "original" },
+	];
+
+	it("prefixes the status text", () => {
+		const inputs = collectPillInputs(
+			["extensionStatus"],
+			statuses,
+			() => "",
+			() => "",
+			() => "st",
+			(key) => (key === "balance" ? "◈" : ""),
+		);
+		expect(inputs.find((input) => input.key === "balance")?.text).toBe("◈ ¥327");
+	});
+
+	// colorMode "original" text arrives pre-styled; splicing an icon into it would
+	// land inside or outside its escapes unpredictably.
+	it("leaves colorMode original text untouched", () => {
+		const inputs = collectPillInputs(
+			["extensionStatus"],
+			statuses,
+			() => "",
+			() => "",
+			() => "st",
+			() => "◈",
+		);
+		expect(inputs.find((input) => input.key === "mcp")?.text).toBe("3");
+	});
+
+	it("adds nothing when no icon is configured", () => {
+		const inputs = collectPillInputs(
+			["extensionStatus"],
+			statuses,
+			() => "",
+			() => "",
+			() => "st",
+		);
+		expect(inputs.find((input) => input.key === "balance")?.text).toBe("¥327");
+	});
+});

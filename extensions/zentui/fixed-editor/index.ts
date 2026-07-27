@@ -144,6 +144,7 @@ function installFromProbe(
 				mouseScroll: getConfig().fixedEditor?.mouseScroll ?? false,
 				copyNotice: getConfig().fixedEditor?.copyNotice ?? true,
 				copyOnSelect: getConfig().fixedEditor?.copyOnSelect ?? true,
+				hardwareCursor: getConfig().editorCursor === "terminal",
 			}),
 			ctx.hasUI ? () => showCopyNotice(ctx, getConfig) : undefined,
 			ctx.hasUI ? () => clearCopyNotice(ctx) : undefined,

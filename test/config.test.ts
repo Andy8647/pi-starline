@@ -98,6 +98,7 @@ describe("mergeConfig", () => {
 			placements: {},
 			colorModes: {},
 			colors: {},
+			icons: {},
 		});
 	});
 
@@ -548,6 +549,7 @@ describe("mergeConfig", () => {
 					beta: "zentui",
 				},
 				colors: {},
+				icons: {},
 			},
 		});
 
@@ -563,6 +565,7 @@ describe("mergeConfig", () => {
 				beta: "zentui",
 			},
 			colors: {},
+			icons: {},
 		});
 	});
 
@@ -582,6 +585,7 @@ describe("mergeConfig", () => {
 						gamma: 1,
 					},
 					colors: {},
+					icons: {},
 				},
 			}).extensionStatuses,
 		).toEqual({
@@ -589,12 +593,14 @@ describe("mergeConfig", () => {
 			placements: { alpha: "left" },
 			colorModes: { alpha: "original" },
 			colors: {},
+			icons: {},
 		});
 		expect(mergeConfig({ extensionStatuses: { placements: "none" } }).extensionStatuses).toEqual({
 			defaultPlacement: "right",
 			placements: {},
 			colorModes: {},
 			colors: {},
+			icons: {},
 		});
 	});
 
@@ -1159,6 +1165,7 @@ describe("mergeConfig", () => {
 				placements: { alpha: "right" },
 				colorModes: { alpha: "zentui", beta: "original" },
 				colors: {},
+				icons: {},
 			});
 			expect(raw.unknown).toBe(true);
 			expect(raw.colors.futureKey).toBe("future");
@@ -1209,6 +1216,7 @@ describe("mergeConfig", () => {
 				placements: { alpha: "right", beta: "off" },
 				colorModes: {},
 				colors: {},
+				icons: {},
 			});
 			expect(raw.unknown).toBe(true);
 			expect(raw.colors.futureKey).toBe("future");
