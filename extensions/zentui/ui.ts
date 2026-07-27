@@ -146,27 +146,30 @@ function unwrapPolishedFrameOnly(
 	config: PolishedTuiConfig,
 	uiTheme: Theme,
 ): string[] | undefined {
+	// The frame is parsed back by position, so the padding the renderer emitted has
+	// to be the padding assumed here.
+	const padY = config.editorPaddingY > 0 ? 1 : 0;
 	if (
-		lines.length < 5 ||
+		lines.length < 4 + padY ||
 		!isHorizontalBorder(lines[0] ?? "") ||
 		!isHorizontalBorder(lines.at(-1) ?? "")
 	)
 		return undefined;
 
 	const interior = lines.slice(1, -1);
-	if (interior.length < 3) return undefined;
+	if (interior.length < 2 + padY) return undefined;
 
 	if (config.features.copyFriendly) {
 		if (
-			plainRenderedText(interior[0] ?? "").trim() !== "" ||
-			plainRenderedText(interior.at(-2) ?? "").trim() !== "" ||
+			(padY > 0 && plainRenderedText(interior[0] ?? "").trim() !== "") ||
+			(padY > 0 && plainRenderedText(interior.at(-2) ?? "").trim() !== "") ||
 			!(interior.at(-1) ?? "").startsWith(" ")
 		)
 			return undefined;
 
 		const { prompt, promptWidth } = getEditorChromeWidths(config, uiTheme, "\x1b[0m");
 		const continuation = " ".repeat(promptWidth);
-		const content = interior.slice(1, -2);
+		const content = interior.slice(padY, -(1 + padY));
 		const unwrapped: string[] = [];
 		for (let index = 0; index < content.length; index++) {
 			const prefix = index === 0 ? prompt : continuation;
@@ -181,11 +184,12 @@ function unwrapPolishedFrameOnly(
 	if (!rail || interior.some((line) => !line.startsWith(rail))) return undefined;
 	const unrailed = interior.map((line) => line.slice(rail.length));
 	if (
-		plainRenderedText(unrailed[0] ?? "").trim() !== "" ||
-		plainRenderedText(unrailed.at(-2) ?? "").trim() !== ""
+		padY > 0 &&
+		(plainRenderedText(unrailed[0] ?? "").trim() !== "" ||
+			plainRenderedText(unrailed.at(-2) ?? "").trim() !== "")
 	)
 		return undefined;
-	return unrailed.slice(1, -2);
+	return unrailed.slice(padY, -(1 + padY));
 }
 
 function splitPolishedFrame(
@@ -309,16 +313,17 @@ function renderPolishedFrame({
 	// The metadata row stays even when it renders blank: splitPolishedFrame parses
 	// the frame back by position, so changing the line count breaks the wrapped
 	// editor path. An empty editorMetadataFormat leaves a blank row, not no row.
-	const lines = ["", ...editorLines, "", railedMeta];
+	const padRows = config.editorPaddingY > 0 ? [""] : [];
+	const lines = [...padRows, ...editorLines, ...padRows, railedMeta];
 	const renderedLines = config.features.copyFriendly
 		? [
 				top,
-				"",
+				...padRows,
 				...editorLines.map(
 					(line, index) =>
 						`${index === 0 ? prompt : copyFriendlyContinuation}${fillLine(line, innerWidth)}`,
 				),
-				"",
+				...padRows,
 				` ${truncateToWidth(copyFriendlyMeta, Math.max(0, width - 1), "")}`,
 				bottom,
 				...autocompleteLines,

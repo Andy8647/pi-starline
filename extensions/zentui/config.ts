@@ -162,6 +162,10 @@ export type PolishedTuiConfig = {
 	segmentOptions: SegmentOptionsConfig;
 	editorModelLabel: ModelLabelSource;
 	editorCursor: EditorCursorStyle;
+	/** Blank rows inside the editor box, above the input and above the metadata row. */
+	editorPaddingY: number;
+	/** Blank rows inside the previous-message box, above and below the body. */
+	userMessagePaddingY: number;
 	contextThresholds: ContextThresholds;
 	pathDisplay: PathDisplayConfig;
 	gitBranch: GitBranchConfig;
@@ -275,6 +279,8 @@ export const defaultConfig: PolishedTuiConfig = {
 	segmentOptions: { context: { format: "full" }, tokens: { cache: "percent" } },
 	editorModelLabel: "id",
 	editorCursor: "block",
+	editorPaddingY: 1,
+	userMessagePaddingY: 1,
 	contextThresholds: { warning: 70, error: 90 },
 	pathDisplay: { mode: "basename", depth: 0 },
 	gitBranch: { maxLength: "full" },
@@ -616,6 +622,11 @@ function normalizeUiFeatures(record: Record<string, unknown>): UiFeaturesConfig 
 	};
 }
 
+/** Box padding is 0 or 1 rows; anything else falls back to the default. */
+function parseBoxPadding(value: unknown, fallback: number): number {
+	return value === 0 || value === 1 ? value : fallback;
+}
+
 function normalizeSegmentOptions(value: unknown): SegmentOptionsConfig {
 	const record = isRecord(value) ? value : {};
 	const context = isRecord(record.context) ? record.context : {};
@@ -951,6 +962,11 @@ export function mergeConfig(parsed: unknown): PolishedTuiConfig {
 		segmentOptions: normalizeSegmentOptions(config.segmentOptions),
 		editorModelLabel: parseEditorModelLabel(config.editorModelLabel),
 		editorCursor: parseEditorCursorStyle(config.editorCursor),
+		editorPaddingY: parseBoxPadding(config.editorPaddingY, defaultConfig.editorPaddingY),
+		userMessagePaddingY: parseBoxPadding(
+			config.userMessagePaddingY,
+			defaultConfig.userMessagePaddingY,
+		),
 		contextThresholds: parseContextThresholds(config.contextThresholds),
 		pathDisplay: parsePathDisplay(config.pathDisplay),
 		gitBranch,

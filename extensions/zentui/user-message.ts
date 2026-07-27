@@ -77,6 +77,7 @@ function getUserMessageConfigKey(config: PolishedTuiConfig): string {
 		config.colors.editorBorder ?? "",
 		config.colors.userMessageBorder ?? "",
 		config.colors.userMessageText ?? "",
+		String(config.userMessagePaddingY),
 		config.icons.rail,
 	].join("\0");
 }
@@ -195,11 +196,13 @@ function renderZentuiUserMessage(
 				"─".repeat(width),
 			)
 		: "─".repeat(width);
+	const padRows =
+		config.userMessagePaddingY > 0 ? [renderPromptBoxLine("", width, theme, config)] : [];
 	const lines = [
 		truncateToWidth(border, width, ""),
-		renderPromptBoxLine("", width, theme, config),
+		...padRows,
 		...contentLines.map((line) => renderPromptBoxLine(line, width, theme, config)),
-		renderPromptBoxLine("", width, theme, config),
+		...padRows,
 		truncateToWidth(border, width, ""),
 	];
 

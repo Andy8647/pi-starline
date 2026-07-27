@@ -442,6 +442,22 @@ Give each status its own icon with `extensionStatuses.icons`, keyed by status ke
 
 When enabled, the branch segment's icon becomes the `origin` remote's forge logo: GitHub, GitLab, Bitbucket, or a generic git mark for anything else, including self-hosted instances recognised by subdomain (`gitlab.acme.com`). Repos with no `origin` keep the plain branch icon. The remote is read once and cached for ten minutes, and only read at all when the option is on. Disabled in `icons.mode: "ascii"`.
 
+## Box height
+
+The editor and previous-message boxes each carry a blank row above and below
+their content. Set either to `0` to reclaim those rows:
+
+```json
+{
+	"editorPaddingY": 1,
+	"userMessagePaddingY": 1
+}
+```
+
+Only `0` and `1` are accepted. The editor frame is parsed back by position when
+one editor wraps another, so the padding the renderer emits and the padding the
+parser assumes have to agree — a second padding row has nowhere to be described.
+
 ## Editor cursor
 
 ```json
