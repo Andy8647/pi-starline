@@ -1,7 +1,11 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import type { PolishedTuiConfig, SeparatorStyle } from "./config";
-import { FOOTER_FORMAT_ALIASES } from "./config";
+import {
+	type ColorSpec,
+	FOOTER_FORMAT_ALIASES,
+	type PolishedTuiConfig,
+	type SeparatorStyle,
+} from "./config";
 import {
 	collectExtensionStatusSegments,
 	type ExtensionStatusSegment,
@@ -24,6 +28,7 @@ import {
 } from "./format";
 import { resolveRuntimeSymbol } from "./icons";
 import type { LiveContextOverride } from "./live-context";
+import { collectPillInputs, renderPillBar } from "./pill";
 import type { FooterState } from "./state";
 import { renderStyleForSource } from "./style";
 
@@ -601,6 +606,73 @@ export function installFooter(
 					footerData.getExtensionStatuses(),
 					config,
 				);
+
+				if (config.footerStyle === "pill") {
+					// Several segment colours are dynamic — the context tier, the detected
+					// runtime, the thinking level — so the spec lookup lives here where
+					// that state is already resolved, and pill.ts stays presentation-only.
+					const pillSpecFor = (segment: string): ColorSpec => {
+						switch (segment) {
+							case "model":
+								return config.colors.model;
+							case "thinking":
+								return config.colors.thinking ?? thinkingThemeKey(thinkingText);
+							case "cwd":
+								return config.colors.cwd;
+							case "sessionName":
+								return config.colors.sessionName;
+							case "gitBranch":
+								return config.colors.gitBranch;
+							case "gitStatus":
+							case "gitState":
+								return config.colors.gitStatus;
+							case "gitCommit":
+							case "gitTag":
+								return config.colors.gitCommit;
+							case "gitMetrics":
+								return config.colors.gitMetricsAdded;
+							case "runtime":
+								return state.runtime?.style ?? config.colors.runtimePrefix;
+							case "context":
+								return contextColor;
+							case "tokens":
+								return config.colors.tokens;
+							case "cost":
+								return config.colors.cost;
+							case "sessionDuration":
+								return config.colors.sessionDuration;
+							case "username":
+								return config.colors.username;
+							case "time":
+								return config.colors.time;
+							case "os":
+								return config.colors.os;
+							case "packageVersion":
+								return config.colors.packageVersion;
+							default:
+								return config.colors.extensionStatus;
+						}
+					};
+
+					const bar = renderPillBar(
+						collectPillInputs(
+							config.pill.segments,
+							[...extensionStatuses.left, ...extensionStatuses.middle, ...extensionStatuses.right],
+							renderVariable,
+							pillSpecFor,
+							config.colors.extensionStatus,
+						),
+						theme,
+						colorSource,
+						config.pill,
+						Math.max(0, width - 2),
+						{ ascii: iconMode === "ascii" },
+					);
+					// An empty bar means nothing had content; fall through to the text
+					// footer rather than emit a bare pair of caps.
+					if (bar) return [truncateToWidth(width > 2 ? ` ${bar} ` : bar, width, "")];
+				}
+
 				const renderExtensionStatus = (segment: ExtensionStatusSegment) =>
 					segment.colorMode === "original"
 						? segment.text

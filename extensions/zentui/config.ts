@@ -24,6 +24,13 @@ import {
 	type ResolvedIcons,
 	resolveConfiguredIcons,
 } from "./icons";
+import {
+	DEFAULT_PILL_CONFIG,
+	type FooterStyle,
+	normalizePillConfig,
+	type PillConfig,
+	parseFooterStyle,
+} from "./pill-config";
 import { isSupportedColorSpec } from "./style";
 
 export type ColorSpec = string;
@@ -128,6 +135,9 @@ export const DEFAULT_EDITOR_METADATA_FORMAT = "$model  $provider(  $thinking)";
 
 export type PolishedTuiConfig = {
 	projectRefreshIntervalMs: number;
+	/** "text" renders footerFormat as before; "pill" renders pill.segments instead. */
+	footerStyle: FooterStyle;
+	pill: PillConfig;
 	footerFormat: string;
 	editorMetadataFormat: string;
 	separator: SeparatorStyle;
@@ -231,6 +241,8 @@ export const configPath = join(getAgentDir(), "zentui.json");
 
 export const defaultConfig: PolishedTuiConfig = {
 	projectRefreshIntervalMs: DEFAULT_PROJECT_REFRESH_INTERVAL_MS,
+	footerStyle: "text",
+	pill: DEFAULT_PILL_CONFIG,
 	footerFormat: "",
 	editorMetadataFormat: DEFAULT_EDITOR_METADATA_FORMAT,
 	separator: "pipe",
@@ -853,6 +865,8 @@ export function mergeConfig(parsed: unknown): PolishedTuiConfig {
 	const editorMetadataFormat = stringValue(config, "editorMetadataFormat");
 	return {
 		projectRefreshIntervalMs: parseProjectRefreshIntervalMs(config.projectRefreshIntervalMs),
+		footerStyle: parseFooterStyle(config.footerStyle),
+		pill: normalizePillConfig(config.pill),
 		footerFormat: stringValue(config, "footerFormat") ?? "",
 		editorMetadataFormat:
 			editorMetadataFormat && editorMetadataFormat.length > 0
