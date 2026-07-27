@@ -55,7 +55,6 @@ function makeEditor(config: PolishedTuiConfig) {
 
 // The fake theme tags with [name]; real SGR resets ride along too.
 const stripTags = (line: string) =>
-	// biome-ignore lint/suspicious/noControlCharactersInRegex: stripping terminal escapes
 	line.replace(/\u001b\[[0-9;]*m/g, "").replace(/\[[^\]]*\]/g, "");
 
 describe("editorPaddingY in the rendered frame", () => {
