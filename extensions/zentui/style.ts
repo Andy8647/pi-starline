@@ -6,6 +6,13 @@ type ThemeLike = {
 	bold?: (text: string) => string;
 	italic?: (text: string) => string;
 	underline?: (text: string) => string;
+	/**
+	 * Pi's `Theme.getFgAnsi` — returns the resolved SGR sequence for a theme color
+	 * without wrapping any text. Optional because test fixtures and older Pi
+	 * versions may not provide it; `themeColorToFgSgr` falls back to probing
+	 * `fg()` with an empty string.
+	 */
+	getFgAnsi?(color: string): string;
 };
 
 export type { ThemeLike };
@@ -329,4 +336,193 @@ export function renderChromeBorder(
 		{ theme: "borderMuted", terminal: terminalFallbackStyle },
 		text,
 	);
+}
+
+/* -------------------------------------------------------------------------
+ * Structured ColorSpec resolution
+ *
+ * The `render*` functions above return ready-wrapped strings, which is all the
+ * text footer needs. The pill footer needs the foreground and background as
+ * separate SGR sequences, because the arrow joining two pills draws the left
+ * pill's background as its foreground and the right pill's background as its
+ * background.
+ *
+ * These resolvers are additive: they mirror the token semantics of
+ * `renderStyle` / `renderThemeStyle` but never feed back into them, so text
+ * mode output stays byte-identical to upstream. In particular they cannot
+ * replace the theme path, which styles via chalk (`\x1b[1m..\x1b[22m`) and
+ * closes with `\x1b[39m` rather than `\x1b[0m`.
+ * ---------------------------------------------------------------------- */
+
+const FG_RESET = "\x1b[39m";
+
+export type ResolvedStyle = {
+	/** Full SGR sequence for the foreground, e.g. `\x1b[38;2;203;166;247m`. */
+	fg?: string;
+	/** Full SGR sequence for the background, only set by an explicit `bg:` token. */
+	bg?: string;
+	bold: boolean;
+	italic: boolean;
+	underline: boolean;
+	dim: boolean;
+};
+
+function emptyResolvedStyle(): ResolvedStyle {
+	return { bold: false, italic: false, underline: false, dim: false };
+}
+
+function hasAnyStyle(resolved: ResolvedStyle): boolean {
+	return Boolean(
+		resolved.fg ||
+			resolved.bg ||
+			resolved.bold ||
+			resolved.italic ||
+			resolved.underline ||
+			resolved.dim,
+	);
+}
+
+/**
+ * Resolve a Pi theme color key to its foreground SGR sequence.
+ *
+ * Prefers Pi's public `Theme.getFgAnsi`, which has already picked the right
+ * encoding for the terminal (truecolor `38;2;r;g;b` vs 256-colour `38;5;n`).
+ * Falls back to probing `fg(color, "")`, whose result is the same sequence
+ * followed by `\x1b[39m`. Returns undefined for themes that do neither —
+ * notably test fixtures — so callers can degrade instead of emitting garbage.
+ */
+export function themeColorToFgSgr(theme: ThemeLike, color: string): string | undefined {
+	if (typeof theme.getFgAnsi === "function") {
+		try {
+			const ansi = theme.getFgAnsi(color);
+			if (typeof ansi === "string" && ansi.startsWith("\x1b[")) return ansi;
+		} catch {
+			// Unknown key for this theme — fall through to the probe.
+		}
+	}
+	try {
+		const probe = theme.fg(color, "");
+		if (typeof probe !== "string" || !probe.endsWith(FG_RESET)) return undefined;
+		const ansi = probe.slice(0, -FG_RESET.length);
+		return ansi.startsWith("\x1b[") ? ansi : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+function shiftSgr(sgr: string, from: string, to: string, namedDelta: number): string | undefined {
+	const match = /^\x1b\[([0-9;:]*)m$/.exec(sgr);
+	if (!match) return undefined;
+	const parts = (match[1] ?? "").split(";");
+	const head = parts[0] ?? "";
+	if (head === from) return `\x1b[${[to, ...parts.slice(1)].join(";")}m`;
+
+	const code = Number(head);
+	if (!Number.isInteger(code) || parts.length !== 1) return undefined;
+	const shifted = code + namedDelta;
+	const lowBase = namedDelta > 0 ? 30 : 40;
+	const brightBase = namedDelta > 0 ? 90 : 100;
+	const inLow = code >= lowBase && code <= lowBase + 9;
+	const inBright = code >= brightBase && code <= brightBase + 9;
+	return inLow || inBright ? `\x1b[${shifted}m` : undefined;
+}
+
+/**
+ * Convert a foreground SGR sequence to the same colour as a background.
+ * Handles `38;2;r;g;b`, `38;5;n`, the 30-37/90-97 named codes, and the `39`
+ * default. This is how a theme colour becomes a pill background without ever
+ * extracting RGB — whatever encoding Pi chose is preserved.
+ */
+export function toBackgroundSgr(fgSgr: string): string | undefined {
+	if (fgSgr === FG_RESET) return "\x1b[49m";
+	return shiftSgr(fgSgr, "38", "48", 10);
+}
+
+/** Inverse of {@link toBackgroundSgr}, used to draw a pill's arrow. */
+export function toForegroundSgr(bgSgr: string): string | undefined {
+	if (bgSgr === "\x1b[49m") return FG_RESET;
+	return shiftSgr(bgSgr, "48", "38", -10);
+}
+
+function resolveTerminalTokens(tokens: string[]): ResolvedStyle {
+	const resolved = emptyResolvedStyle();
+	for (const token of tokens) {
+		const normalized = token.toLowerCase();
+
+		const modifier = terminalStyleModifiers.get(normalized);
+		if (modifier !== undefined) {
+			if (modifier === 1) resolved.bold = true;
+			if (modifier === 2) resolved.dim = true;
+			if (modifier === 3) resolved.italic = true;
+			if (modifier === 4) resolved.underline = true;
+			continue;
+		}
+
+		const isForeground = normalized.startsWith("fg:");
+		const isBackground = normalized.startsWith("bg:");
+		const colorName = isForeground || isBackground ? normalized.slice(3) : normalized;
+		const fragment = terminalColorToAnsi(colorName, isBackground);
+		if (!fragment) continue;
+		if (isBackground) resolved.bg = `\x1b[${fragment}m`;
+		else resolved.fg = `\x1b[${fragment}m`;
+	}
+	return resolved;
+}
+
+function resolveThemeTokens(theme: ThemeLike, tokens: string[]): ResolvedStyle {
+	const resolved = emptyResolvedStyle();
+	for (const token of tokens) {
+		const normalized = token.toLowerCase();
+		if (normalized === "bold") resolved.bold = true;
+		if (normalized === "italic") resolved.italic = true;
+		if (normalized === "underline") resolved.underline = true;
+	}
+	resolved.fg = themeColorToFgSgr(theme, mapThemeColor(tokens) ?? "text");
+	return resolved;
+}
+
+/**
+ * Resolve a ColorSpec into separate foreground/background SGR sequences plus
+ * text attributes.
+ *
+ * Token precedence mirrors the `render*` functions exactly: an explicit
+ * terminal colour token (`fg:`/`bg:`, hex, or a 256 index) anywhere in the spec
+ * routes the whole spec down the terminal path regardless of `source`, which is
+ * what lets a literal `#cba6f7` override the theme per key.
+ */
+export function resolveColorSpec(
+	theme: ThemeLike,
+	source: ColorSource,
+	spec: ColorSpec,
+): ResolvedStyle {
+	const trimmed = spec.trim();
+	if (trimmed === "") return emptyResolvedStyle();
+
+	const tokens = trimmed.split(/\s+/).filter(Boolean);
+	if (source !== "terminal" && !tokens.some(isExplicitTerminalColorToken)) {
+		return resolveThemeTokens(theme, tokens);
+	}
+
+	const resolved = resolveTerminalTokens(tokens);
+	if (hasAnyStyle(resolved)) return resolved;
+
+	// Nothing matched the terminal vocabulary. `renderStyle` falls back to
+	// `colorize` here, which treats the whole spec as a theme key.
+	resolved.fg = themeColorToFgSgr(theme, trimmed);
+	return resolved;
+}
+
+/**
+ * The background a pill should paint for this spec: an explicit `bg:` when
+ * given, otherwise the spec's foreground colour promoted to a background. Undefined
+ * when the spec names no colour at all, leaving the caller to pick a neutral.
+ */
+export function resolveBackgroundSgr(
+	theme: ThemeLike,
+	source: ColorSource,
+	spec: ColorSpec,
+): string | undefined {
+	const resolved = resolveColorSpec(theme, source, spec);
+	if (resolved.bg) return resolved.bg;
+	return resolved.fg ? toBackgroundSgr(resolved.fg) : undefined;
 }
