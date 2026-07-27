@@ -5,10 +5,12 @@ import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type {
 	ColorSource,
 	ColorSpec,
+	ContextFormat,
 	ContextStyle,
 	ContextThresholds,
 	GitBranchMaxLength,
 	PathDisplayMode,
+	TokensCacheFormat,
 } from "./config";
 import type { GitCommitInfo, GitMetricsInfo } from "./git";
 import type { IconMode } from "./icons";
@@ -204,15 +206,28 @@ export function getUsageTotals(ctx: ExtensionContext): UsageTotals {
 	return totals;
 }
 
-export function buildTokenLabel(totals: UsageTotals, cacheHitIcon = "󰆼"): string {
+export function buildTokenLabel(
+	totals: UsageTotals,
+	cacheHitIcon = "󰆼",
+	cache: TokensCacheFormat = "percent",
+): string {
 	const parts: string[] = [];
 	if (totals.input) parts.push(`↑${formatCount(totals.input)}`);
 	if (totals.output) parts.push(`↓${formatCount(totals.output)}`);
 
 	const hasCacheTokens = totals.cacheRead > 0 || totals.cacheWrite > 0;
-	if (hasCacheTokens && totals.latestCacheHitRate !== undefined) {
-		const cacheHitRate = `${totals.latestCacheHitRate.toFixed(1)}%`;
-		parts.push(cacheHitIcon ? `${cacheHitIcon} ${cacheHitRate}` : cacheHitRate);
+	if (hasCacheTokens && cache !== "off") {
+		// "percent" is zentui's long-standing display; "tokens" shows the raw
+		// cache-read count instead, which is what the powerline footer showed.
+		const cacheText =
+			cache === "tokens"
+				? formatCount(totals.cacheRead)
+				: totals.latestCacheHitRate !== undefined
+					? `${totals.latestCacheHitRate.toFixed(1)}%`
+					: undefined;
+		if (cacheText !== undefined) {
+			parts.push(cacheHitIcon ? `${cacheHitIcon} ${cacheText}` : cacheText);
+		}
 	}
 	return parts.length > 0 ? parts.join(" ") : "↑0 ↓0";
 }
@@ -261,16 +276,28 @@ export function formatContextPercentLabel(
 	return `${percentLabel}/${formatCount(contextWindow)}`;
 }
 
+/** Just the rounded percentage, for `segmentOptions.context.format: "percent"`. */
+export function formatBareContextPercent(percent: number | null | undefined): string {
+	if (percent === null || percent === undefined || !Number.isFinite(percent)) return "?";
+	return `${Math.max(0, Math.min(999, Math.round(percent)))}%`;
+}
+
 export function buildContextDisplayLabel(options: {
 	percent: number | null | undefined;
 	contextWindow: number | undefined;
 	style?: ContextStyle;
 	asciiGauge?: boolean;
+	format?: ContextFormat;
 }): string {
-	const { percent, contextWindow, style = "text", asciiGauge = false } = options;
+	const { percent, contextWindow, style = "text", asciiGauge = false, format = "full" } = options;
 	if (!contextWindow || contextWindow <= 0) return "--";
 
-	const text = formatContextPercentLabel(percent, contextWindow);
+	// "percent" drops the context window, leaving a bare threshold-coloured
+	// figure for minimal layouts. It composes with contextStyle unchanged.
+	const text =
+		format === "percent"
+			? formatBareContextPercent(percent)
+			: formatContextPercentLabel(percent, contextWindow);
 	const numericPercent =
 		percent === null || percent === undefined || !Number.isFinite(percent)
 			? 0

@@ -38,6 +38,15 @@ export type ColorSource = "theme" | "terminal";
 export type { IconMode } from "./icons";
 
 export type ContextStyle = "text" | "gauge" | "text+gauge";
+/** How much the context segment spells out. Orthogonal to ContextStyle. */
+export type ContextFormat = "full" | "percent";
+/** What the tokens segment shows for cache activity. */
+export type TokensCacheFormat = "percent" | "tokens" | "off";
+
+export type SegmentOptionsConfig = {
+	context: { format: ContextFormat };
+	tokens: { cache: TokensCacheFormat };
+};
 export type SeparatorStyle = "pipe" | "dot" | "chevron" | "none";
 export type ModelLabelSource = "id" | "name";
 
@@ -142,6 +151,7 @@ export type PolishedTuiConfig = {
 	editorMetadataFormat: string;
 	separator: SeparatorStyle;
 	contextStyle: ContextStyle;
+	segmentOptions: SegmentOptionsConfig;
 	editorModelLabel: ModelLabelSource;
 	contextThresholds: ContextThresholds;
 	pathDisplay: PathDisplayConfig;
@@ -249,6 +259,7 @@ export const defaultConfig: PolishedTuiConfig = {
 	editorMetadataFormat: DEFAULT_EDITOR_METADATA_FORMAT,
 	separator: "pipe",
 	contextStyle: "text",
+	segmentOptions: { context: { format: "full" }, tokens: { cache: "percent" } },
 	editorModelLabel: "id",
 	contextThresholds: { warning: 70, error: 90 },
 	pathDisplay: { mode: "basename", depth: 0 },
@@ -586,6 +597,19 @@ function normalizeUiFeatures(record: Record<string, unknown>): UiFeaturesConfig 
 	};
 }
 
+function normalizeSegmentOptions(value: unknown): SegmentOptionsConfig {
+	const record = isRecord(value) ? value : {};
+	const context = isRecord(record.context) ? record.context : {};
+	const tokens = isRecord(record.tokens) ? record.tokens : {};
+	const cache = tokens.cache;
+	return {
+		context: { format: context.format === "percent" ? "percent" : "full" },
+		tokens: {
+			cache: cache === "tokens" || cache === "off" || cache === "percent" ? cache : "percent",
+		},
+	};
+}
+
 function normalizeFooterSegments(record: Record<string, unknown>): FooterSegmentsConfig {
 	return {
 		model: footerSegmentValue(record, "model"),
@@ -877,6 +901,7 @@ export function mergeConfig(parsed: unknown): PolishedTuiConfig {
 				: DEFAULT_EDITOR_METADATA_FORMAT,
 		separator: parseSeparatorStyle(config.separator),
 		contextStyle: parseContextStyle(config.contextStyle),
+		segmentOptions: normalizeSegmentOptions(config.segmentOptions),
 		editorModelLabel: parseEditorModelLabel(config.editorModelLabel),
 		contextThresholds: parseContextThresholds(config.contextThresholds),
 		pathDisplay: parsePathDisplay(config.pathDisplay),

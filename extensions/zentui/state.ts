@@ -1,5 +1,5 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { ModelLabelSource } from "./config";
+import type { ModelLabelSource, TokensCacheFormat } from "./config";
 import {
 	buildContextLabel,
 	buildCostLabel,
@@ -47,6 +47,7 @@ export function syncState(
 	ctx: ExtensionContext,
 	cacheHitIcon: string,
 	modelLabelSource: ModelLabelSource,
+	tokensCache: TokensCacheFormat = "percent",
 ): void {
 	const totals = getUsageTotals(ctx);
 	const m = ctx.model;
@@ -55,6 +56,6 @@ export function syncState(
 	state.modelLabel = (modelLabelSource === "name" ? m?.name || m?.id : m?.id) ?? "no-model";
 	state.providerLabel = formatProviderLabel(ctx.model?.provider);
 	state.contextLabel = buildContextLabel(ctx);
-	state.tokenLabel = buildTokenLabel(totals, cacheHitIcon);
+	state.tokenLabel = buildTokenLabel(totals, cacheHitIcon, tokensCache);
 	state.costLabel = buildCostLabel(totals);
 }

@@ -293,6 +293,7 @@ export function installFooter(
 					contextWindow,
 					style: config.contextStyle,
 					asciiGauge: iconMode === "ascii",
+					format: config.segmentOptions.context.format,
 				});
 				const tier = contextColorTier(contextPercent, config.contextThresholds);
 				const contextColor =
