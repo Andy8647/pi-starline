@@ -306,6 +306,9 @@ function renderPolishedFrame({
 		EDITOR_BORDER_FALLBACK,
 		"─".repeat(width),
 	);
+	// The metadata row stays even when it renders blank: splitPolishedFrame parses
+	// the frame back by position, so changing the line count breaks the wrapped
+	// editor path. An empty editorMetadataFormat leaves a blank row, not no row.
 	const lines = ["", ...editorLines, "", railedMeta];
 	const renderedLines = config.features.copyFriendly
 		? [

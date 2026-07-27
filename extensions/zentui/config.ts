@@ -140,6 +140,8 @@ export type ExtensionStatusesConfig = {
 	defaultPlacement: ExtensionStatusPlacement;
 	placements: Record<string, ExtensionStatusPlacement>;
 	colorModes: Record<string, ExtensionStatusColorMode>;
+	/** Per-status colour, keyed by status key. Falls back to colors.extensionStatus. */
+	colors: Record<string, ColorSpec>;
 };
 
 const DEFAULT_PROJECT_REFRESH_INTERVAL_MS = 30_000;
@@ -343,6 +345,7 @@ export const defaultConfig: PolishedTuiConfig = {
 	},
 	extensionStatuses: {
 		defaultPlacement: "right",
+		colors: {},
 		placements: {},
 		colorModes: {},
 	},
@@ -686,7 +689,10 @@ export function isExtensionStatusColorMode(value: unknown): value is ExtensionSt
 	return value === "zentui" || value === "original";
 }
 
-function normalizeExtensionStatuses(record: Record<string, unknown>): ExtensionStatusesConfig {
+function normalizeExtensionStatuses(
+	record: Record<string, unknown>,
+	palette: Palette = {},
+): ExtensionStatusesConfig {
 	const defaultPlacement = isExtensionStatusPlacement(record.defaultPlacement)
 		? record.defaultPlacement
 		: defaultConfig.extensionStatuses.defaultPlacement;
@@ -707,10 +713,22 @@ function normalizeExtensionStatuses(record: Record<string, unknown>): ExtensionS
 			)
 		: {};
 
+	// Palette references have to be expanded before validation, or a $ref would
+	// be rejected as an unsupported spec and silently drop the colour.
+	const colors = isRecord(record.colors)
+		? Object.fromEntries(
+				Object.entries(expandPaletteInRecord(record.colors, palette)).filter(
+					(entry): entry is [string, ColorSpec] =>
+						typeof entry[1] === "string" && isSupportedColorSpec(entry[1]),
+				),
+			)
+		: {};
+
 	return {
 		defaultPlacement,
 		placements,
 		colorModes,
+		colors,
 	};
 }
 
@@ -894,7 +912,7 @@ export function mergeConfig(parsed: unknown): PolishedTuiConfig {
 		? normalizeFooterSegments(config.footerSegments as Record<string, unknown>)
 		: defaultConfig.footerSegments;
 	const extensionStatuses = isRecord(config.extensionStatuses)
-		? normalizeExtensionStatuses(config.extensionStatuses as Record<string, unknown>)
+		? normalizeExtensionStatuses(config.extensionStatuses as Record<string, unknown>, palette)
 		: defaultConfig.extensionStatuses;
 	const gitCommit = isRecord(config.gitCommit)
 		? normalizeGitCommitConfig(config.gitCommit as Record<string, unknown>)
@@ -912,10 +930,10 @@ export function mergeConfig(parsed: unknown): PolishedTuiConfig {
 		footerStyle: parseFooterStyle(config.footerStyle),
 		pill: normalizePillConfig(config.pill),
 		footerFormat: stringValue(config, "footerFormat") ?? "",
-		editorMetadataFormat:
-			editorMetadataFormat && editorMetadataFormat.length > 0
-				? editorMetadataFormat
-				: DEFAULT_EDITOR_METADATA_FORMAT,
+		// An explicit "" means "show nothing", which is how the model/thinking
+		// segments get moved down to the footer without leaving an empty row.
+		// Only a missing or non-string value falls back to the default.
+		editorMetadataFormat: editorMetadataFormat ?? DEFAULT_EDITOR_METADATA_FORMAT,
 		separator: parseSeparatorStyle(config.separator),
 		contextStyle: parseContextStyle(config.contextStyle),
 		segmentOptions: normalizeSegmentOptions(config.segmentOptions),
@@ -939,6 +957,7 @@ export function mergeConfig(parsed: unknown): PolishedTuiConfig {
 			defaultPlacement: extensionStatuses.defaultPlacement,
 			placements: { ...extensionStatuses.placements },
 			colorModes: { ...extensionStatuses.colorModes },
+			colors: { ...extensionStatuses.colors },
 		},
 		fixedEditor,
 	};
@@ -949,6 +968,14 @@ export function getExtensionStatusPlacement(
 	key: string,
 ): ExtensionStatusPlacement {
 	return config.extensionStatuses.placements[key] ?? config.extensionStatuses.defaultPlacement;
+}
+
+/** Colour for one status, or undefined to use the shared extensionStatus colour. */
+export function getExtensionStatusColor(
+	config: PolishedTuiConfig,
+	key: string,
+): ColorSpec | undefined {
+	return config.extensionStatuses.colors[key];
 }
 
 export function getExtensionStatusColorMode(

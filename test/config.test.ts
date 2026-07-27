@@ -97,6 +97,7 @@ describe("mergeConfig", () => {
 			defaultPlacement: "right",
 			placements: {},
 			colorModes: {},
+			colors: {},
 		});
 	});
 
@@ -148,7 +149,7 @@ describe("mergeConfig", () => {
 
 	it("defaults editorMetadataFormat and preserves non-empty strings", () => {
 		expect(defaultConfig.editorMetadataFormat).toBe(DEFAULT_EDITOR_METADATA_FORMAT);
-		for (const value of [undefined, null, 123, true, ""]) {
+		for (const value of [undefined, null, 123, true]) {
 			expect(mergeConfig({ editorMetadataFormat: value }).editorMetadataFormat).toBe(
 				DEFAULT_EDITOR_METADATA_FORMAT,
 			);
@@ -157,6 +158,9 @@ describe("mergeConfig", () => {
 			"$model · $provider",
 		);
 		expect(mergeConfig({ editorMetadataFormat: "   " }).editorMetadataFormat).toBe("   ");
+		// An explicit "" means "show nothing", so the model and thinking segments can
+		// move to the footer without the editor still spelling them out.
+		expect(mergeConfig({ editorMetadataFormat: "" }).editorMetadataFormat).toBe("");
 	});
 
 	it("ignores non-string footerFormat values", () => {
@@ -543,6 +547,7 @@ describe("mergeConfig", () => {
 					alpha: "original",
 					beta: "zentui",
 				},
+				colors: {},
 			},
 		});
 
@@ -557,6 +562,7 @@ describe("mergeConfig", () => {
 				alpha: "original",
 				beta: "zentui",
 			},
+			colors: {},
 		});
 	});
 
@@ -575,17 +581,20 @@ describe("mergeConfig", () => {
 						beta: "muted",
 						gamma: 1,
 					},
+					colors: {},
 				},
 			}).extensionStatuses,
 		).toEqual({
 			defaultPlacement: "right",
 			placements: { alpha: "left" },
 			colorModes: { alpha: "original" },
+			colors: {},
 		});
 		expect(mergeConfig({ extensionStatuses: { placements: "none" } }).extensionStatuses).toEqual({
 			defaultPlacement: "right",
 			placements: {},
 			colorModes: {},
+			colors: {},
 		});
 	});
 
@@ -1149,6 +1158,7 @@ describe("mergeConfig", () => {
 				defaultPlacement: "left",
 				placements: { alpha: "right" },
 				colorModes: { alpha: "zentui", beta: "original" },
+				colors: {},
 			});
 			expect(raw.unknown).toBe(true);
 			expect(raw.colors.futureKey).toBe("future");
@@ -1198,6 +1208,7 @@ describe("mergeConfig", () => {
 				defaultPlacement: "left",
 				placements: { alpha: "right", beta: "off" },
 				colorModes: {},
+				colors: {},
 			});
 			expect(raw.unknown).toBe(true);
 			expect(raw.colors.futureKey).toBe("future");

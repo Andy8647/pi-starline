@@ -40,6 +40,9 @@ const SEPARATOR_GLYPHS: Record<PillConfig["separator"], string> = {
 
 const CAP_GLYPHS = { left: "", right: "" };
 
+/** Divider used where a solid arrow would be invisible. */
+const THIN_SEPARATOR = SEPARATOR_GLYPHS["powerline-thin"];
+
 export type PillInput = {
 	/** Segment name, for diagnostics. */
 	key: string;
@@ -56,10 +59,13 @@ export type PillInput = {
 	keepStyling?: boolean;
 };
 
-function statusInput(status: ExtensionStatusSegment, statusSpec: ColorSpec): PillInput {
+function statusInput(
+	status: ExtensionStatusSegment,
+	statusSpec: (key: string) => ColorSpec,
+): PillInput {
 	return status.colorMode === "original"
 		? { key: status.key, text: status.text, spec: "", keepStyling: true }
-		: { key: status.key, text: status.text, spec: statusSpec };
+		: { key: status.key, text: status.text, spec: statusSpec(status.key) };
 }
 
 /**
@@ -74,7 +80,7 @@ export function collectPillInputs(
 	statuses: ExtensionStatusSegment[],
 	renderVariable: (name: string) => string,
 	specFor: (segment: string) => ColorSpec,
-	statusSpec: ColorSpec,
+	statusSpec: (key: string) => ColorSpec,
 ): PillInput[] {
 	const placedKeys = new Set(
 		segments
@@ -252,6 +258,16 @@ export function renderPillBar(
 		const next = pills[index + 1];
 		if (next) {
 			if (!separator) return;
+
+			// A solid arrow works by being the left colour on the right colour, so
+			// it vanishes when the two pills share a background — several segments
+			// default to the same theme colour, which merged them into one blob.
+			// Fall back to the thin divider in the text colour, which stays visible.
+			if (pill.bg === next.bg) {
+				out += `${pill.bg}${pill.fg || contrastTextSgr(pill.bg)}${THIN_SEPARATOR}${RESET}`;
+				return;
+			}
+
 			const arrowFg = toForegroundSgr(pill.bg);
 			// Without a usable foreground the arrow would be invisible; letting the
 			// backgrounds abut is better than drawing a glyph in the wrong colour.

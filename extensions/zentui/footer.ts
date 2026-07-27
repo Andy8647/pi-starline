@@ -3,6 +3,7 @@ import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import {
 	type ColorSpec,
 	FOOTER_FORMAT_ALIASES,
+	getExtensionStatusColor,
 	type PolishedTuiConfig,
 	type SeparatorStyle,
 } from "./config";
@@ -691,7 +692,7 @@ export function installFooter(
 							[...extensionStatuses.left, ...extensionStatuses.middle, ...extensionStatuses.right],
 							renderVariable,
 							pillSpecFor,
-							config.colors.extensionStatus,
+							(key) => getExtensionStatusColor(config, key) ?? config.colors.extensionStatus,
 						),
 						theme,
 						colorSource,

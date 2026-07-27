@@ -399,7 +399,22 @@ Notes:
 - A status configured with `colorMode: "original"` keeps the colours its own extension chose, on a neutral background.
 - `footerSegments` toggles still apply: a segment listed here but switched off there is skipped.
 - Unknown segment names are dropped rather than drawn as empty pills.
+- Where two neighbouring pills resolve to the same background, the solid arrow would be invisible (it is the left colour drawn on the right colour), so a thin divider is drawn in the text colour instead. Several segments share a default colour, so this comes up more often than it sounds.
 - In `icons.mode: "ascii"` the arrows and caps disappear; the background transitions still separate the segments.
+
+Give each status its own colour with `extensionStatuses.colors`, keyed by status key — otherwise they all take `colors.extensionStatus` and read as one block:
+
+```json
+{
+	"extensionStatuses": {
+		"colors": {
+			"provider-balance": "bg:$yellow",
+			"pi-automode": "bg:$lavender",
+			"mcp-status": "bg:$sky"
+		}
+	}
+}
+```
 
 ## Segment display options
 
@@ -433,9 +448,15 @@ When enabled, the branch segment's icon becomes the `origin` remote's forge logo
 - `underline` — an underline instead of the block
 - `terminal` — hide the software cursor and let the real terminal cursor show through, so its shape and blink follow your terminal's own configuration
 
+**`terminal` requires Pi's own hardware cursor to be on.** Pi defaults it off (`showHardwareCursor`, or `PI_HARDWARE_CURSOR=1`) and re-applies that setting at several points, so an extension cannot turn it on reliably. Without it the software cursor is hidden and nothing replaces it. Set it in `~/.pi/agent/settings.json`:
+
+```json
+{ "showHardwareCursor": true }
+```
+
 ## Editor Metadata Format
 
-Set `editorMetadataFormat` in `~/.pi/agent/zentui.json` to customize the left side of the editor metadata row:
+Set `editorMetadataFormat` in `~/.pi/agent/zentui.json` to customize the left side of the editor metadata row. Set it to `""` to show nothing there — useful when `$model` and `$thinking` have moved to the pill footer. The row itself stays (the frame is parsed back by position, so its line count is fixed); it just renders blank.
 
 ```json
 {

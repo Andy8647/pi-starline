@@ -22,6 +22,9 @@ const MAUVE_BG = "\x1b[48;2;203;166;247m";
 const GREEN_BG = "\x1b[48;2;166;227;161m";
 const SURFACE1_BG = "\x1b[48;2;69;71;90m";
 
+const SOLID_ARROW = "";
+const THIN_ARROW = "";
+
 const theme: ThemeLike = {
 	fg(color: string, text: string): string {
 		const colors: Record<string, string> = {
@@ -125,7 +128,7 @@ describe("collectPillInputs", () => {
 	// Text comes from the footer variable, but the colour is looked up by segment
 	// name — that is the key footer.ts's pillSpecFor switch dispatches on.
 	it("maps segment names onto footer variables and looks colours up by segment", () => {
-		const inputs = collectPillInputs(["cwd", "gitBranch"], [], renderVariable, specFor, "st");
+		const inputs = collectPillInputs(["cwd", "gitBranch"], [], renderVariable, specFor, () => "st");
 		expect(inputs).toEqual([
 			{ key: "cwd", text: "<cwd>", spec: "spec:cwd" },
 			{ key: "gitBranch", text: "<git_branch>", spec: "spec:gitBranch" },
@@ -133,7 +136,13 @@ describe("collectPillInputs", () => {
 	});
 
 	it("expands extensionStatus into every registered status", () => {
-		const inputs = collectPillInputs(["extensionStatus"], statuses, renderVariable, specFor, "st");
+		const inputs = collectPillInputs(
+			["extensionStatus"],
+			statuses,
+			renderVariable,
+			specFor,
+			() => "st",
+		);
 		expect(inputs.map((input) => input.key)).toEqual(["automode", "balance", "mcp"]);
 	});
 
@@ -143,7 +152,7 @@ describe("collectPillInputs", () => {
 			statuses,
 			renderVariable,
 			specFor,
-			"st",
+			() => "st",
 		);
 		expect(inputs.map((input) => input.key)).toEqual(["balance", "cwd"]);
 	});
@@ -154,7 +163,7 @@ describe("collectPillInputs", () => {
 			statuses,
 			renderVariable,
 			specFor,
-			"st",
+			() => "st",
 		);
 		expect(inputs.map((input) => input.key)).toEqual(["balance", "cwd", "automode", "mcp"]);
 	});
@@ -165,13 +174,19 @@ describe("collectPillInputs", () => {
 			statuses,
 			renderVariable,
 			specFor,
-			"st",
+			() => "st",
 		);
 		expect(inputs).toEqual([]);
 	});
 
 	it("marks colorMode original statuses to keep their own styling", () => {
-		const inputs = collectPillInputs(["extensionStatus"], statuses, renderVariable, specFor, "st");
+		const inputs = collectPillInputs(
+			["extensionStatus"],
+			statuses,
+			renderVariable,
+			specFor,
+			() => "st",
+		);
 		const mcp = inputs.find((input) => input.key === "mcp");
 		expect(mcp).toEqual({ key: "mcp", text: "mcp 3", spec: "", keepStyling: true });
 		expect(inputs.find((input) => input.key === "balance")?.spec).toBe("st");
@@ -299,6 +314,33 @@ describe("renderPillBar", () => {
 	it("bolds by default and stops when told to", () => {
 		expect(bar([cwd])).toContain("\x1b[1m");
 		expect(bar([cwd], { bold: false })).not.toContain("\x1b[1m");
+	});
+
+	// Several segments default to the same theme colour (extensionStatus, tokens
+	// and contextNormal are all "bright-black"). A solid arrow is the left colour
+	// on the right colour, so it was invisible there and the pills merged.
+	it("keeps a visible divider between pills that share a background", () => {
+		const same: PillInput[] = [
+			{ key: "a", text: "aaa", spec: "success" },
+			{ key: "b", text: "bbb", spec: "success" },
+		];
+		const plain = stripVTControlCharacters(bar(same));
+		expect(plain).toContain(THIN_ARROW);
+		expect(plain).not.toContain(SOLID_ARROW);
+	});
+
+	it("still uses the solid arrow between different backgrounds", () => {
+		const plain = stripVTControlCharacters(bar([cwd, cost]));
+		expect(plain).toContain(SOLID_ARROW);
+		expect(plain).not.toContain(THIN_ARROW);
+	});
+
+	it("draws that divider in the text colour so it stays legible", () => {
+		const same: PillInput[] = [
+			{ key: "a", text: "aaa", spec: "syntaxKeyword" },
+			{ key: "b", text: "bbb", spec: "syntaxKeyword" },
+		];
+		expect(bar(same)).toContain(`${MAUVE_BG}\x1b[30m`);
 	});
 
 	it("truncates to the given width", () => {

@@ -141,3 +141,36 @@ describe("mergeConfig palette integration", () => {
 		);
 	});
 });
+
+describe("palette in extensionStatuses.colors", () => {
+	// Expansion has to happen before validation, or a $ref reads as an unsupported
+	// spec and the colour is dropped — which showed up as every status pill
+	// falling back to the same grey.
+	it("expands references there too", () => {
+		const config = mergeConfig({
+			palette: { yellow: "#f9e2af", sky: "#89dceb" },
+			extensionStatuses: {
+				colors: { "provider-balance": "bg:$yellow", "mcp-status": "bg:$sky" },
+			},
+		});
+		expect(config.extensionStatuses.colors).toEqual({
+			"provider-balance": "bg:#f9e2af",
+			"mcp-status": "bg:#89dceb",
+		});
+	});
+
+	it("drops a colour whose reference did not resolve", () => {
+		const config = mergeConfig({
+			palette: { yellow: "#f9e2af" },
+			extensionStatuses: { colors: { balance: "bg:$missing" } },
+		});
+		expect(config.extensionStatuses.colors).toEqual({});
+	});
+
+	it("accepts plain values with no palette declared", () => {
+		expect(
+			mergeConfig({ extensionStatuses: { colors: { balance: "bg:#f9e2af" } } }).extensionStatuses
+				.colors,
+		).toEqual({ balance: "bg:#f9e2af" });
+	});
+});
