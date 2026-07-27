@@ -3,6 +3,30 @@
 > 2026-07-27。基线 `upstream/main` = `0b2bdc7` (v0.13.0)。配套规格见 `SPEC.md`。
 > 本文件是 SPEC 的执行计划,并**订正** SPEC 中若干经代码核实后不成立的假设(见 §0)。
 
+## 进度
+
+| 阶段 | 状态 |
+|---|---|
+| P0 基线对齐(pi-tui → 0.82.1) | ✅ |
+| P1 ColorSpec 结构化 resolver | ✅ |
+| P1b palette 变量层 | ✅ |
+| P2a model / thinking 段 | ✅ |
+| P2 pill 渲染 | ✅ |
+| P3 图标 + gitHostIcon | ✅ |
+| P4 segmentOptions | ✅ |
+| P5 编辑框颜色补齐 | ✅ |
+| P7 editorCursor 三档 | ✅ |
+| P6 复制行为 | ⚠️ 9 条交付 7 条(1–6、9) |
+| P6b 编辑框内选区与单击定位(#7 #8) | ⬜ 未做,见下 |
+| P8 粘贴折叠 + 再粘展开 | ⬜ 未做 |
+| P10 文档 | ✅ |
+
+**P6b** 拆出来的原因:#7(编辑框内选区排除边框/prompt)和 #8(编辑框内单击定位光标)都需要「屏幕列 → 编辑器文本偏移」的映射,依赖 pi 编辑器内部,与 P6 其余七条的风险面完全不同。其余七条只作用在 transcript 区,那里本来就参与选择。
+
+**P8 未做的原因**:它的正确性依赖真实粘贴事件在活的 pi TUI 中的行为(影子 `handlePaste`、marker id 重编号、submit 时的 `expandPasteMarkers`),无法在无头环境中验证。设计已在 §3 写清,实现时务必先做 feature-detect + 静默降级。
+
+**当前约束状态**:`compositor.ts` 对 `upstream/main` 的 diff 为 **+20 −52**(净减 32 行,§6.7 上限 100);`git merge upstream/main` 无冲突(§6.8);`npm run verify` 654 tests / 26 files 全绿。
+
 ---
 
 ## 0. 先决调研结论(已完成,订正 SPEC)
