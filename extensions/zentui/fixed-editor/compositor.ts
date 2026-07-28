@@ -361,23 +361,30 @@ export class TerminalSplitCompositor {
 
 		const lines = this.callOriginalRender(Math.max(1, width));
 
+		// Pi's root render ends with blank rows of its own. Counting them as
+		// content pins the transcript to the top of the region and leaves the gap
+		// under it, so measure by the last row that actually has something on it.
+		let contentLength = lines.length;
+		while (contentLength > 0 && visibleWidth(lines[contentLength - 1] ?? "") === 0) {
+			contentLength--;
+		}
+
 		// Adjust scroll offset when new content arrives while scrolled up.
 		if (
 			this.scrollOffset > 0 &&
 			this.lastRootLineCount > 0 &&
-			lines.length > this.lastRootLineCount
+			contentLength > this.lastRootLineCount
 		) {
-			this.scrollOffset += lines.length - this.lastRootLineCount;
+			this.scrollOffset += contentLength - this.lastRootLineCount;
 		}
-		this.lastRootLineCount = lines.length;
-		this.maxScrollOffset = Math.max(0, lines.length - scrollableRows);
+		this.lastRootLineCount = contentLength;
+		this.maxScrollOffset = Math.max(0, contentLength - scrollableRows);
 		this.scrollOffset = clampScrollOffset(this.scrollOffset, this.maxScrollOffset);
 
-		const start = Math.max(0, lines.length - scrollableRows - this.scrollOffset);
-		const visible = lines.slice(start, start + scrollableRows);
-		// Pad above rather than below. A transcript shorter than the region should
-		// sit against the editor the way Pi's native scrollback does, instead of
-		// floating at the top of the screen with the gap underneath it.
+		const start = Math.max(0, contentLength - scrollableRows - this.scrollOffset);
+		const visible = lines.slice(start, Math.min(start + scrollableRows, contentLength));
+		// Pad above rather than below, so a transcript shorter than the region sits
+		// against the editor the way Pi's native scrollback does.
 		const padTop = Math.max(0, scrollableRows - visible.length);
 		for (let i = 0; i < padTop; i++) visible.unshift("");
 

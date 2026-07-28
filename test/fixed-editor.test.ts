@@ -413,6 +413,53 @@ describe("Pi fixed-editor compatibility", () => {
 		compositor.dispose();
 	});
 
+	/**
+	 * Pi's root render ends with blank rows of its own. Treating them as content
+	 * pins a short transcript to the top of the region and leaves the gap sitting
+	 * between it and the editor, which is what this used to look like.
+	 */
+	describe("anchoring a short transcript", () => {
+		function visibleRegion(rootLines: string[]): string[] {
+			const fixture = makeValidPiFixture();
+			fixture.rootRender.mockImplementation(() => rootLines);
+			const capabilities = inspectPiTui(fixture.tui);
+			if (!capabilities) throw new Error("expected valid fixture");
+			const compositor = new TerminalSplitCompositor(capabilities, () => ({
+				enabled: true,
+				mouseScroll: true,
+				copyNotice: true,
+				copyOnSelect: true,
+				hardwareCursor: false,
+				editorClickCursor: true,
+				editorPaddingY: 1,
+				editorTextColumn: 2,
+			}));
+			expect(compositor.install()).toBe(true);
+			const rendered = (fixture.tui.render as (width: number) => string[])(80);
+			compositor.dispose();
+			return rendered;
+		}
+
+		it("puts the content against the editor, not at the top", () => {
+			const region = visibleRegion(["only line"]);
+			expect(region.at(-1)).toContain("only line");
+			expect(region.slice(0, -1).every((line) => line.trim() === "")).toBe(true);
+		});
+
+		it("ignores the blank rows Pi appends", () => {
+			const region = visibleRegion(["only line", "", "", ""]);
+			expect(region.at(-1)).toContain("only line");
+			expect(region.filter((line) => line.includes("only line"))).toHaveLength(1);
+		});
+
+		it("still shows the newest lines when the transcript overflows", () => {
+			const many = Array.from({ length: 60 }, (_, index) => `line-${index}`);
+			const region = visibleRegion(many);
+			expect(region.at(-1)).toContain("line-59");
+			expect(region.every((line) => line.trim() !== "")).toBe(true);
+		});
+	});
+
 	it("clears the right-click mouse-resume timer on disposal", () => {
 		vi.useFakeTimers();
 		try {
