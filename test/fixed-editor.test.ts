@@ -833,10 +833,10 @@ describe("selection", () => {
 			const r3 = sel.getRangeForLine(3);
 			expect(r3?.startCol).toBe(0);
 			expect(r3?.endCol).toBe(Number.POSITIVE_INFINITY);
-			// Line 5 is end: cols 0..8
+			// Line 5 is the end: through the cell at col 8, so exclusive end 9
 			const r5 = sel.getRangeForLine(5);
 			expect(r5?.startCol).toBe(0);
-			expect(r5?.endCol).toBe(8);
+			expect(r5?.endCol).toBe(9);
 			// Line 6 is after selection
 			expect(sel.getRangeForLine(6)).toBeNull();
 		});
@@ -849,11 +849,14 @@ describe("selection", () => {
 			expect(sel.getSelectedText(lines)).toBe("llo world\nfoo bar");
 		});
 
-		it("getSelectedText returns empty for single point", () => {
+		// Anchor and focus are cells, not boundaries, so a selection that never
+		// left its starting cell still covers that cell. A press that turns out to
+		// be a click is the controller's business, not this class's.
+		it("getSelectedText covers the single cell under the pointer", () => {
 			const sel = new SelectionState();
 			sel.start(0, 3);
 			sel.extend(0, 3);
-			expect(sel.getSelectedText(["hello"])).toBe("");
+			expect(sel.getSelectedText(["hello"])).toBe("l");
 		});
 
 		it("getSelectedText strips ANSI codes", () => {
@@ -861,7 +864,7 @@ describe("selection", () => {
 			const lines = ["\x1b[32mhello\x1b[0m world"];
 			sel.start(0, 0);
 			sel.extend(0, 8);
-			expect(sel.getSelectedText(lines)).toBe("hello wo");
+			expect(sel.getSelectedText(lines)).toBe("hello wor");
 		});
 
 		it("handles reverse selection (drag upward)", () => {
@@ -869,8 +872,9 @@ describe("selection", () => {
 			const lines = ["line0", "line1", "line2"];
 			sel.start(2, 3);
 			sel.extend(0, 2);
-			// Normalized: start=(0,2) end=(2,3)
-			expect(sel.getSelectedText(lines)).toBe("ne0\nline1\nlin");
+			// Normalized to start=(0,2), end=(2,3) inclusive — both the cell the drag
+			// started on and the cell it ended on are in.
+			expect(sel.getSelectedText(lines)).toBe("ne0\nline1\nline");
 		});
 	});
 
@@ -882,7 +886,7 @@ describe("selection", () => {
 			const result = highlightSelection("hello world", 0, sel);
 			expect(result).toContain("\x1b[48;5;238m");
 			expect(result).toContain("\x1b[49m");
-			expect(result).toBe("he\x1b[48;5;238mllo\x1b[49m world");
+			expect(result).toBe("he\x1b[48;5;238mllo \x1b[49mworld");
 		});
 
 		it("does not modify non-selected lines", () => {
@@ -934,6 +938,42 @@ describe("selection", () => {
 			expect(result).toContain("\x1b[31m"); // red preserved
 			expect(result).toContain("\x1b[48;5;238m"); // inverse added
 			expect(result).toContain("\x1b[49m"); // inverse off
+		});
+
+		// A reset inside the run wipes the tint for everything after it, which is
+		// how a whole selected editor row ended up showing only its first cell.
+		it("re-asserts the tint after a reset inside the selection", () => {
+			const sel = new SelectionState();
+			sel.start(0, 0);
+			sel.extend(0, 12);
+			const result = highlightSelection("ab\x1b[0mcd\x1b[0mef world", 0, sel);
+			expect(result).toBe(
+				"\x1b[48;5;238mab\x1b[0m\x1b[48;5;238mcd\x1b[0m\x1b[48;5;238mef world\x1b[49m",
+			);
+		});
+
+		it("does not re-assert the tint outside the selection", () => {
+			const sel = new SelectionState();
+			sel.start(0, 0);
+			sel.extend(0, 1);
+			const result = highlightSelection("ab\x1b[0mcd", 0, sel);
+			expect(result).toBe("\x1b[48;5;238mab\x1b[49m\x1b[0mcd");
+		});
+
+		// Real shape of a Pi editor row: coloured rail, two resets, then the text.
+		it("tints an editor row's text but never its rail", () => {
+			const sel = new SelectionState();
+			sel.start(0, 0);
+			sel.extend(2, 4);
+			const row = "\x1b[38;2;203;166;247m│\x1b[0m\x1b[0m AAAA BBBB";
+			const result = highlightSelection(row, 1, sel, 2);
+
+			// The rail and the space after it stay untinted...
+			expect(result.indexOf("\x1b[48;5;238m")).toBeGreaterThan(result.indexOf("│"));
+			expect(result).toContain("\x1b[38;2;203;166;247m│\x1b[0m\x1b[0m ");
+			// ...and the text after the resets is tinted all the way.
+			expect(result).toContain("\x1b[48;5;238mAAAA BBBB");
+			expect(result.endsWith("\x1b[49m")).toBe(true);
 		});
 	});
 

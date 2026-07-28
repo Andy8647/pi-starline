@@ -89,7 +89,10 @@ export class SelectionController {
 	private selectedText(): string {
 		if (this.area === "editor") {
 			if (!this.editorSelection.active) return "";
-			return this.editorSelection.getSelectedText(this.host.getClusterLines());
+			return this.editorSelection.getSelectedText(
+				this.host.getClusterLines(),
+				this.editorTextColumn(),
+			);
 		}
 		if (!this.selection.active) return "";
 		return this.selection.getSelectedText(this.host.getRootLines());
@@ -100,12 +103,23 @@ export class SelectionController {
 	}
 
 	/**
+	 * Where the editor's text starts, past the box's rail. Selection stops there:
+	 * the chrome is not text, so it should neither light up nor be copied.
+	 */
+	private editorTextColumn(): number {
+		return this.editorBox?.textColumn ?? this.host.getEditorTextColumn();
+	}
+
+	/**
 	 * Paint the editor-box selection onto cluster lines. Only ever highlights
 	 * inside the box, because that is the only place the selection can reach.
 	 */
 	highlightCluster(lines: string[]): string[] {
 		if (!this.editorSelection.active) return lines;
-		return lines.map((line, index) => highlightSelection(line, index, this.editorSelection));
+		const minCol = this.editorTextColumn();
+		return lines.map((line, index) =>
+			highlightSelection(line, index, this.editorSelection, minCol),
+		);
 	}
 
 	/**
@@ -219,7 +233,7 @@ export class SelectionController {
 			if (this.pressPoint && (this.pressPoint.line !== line || this.pressPoint.col !== col)) {
 				this.dragged = true;
 			}
-			this.selection.extend(line, col + 1);
+			this.selection.extend(line, col);
 			this.host.requestRender();
 			return;
 		}
@@ -272,7 +286,7 @@ export class SelectionController {
 			if (this.pressPoint && (this.pressPoint.line !== row || this.pressPoint.col !== col)) {
 				this.dragged = true;
 			}
-			this.editorSelection.extend(row, col + 1);
+			this.editorSelection.extend(row, col);
 			this.host.requestRender();
 			return;
 		}
@@ -283,7 +297,7 @@ export class SelectionController {
 	}
 
 	private finishEditorDrag(row: number, col: number, clusterRow: number, clusterCol: number): void {
-		this.editorSelection.extend(row, col + 1);
+		this.editorSelection.extend(row, col);
 		this.editorSelection.setDragging(false);
 
 		if (this.dragged) {
@@ -320,7 +334,7 @@ export class SelectionController {
 	}
 
 	private finishDrag(line: number, col: number): void {
-		this.selection.extend(line, col + 1);
+		this.selection.extend(line, col);
 		this.selection.setDragging(false);
 
 		// A press with no movement is a click, not an empty selection.

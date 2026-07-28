@@ -100,7 +100,7 @@ describe("copyOnSelect: false", () => {
 	it("says character, singular, for one", () => {
 		const { controller, selection } = makeHarness({ copyOnSelect: false, copyNotice: true });
 		selection.start(0, 0);
-		selection.extend(0, 1);
+		selection.extend(0, 0);
 		selection.setDragging(false);
 		expect(controller.hintText()).toBe("1 character selected, ctrl+c to copy");
 	});
@@ -115,6 +115,20 @@ describe("copyOnSelect: false", () => {
 	it("stays quiet with no selection", () => {
 		const { controller } = makeHarness({ copyOnSelect: false, copyNotice: true });
 		expect(controller.hintText()).toBe("");
+	});
+
+	// Dragging backwards used to drop a character at each end: the cell the drag
+	// started on and the cell it ended on both fell outside the range.
+	it("selects the same text dragged backwards as forwards", () => {
+		const forwards = makeHarness({ copyOnSelect: false, copyNotice: true });
+		drag(forwards.controller, [1, 7], [1, 11]);
+		const forwardsHint = forwards.controller.hintText();
+
+		const backwards = makeHarness({ copyOnSelect: false, copyNotice: true });
+		drag(backwards.controller, [1, 11], [1, 7]);
+
+		expect(forwardsHint).toBe("4 characters selected, ctrl+c to copy"); // "line"
+		expect(backwards.controller.hintText()).toBe(forwardsHint);
 	});
 });
 
