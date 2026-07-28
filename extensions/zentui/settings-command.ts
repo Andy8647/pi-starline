@@ -137,6 +137,7 @@ const footerSegmentSettingLabels: Record<FooterSegmentSettingId, string> = {
 	runtime: "Runtime",
 	context: "Context usage",
 	tokens: "Token counts",
+	cacheHit: "Cache hit rate",
 	cost: "Session cost",
 	packageVersion: "Package version",
 	gitCommit: "Git commit",
@@ -161,6 +162,8 @@ const footerSegmentSettingDescriptions: Record<FooterSegmentSettingId, string> =
 	runtime: "Show or hide the detected runtime/language segment on the left.",
 	context: "Show or hide context usage on the right.",
 	tokens: "Show or hide input/output token counts on the right.",
+	cacheHit:
+		'Show the latest turn\'s cache hit rate as its own segment. Off by default; the tokens segment already carries it inline unless segmentOptions.tokens.cache is set to "off".',
 	cost: "Show or hide session cost on the right.",
 	packageVersion:
 		"Show the project’s own manifest version (package.json, Cargo.toml, pyproject.toml, …). Distinct from the runtime segment, which shows the installed toolchain version.",

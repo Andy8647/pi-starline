@@ -46,6 +46,7 @@ export const PILL_SEGMENT_VARIABLES: Record<string, string> = {
 	runtime: "runtime",
 	context: "context",
 	tokens: "tokens",
+	cacheHit: "cache_hit",
 	cost: "cost",
 	sessionDuration: "session_duration",
 	username: "username",

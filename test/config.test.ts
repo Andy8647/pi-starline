@@ -91,6 +91,7 @@ describe("mergeConfig", () => {
 			gitCommit: false,
 			gitMetrics: false,
 			tokens: true,
+			cacheHit: false,
 			cost: true,
 		});
 		expect(config.extensionStatuses).toEqual({
@@ -719,6 +720,7 @@ describe("mergeConfig", () => {
 			gitCommit: false,
 			gitMetrics: false,
 			tokens: false,
+			cacheHit: false,
 			cost: true,
 		});
 		expect(
@@ -742,6 +744,7 @@ describe("mergeConfig", () => {
 			gitCommit: false,
 			gitMetrics: false,
 			tokens: true,
+			cacheHit: false,
 			cost: true,
 		});
 	});
@@ -958,6 +961,7 @@ describe("mergeConfig", () => {
 				gitCommit: false,
 				gitMetrics: false,
 				tokens: false,
+				cacheHit: false,
 				cost: false,
 			});
 			expect(raw.unknown).toBe(true);
@@ -997,6 +1001,7 @@ describe("mergeConfig", () => {
 				gitCommit: false,
 				gitMetrics: false,
 				tokens: true,
+				cacheHit: false,
 				cost: true,
 			});
 			expect(raw).toEqual({ footerSegments: { runtime: false } });

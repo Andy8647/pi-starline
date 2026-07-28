@@ -434,6 +434,23 @@ Give each status its own icon with `extensionStatuses.icons`, keyed by status ke
 - `context.format` — `full` (default, `6%/200k`) or `percent` (`6%`). Orthogonal to `contextStyle`: the gauge is unaffected.
 - `tokens.cache` — `percent` (default, cache hit rate), `tokens` (raw cache-read count), or `off`.
 
+The cache hit rate can also stand on its own rather than riding inside the tokens
+segment. Enable the `cacheHit` segment and set `tokens.cache` to `off` so it is
+not shown twice:
+
+```json
+{
+	"footerSegments": { "cacheHit": true },
+	"segmentOptions": { "tokens": { "cache": "off" } },
+	"icons": { "cacheHit": "" }
+}
+```
+
+`icons.cacheHit` is the glyph for that segment, and doubles as the inline glyph
+when the rate rides inside `tokens`. The segment renders nothing when there was no
+cache activity, or when the latest turn has no known rate, so it disappears rather
+than claiming a miss.
+
 ## Git host icon
 
 ```json

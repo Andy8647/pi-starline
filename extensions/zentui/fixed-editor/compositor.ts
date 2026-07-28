@@ -368,15 +368,21 @@ export class TerminalSplitCompositor {
 
 		const start = Math.max(0, lines.length - scrollableRows - this.scrollOffset);
 		const visible = lines.slice(start, start + scrollableRows);
-		while (visible.length < scrollableRows) visible.push("");
+		// Pad above rather than below. A transcript shorter than the region should
+		// sit against the editor the way Pi's native scrollback does, instead of
+		// floating at the top of the screen with the gap underneath it.
+		const padTop = Math.max(0, scrollableRows - visible.length);
+		for (let i = 0; i < padTop; i++) visible.unshift("");
 
-		// Store for selection mapping and text extraction.
+		// Store for selection mapping and text extraction. The origin shifts back by
+		// the padding so screen row -> transcript index stays a plain offset.
+		const origin = start - padTop;
 		this.rootLines = lines;
-		this.visibleRootStart = start;
+		this.visibleRootStart = origin;
 		this.visibleScrollableRows = scrollableRows;
 
 		// Apply selection highlight to visible lines.
-		return visible.map((line, i) => highlightSelection(line, start + i, this.selection));
+		return visible.map((line, i) => highlightSelection(line, origin + i, this.selection));
 	}
 
 	private handleInput(data: string): { consume?: boolean; data?: string } | undefined {

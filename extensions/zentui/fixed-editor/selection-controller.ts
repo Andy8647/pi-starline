@@ -140,6 +140,8 @@ export class SelectionController {
 		if (event.row > this.host.getVisibleScrollableRows()) return;
 
 		const line = this.host.getVisibleRootStart() + event.row - 1;
+		// Rows above a short transcript map before its first line; nothing to select.
+		if (line < 0) return;
 		const col = Math.max(0, event.col - 1);
 
 		if (event.action === "press") {
@@ -196,6 +198,7 @@ export class SelectionController {
 	private handleRightClick(event: MouseEvent): void {
 		const line = this.host.getVisibleRootStart() + event.row - 1;
 		const insideSelection =
+			line >= 0 &&
 			event.row <= this.host.getVisibleScrollableRows() &&
 			this.selection.getRangeForLine(line) !== null;
 

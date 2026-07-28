@@ -1,6 +1,7 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { ModelLabelSource, TokensCacheFormat } from "./config";
 import {
+	buildCacheHitLabel,
 	buildContextLabel,
 	buildCostLabel,
 	buildTokenLabel,
@@ -18,6 +19,7 @@ export type FooterState = GitStatusSummary & {
 	providerLabel: string;
 	contextLabel: string;
 	tokenLabel: string;
+	cacheHitLabel: string;
 	costLabel: string;
 	runtime?: RuntimeInfo;
 	gitHost?: GitHost;
@@ -33,6 +35,7 @@ export function createInitialState(gitDefaults: GitStatusSummary): FooterState {
 		providerLabel: "Unknown",
 		contextLabel: "--",
 		tokenLabel: "↑0 ↓0",
+		cacheHitLabel: "",
 		costLabel: "$0.000",
 		runtime: undefined,
 		gitHost: undefined,
@@ -57,5 +60,6 @@ export function syncState(
 	state.providerLabel = formatProviderLabel(ctx.model?.provider);
 	state.contextLabel = buildContextLabel(ctx);
 	state.tokenLabel = buildTokenLabel(totals, cacheHitIcon, tokensCache);
+	state.cacheHitLabel = buildCacheHitLabel(totals, cacheHitIcon);
 	state.costLabel = buildCostLabel(totals);
 }

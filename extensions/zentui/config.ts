@@ -95,6 +95,7 @@ export type FooterSegmentsConfig = {
 	runtime: boolean;
 	context: boolean;
 	tokens: boolean;
+	cacheHit: boolean;
 	cost: boolean;
 	sessionDuration: boolean;
 	username: boolean;
@@ -184,6 +185,7 @@ export type PolishedTuiConfig = {
 		contextWarning: ColorSpec;
 		contextError: ColorSpec;
 		tokens: ColorSpec;
+		cacheHit: ColorSpec;
 		cost: ColorSpec;
 		separator: ColorSpec;
 		runtimePrefix: ColorSpec;
@@ -240,6 +242,7 @@ export const FOOTER_FORMAT_VARIABLES = [
 	"time",
 	"context",
 	"tokens",
+	"cache_hit",
 	"cost",
 	"package",
 	"package_version",
@@ -299,6 +302,7 @@ export const defaultConfig: PolishedTuiConfig = {
 		contextWarning: "bold yellow",
 		contextError: "bold red",
 		tokens: "bright-black",
+		cacheHit: "bright-black",
 		cost: "bold green",
 		separator: "bright-black",
 		runtimePrefix: "",
@@ -333,6 +337,7 @@ export const defaultConfig: PolishedTuiConfig = {
 		runtime: true,
 		context: true,
 		tokens: true,
+		cacheHit: false,
 		cost: true,
 		sessionDuration: false,
 		username: false,
@@ -578,6 +583,7 @@ function normalizeColors(record: Record<string, unknown>): Partial<PolishedTuiCo
 		contextWarning: colorValue(record, "contextWarning"),
 		contextError: colorValue(record, "contextError"),
 		tokens: colorValue(record, "tokens"),
+		cacheHit: colorValue(record, "cacheHit"),
 		cost: colorValue(record, "cost"),
 		separator: colorValue(record, "separator"),
 		runtimePrefix: colorValue(record, "runtimePrefix"),
@@ -652,6 +658,7 @@ function normalizeFooterSegments(record: Record<string, unknown>): FooterSegment
 		runtime: footerSegmentValue(record, "runtime"),
 		context: footerSegmentValue(record, "context"),
 		tokens: footerSegmentValue(record, "tokens"),
+		cacheHit: footerSegmentValue(record, "cacheHit"),
 		cost: footerSegmentValue(record, "cost"),
 		sessionDuration: footerSegmentValue(record, "sessionDuration"),
 		username: footerSegmentValue(record, "username"),

@@ -307,6 +307,9 @@ export function installFooter(
 				const contextDisplay = withIcon(config.icons.context, contextLabel);
 				const tokensDisplay = withIcon(config.icons.tokens, state.tokenLabel);
 				const costDisplay = withIcon(config.icons.cost, state.costLabel);
+				// The cacheHit icon doubles as the tokens segment's inline cache glyph;
+				// state.cacheHitLabel already carries it, so no withIcon here.
+				const cacheHitDisplay = state.cacheHitLabel;
 				const gitColor = (text: string) =>
 					renderStyleForSource(theme, colorSource, config.colors.gitBranch, text);
 				const gitStatusColor = (text: string) =>
@@ -416,6 +419,10 @@ export function installFooter(
 							return renderStyleForSource(theme, colorSource, contextColor, contextDisplay);
 						case "tokens":
 							return renderStyleForSource(theme, colorSource, config.colors.tokens, tokensDisplay);
+						case "cache_hit":
+							return cacheHitDisplay
+								? renderStyleForSource(theme, colorSource, config.colors.cacheHit, cacheHitDisplay)
+								: "";
 						case "cost":
 							return renderStyleForSource(theme, colorSource, config.colors.cost, costDisplay);
 						case "package":
@@ -613,6 +620,9 @@ export function installFooter(
 					config.footerSegments.tokens
 						? renderStyleForSource(theme, colorSource, config.colors.tokens, tokensDisplay)
 						: "",
+					config.footerSegments.cacheHit && cacheHitDisplay
+						? renderStyleForSource(theme, colorSource, config.colors.cacheHit, cacheHitDisplay)
+						: "",
 					config.footerSegments.cost
 						? renderStyleForSource(theme, colorSource, config.colors.cost, costDisplay)
 						: "",
@@ -670,6 +680,8 @@ export function installFooter(
 								return contextColor;
 							case "tokens":
 								return config.colors.tokens;
+							case "cacheHit":
+								return config.colors.cacheHit;
 							case "cost":
 								return config.colors.cost;
 							case "sessionDuration":

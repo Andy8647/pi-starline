@@ -232,6 +232,18 @@ export function buildTokenLabel(
 	return parts.length > 0 ? parts.join(" ") : "↑0 ↓0";
 }
 
+/**
+ * Cache hit rate on its own, for the `cacheHit` segment. Empty when there was no
+ * cache activity or no rate for the latest turn, so the segment disappears
+ * rather than showing a meaningless zero.
+ */
+export function buildCacheHitLabel(totals: UsageTotals, icon = ""): string {
+	const hasCacheTokens = totals.cacheRead > 0 || totals.cacheWrite > 0;
+	if (!hasCacheTokens || totals.latestCacheHitRate === undefined) return "";
+	const rate = `${totals.latestCacheHitRate.toFixed(1)}%`;
+	return icon ? `${icon} ${rate}` : rate;
+}
+
 export function buildCostLabel(totals: UsageTotals): string {
 	return `$${totals.cost.toFixed(3)}`;
 }

@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { defaultConfig, mergeConfig } from "../extensions/zentui/config";
+import { defaultConfig, FOOTER_FORMAT_VARIABLES, mergeConfig } from "../extensions/zentui/config";
 import {
+	buildCacheHitLabel,
 	buildContextDisplayLabel,
 	buildTokenLabel,
 	formatBareContextPercent,
 } from "../extensions/zentui/format";
+import { PILL_SEGMENT_VARIABLES } from "../extensions/zentui/pill-config";
 
 const totals = {
 	input: 12_000,
@@ -139,5 +141,38 @@ describe("tokens cache format", () => {
 			latestCacheHitRate: undefined,
 		};
 		expect(buildTokenLabel(empty, "C", "off")).toBe("↑0 ↓0");
+	});
+});
+
+describe("cacheHit as a standalone segment", () => {
+	it("is off by default, since tokens already carries the rate inline", () => {
+		expect(defaultConfig.footerSegments.cacheHit).toBe(false);
+	});
+
+	it("renders just the rate", () => {
+		expect(buildCacheHitLabel(totals)).toBe("87.3%");
+	});
+
+	it("takes an icon", () => {
+		expect(buildCacheHitLabel(totals, "⚡")).toBe("⚡ 87.3%");
+	});
+
+	// Empty rather than "0%": the segment should disappear, not claim a miss.
+	it("is empty when there was no cache activity", () => {
+		expect(buildCacheHitLabel({ ...totals, cacheRead: 0, cacheWrite: 0 }, "⚡")).toBe("");
+	});
+
+	it("is empty when the latest turn has no known rate", () => {
+		expect(buildCacheHitLabel({ ...totals, latestCacheHitRate: undefined }, "⚡")).toBe("");
+	});
+
+	it("is a footerFormat variable and a pill segment", () => {
+		expect(FOOTER_FORMAT_VARIABLES).toContain("cache_hit");
+		expect(PILL_SEGMENT_VARIABLES.cacheHit).toBe("cache_hit");
+	});
+
+	it("has its own colour, defaulting alongside tokens", () => {
+		expect(defaultConfig.colors.cacheHit).toBe("bright-black");
+		expect(mergeConfig({ colors: { cacheHit: "#f9e2af" } }).colors.cacheHit).toBe("#f9e2af");
 	});
 });
