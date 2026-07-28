@@ -526,7 +526,21 @@ What gets stored is cleaned exactly the way Pi cleans it, so the marker expands
 to the right text on submit and behaves the same when deleted. If the editor
 does not expose what this needs, nothing is patched and Pi's threshold stands.
 
-Not implemented: pasting the same content again to expand the marker in place.
+### Paste again to expand
+
+While a collapsed paste is fresh, `paste again to expand` sits on the editor
+box's bottom border (sharing the line with the selection hint when both apply).
+Pasting the same content again replaces the placeholder with the full text in
+place, rather than adding a second one.
+
+This works for both kinds of collapse — the ones lowered by `pasteCollapseLines`
+and the ones Pi does itself above its own threshold — and needs no configuration.
+Any other keystroke puts the offer away, as does deleting the placeholder.
+
+Expansion refuses if the text behind the placeholder is no longer what was
+collapsed: Pi renumbers paste ids when a marker is deleted, so an id can come to
+point somewhere else. The cost of refusing is a second placeholder; the cost of
+guessing would be silently pasting the wrong thing.
 
 ## Editor cursor
 

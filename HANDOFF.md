@@ -5,9 +5,10 @@
 
 ## 1. 当前状态
 
-- `npm run verify` → **758 tests / 29 files 全绿**
-- `git log upstream/main..HEAD` → 26 个 commit
-- §3.0 的空隙 bug **已修复**(第四次,这次先拿到了真实数据),见 §3.0
+- `npm run verify` → **771 tests / 29 files 全绿**
+- `git log upstream/main..HEAD` → 27 个 commit
+- §3.0 的空隙 bug **已修复**(第四次,这次先拿到了真实数据);P8 的另一半(再粘一次展开)也已完成
+- **PLAN 里的阶段全部做完了**,§3 只剩已完成项的实现要点
 - 扩展已安装到本机 pi 并在实际使用中(见 §4)
 
 ### 硬约束(SPEC §6.7 / §6.8)
@@ -37,7 +38,7 @@
 | P10 | README 配色/pill/各选项文档,LICENSE 双版权 |
 | 后续修复 | pill 同色分隔线、`extensionStatuses.colors` / `.icons`、硬件光标断言、`editorPaddingY` / `userMessagePaddingY`、vitest 测试隔离 |
 | P6b | **编辑框内单击定位光标 + 拖选**,两个 commit。已可用 |
-| P8(一半) | `pasteCollapseLines`(2–10)。**"再粘一次展开"未做** |
+| P8 | `pasteCollapseLines`(2–10)+ **再粘一次就地展开**(提示画在编辑框下边框) |
 | 追加 | `cacheHit` 独立段(`$cache_hit`)、`extensionStatuses.icons` |
 
 ### 追加的两项细节
@@ -46,7 +47,7 @@
 
 **短 transcript 的对齐**。`compositor.ts` 原先用 `visible.push("")` 把空白填在内容**下方**,于是短于滚动区的 transcript 会浮在屏幕顶端、空隙全落在编辑框上方。改为填在上方。**注意**:屏幕行 → transcript 索引的原点要同步回退 `padTop`(`renderScrollableRoot` 里的 `origin`),否则选区映射会整体错位;`SelectionController` 另加了 `line < 0` 的守卫,处理点在填充行上的情况。
 
-## 3. 未完成
+## 3. 已解决的两件事(实现要点)
 
 ### 3.0 ✅ 已修复:Working 与编辑框之间的空隙
 
@@ -74,23 +75,20 @@ pi 的 **above-editor widget 容器在没有 widget 注册时渲染 `[""]`**。�
 
 诊断代码在修复后已删除。
 
-### 3.1 未完成的功能:再粘一次展开(P8 的另一半)
-
-`pasteCollapseLines` 已经做了(阈值 2–10,你的配置设的 3)。**没做的是**:折叠后出现「再粘一次可展开」提示,再粘同样内容时占位符就地变回全文。
-
-它才是真正碰 pi 私有 `pastes` map 的 id 重编号的部分,也是「悄悄丢内容」风险的所在。参考实现 `9f1901b`(展开)、`ce94fd6`(提示放到下边框)。
-
-好消息:`ce94fd6` 需要的下边框提示基础设施已经有了 —— `selection-controller.ts` 的 `overlayHintOnBorder()`,只需让它接受两段提示并用 `⋅` 连接。
-
-**移植时必须改掉**源码注释里"迁移到官方 `getPasteContent`/`replacePaste` API"的说法:0.82.1 仍然没有该 API。
-
-### 3.2 P6b 和 P8 前半的实现要点(已完成,供参考)
+### 3.1 P6b 和 P8 的实现要点(已完成,供参考)
 
 两者都靠 Reflect 进 pi 的私有成员,都写成了 feature-detect + 探测不到就静默关闭:
 
 - `editor-hit-test.ts` —— 屏幕行列 → 编辑器视觉坐标。**行算术依赖 `editorPaddingY`**,配错就点哪都不对
 - `editor-text-cursor.ts` —— 写光标位置。`resolveEditorInternals` 会往下走过容器和 `WrappedPolishedEditor` 的 `base`,因为 compositor 记的是**容器**不是编辑器
-- `paste-collapse.ts` —— 影子 `handlePaste`。清洗流程逐字对着 pi 0.82.1 抄,任何 pi 会区别对待的情况一律原样交还
+- `paste-collapse.ts` —— 影子 `handlePaste`。清洗流程逐字对着 pi 0.82.1 抄,任何 pi 会区别对待的情况一律原样交还。
+
+**再粘一次展开**也在这个文件里(参考 pi-powerline-footer 的 `9f1901b` / `ce94fd6`,但那边是子类 `BashModeEditor`,这边只有影子方法,所以是重写不是照抄):
+
+- 影子能看见**每一次**粘贴,包括 pi 自己折叠的 >10 行 —— 所以重复粘贴在插入第二个 marker **之前**就被拦下,参考实现里「先插入再删掉」那一套完全不需要
+- **pi 0.82.1 删 marker 时会重编号 paste id**(`editor.ts` 的 `handleBackspace`),armed 的 id 可能指到别人的内容上。所以展开前要求 `pastes.get(id)` 仍**逐字等于**当初 arm 的那份;对不上就不展开(代价是多一个占位符,而不是悄悄粘错东西)
+- 提示文字由 `pasteExpandHintText()` 暴露,`SelectionController.hintText()` 用 `⋅` 和选区提示拼在一起 —— **compositor.ts 一个字没动**
+- 非粘贴按键会 disarm:装载时同时影子了 `handleInput`,靠 `isInPaste` 区分 bracketed paste 的中间块
 
 ## 4. 本机安装状态
 
