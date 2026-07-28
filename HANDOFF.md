@@ -5,9 +5,9 @@
 
 ## 1. 当前状态
 
-- `npm run verify` → **756 tests / 29 files 全绿**
-- `git log upstream/main..HEAD` → 25 个 commit
-- **有一个未修复的显示 bug,见 §3.0。已经改了三次都没修好,不要在没拿到数据前再改第四次。**
+- `npm run verify` → **758 tests / 29 files 全绿**
+- `git log upstream/main..HEAD` → 26 个 commit
+- §3.0 的空隙 bug **已修复**(第四次,这次先拿到了真实数据),见 §3.0
 - 扩展已安装到本机 pi 并在实际使用中(见 §4)
 
 ### 硬约束(SPEC §6.7 / §6.8)
@@ -48,48 +48,31 @@
 
 ## 3. 未完成
 
-### 3.0 ⚠️ 未修复的 bug:transcript 与编辑框之间有大片空隙
+### 3.0 ✅ 已修复:Working 与编辑框之间的空隙
 
-**现象**:会话内容很少时(比如只有一行 `∴ Working...`),那一行浮在屏幕**顶端**,它和编辑框上边框之间留着好几行空白。期望是内容贴着编辑框,像 pi 原生 scrollback 那样。
+**现象**:`⠋ Working...` 那一行和编辑框上边框之间留着空白行。期望贴着编辑框。
 
-**改了三次,三次都没修好。** 记录如下,避免重复:
-
-| # | 改了什么 | 结果 |
-|---|---|---|
-| 1 | `renderScrollableRoot` 里空白填充从 `push`(填在内容下方)改成 `unshift`(填在上方) | 逻辑正确,但该路径没被走到 |
-| 2 | 窗口长度改为「按最后一行有内容的位置量」,不再用 `lines.length` | 逻辑正确,但"有内容"的判断是错的 |
-| 3 | blank 的定义从 `visibleWidth(line) === 0` 改成「剥样式后 trim 为空」 | 仍未修好 |
-
-第 3 次是有依据的:pi 把每一行都用空格填满整个终端宽度,所以 `visibleWidth` 判断确实是错的。改完两条新测试(空格填充行、纯样式行)在旧判断下失败、新判断下通过。**但用户实测仍有空隙**,说明这不是(或不只是)原因。
-
-**唯一一次拿到的真实数据**(启动瞬间,`ZENTUI_DEBUG_LAYOUT` 一次性 dump):
-
-```
-rawRows=51 scrollableRows=46 padTop=23
-rootLines=24 contentLength=23 clusterLines=5
-```
-
-启动帧是**正常的**——`padTop=23` 说明填充生效了。问题出在 "Working..." 那一帧,而那次 dump 是一次性的(`didDumpLayout`),抓的是启动帧,**没抓到出问题的那一帧**。这是当时最大的失误。
-
-**最有价值的未验证假设:空隙可能根本不在滚动区,而在 cluster 里。**
-
-`renderCluster`(`cluster.ts`)把 `[status, aboveWidget, editor, belowWidget, footer]` 拼起来,然后**只剥掉开头的空行**:
+**根因(第四次才拿到证据)**:空隙不在滚动区,在 **cluster** 里 —— 前三次全在改滚动区,所以都无效。`cluster.ts` 的 `renderComponent` 剥掉尾部空行之后还有一句:
 
 ```ts
-while (start < allLines.length - 1 && visibleWidth(allLines[start]) === 0) start++;
+return lines.slice(0, Math.max(end, 1));   // ← 整段全空的组件也被强行留 1 行
 ```
 
-如果 `∴ Working...` 是 **cluster 的 status 组件**渲染的,而该组件输出的是 `["∴ Working...", "", "", ""]`,那么开头不是空行、剥不掉,中间那几行空白会原样留在 status 和 editor 之间 —— **正好就是观察到的现象**,而且完美解释了为什么三次改滚动区的代码全都无效。
+pi 的 **above-editor widget 容器在没有 widget 注册时渲染 `[""]`**。这一行被 `Math.max(end, 1)` 保住,夹在 status(Working)和 editor 上边框之间,就是那道空隙。顺带把 blank 判断从 `visibleWidth === 0` 换成 `isBlankRow`(剥 SGR 后 trim),因为 pi 会把行用空格填满整宽 —— 两处(组件尾部、cluster 开头)都换了。
 
-那次 dump 里有 `--- cluster ---` 段(`clusterLines=5`),但**当时只看了根渲染那段就把文件删了**,cluster 的内容始终没看过。这是下一步第一件要做的事。
+**证据是怎么拿到的**(下次照做,别再猜):
 
-**下一步怎么做(不要跳过)**:
+1. 临时在 `cluster.ts` / `compositor.ts` 里加**按布局签名变化**才 dump 的诊断(一次性 dump 只会抓到启动帧,这是前三次失败的关键)。dump 里要含每个组件的 **raw 行**,JSON 转义,能看见空格填充。
+2. **不用手动复现**:pty 里跑真 pi 就行 ——
+   ```fish
+   (sleep 5; printf "reply with just the word hi, no tools\r"; sleep 35) | script -q /dev/null sh -c "stty rows 60 cols 140; exec pi"
+   ```
+   80×24 时 transcript 比滚动区长(`padTop=0`),复现不出来;**要把终端调高**才会走到出问题的那条路径。
+3. 把 pty 日志喂给 `pyte` 还原成真实屏幕(`uv run --with pyte python …`),直接读出「第 54 行 Working、第 55 行边框」这种硬事实,而不是靠肉眼看截图。
 
-1. 把诊断加回 `compositor.ts`(上一版实现见 commit `cdc4533` 的父提交),但改成**按布局签名变化时才 dump**,而不是一次性 —— 一次性只会抓到启动帧。签名用 `rootLines/contentLength/scrollableRows/padTop/clusterLines` 拼一下即可。
-2. 让用户在**出现空隙的那一帧**跑,然后**先看 `--- cluster ---` 段**。
-3. 如果空隙在 cluster 里 → 改 `renderCluster` 的空行处理(注意 `cluster.ts` 在「尽量跟上游逐字节一致」的清单里,但既然要动,同样只留最小改动)。
-4. 如果空隙在滚动区 → 看 `contentLength` 与 `scrollableRows` 的实际关系再判断。
-5. **先写一条能复现该帧的测试再改代码。** 前两次失败都是因为没有;第三次有测试,但测试数据(`""`)不是 pi 真实输出的形态(空格填充行),所以测试通过而 bug 仍在。
+真实数据(修复前那一帧):`status:raw = ["", " ⠋ Working...<空格填充>"]`,`above:raw = [""]`,`editor:raw = [边框, "│ …", "│ …", 边框]`。测试就是照这个形状写的。
+
+诊断代码在修复后已删除。
 
 ### 3.1 未完成的功能:再粘一次展开(P8 的另一半)
 
@@ -157,7 +140,9 @@ cp ~/.pi/agent/zentui.json.before-zentui-fork ~/.pi/agent/zentui.json
 
 10. **一次性诊断会抓错帧。** 用 `didDumpLayout` 之类的标志只 dump 第一帧,拿到的是启动画面,不是出问题的那一帧。要按状态签名变化 dump。
 
-11. **不要试图去动别的扩展的 widget 位置。** 位置由注册方通过 `placement` 决定,通常它自己就有配置项(pi-subagents 的 `fleetViewPlacement` 即是)。zentui 唯一能做的是整体重排 cluster 的组成顺序,那会波及所有扩展,太粗暴。
+11. **渲染类 bug 不要靠截图猜,pty 里跑真 pi + pyte 还原屏幕。** 见 §3.0 的三步法。三次失败都是因为改的是「看起来最像」的那段代码;真实 dump 一出来,根因在完全另一处(cluster,不是滚动区)。
+
+12. **不要试图去动别的扩展的 widget 位置。** 位置由注册方通过 `placement` 决定,通常它自己就有配置项(pi-subagents 的 `fleetViewPlacement` 即是)。zentui 唯一能做的是整体重排 cluster 的组成顺序,那会波及所有扩展,太粗暴。
 
 ## 6. 其余遗留
 

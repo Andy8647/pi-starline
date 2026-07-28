@@ -14,14 +14,22 @@ import type { ClusterRender } from "./types";
 
 export type FixedCluster = PiFixedCluster;
 
+/** A row with nothing on it. Pi pads its output with spaces, so trim first. */
+export function isBlankRow(line: string): boolean {
+	return line.replace(/\x1b\[[0-9;:?]*[ -/]*[@-~]/g, "").trim() === "";
+}
+
 function renderComponent(component: PiRenderableCapability | null, width: number): string[] {
 	if (!component) return [];
 	const lines = component.render.call(component.target, width);
 	// Strip only trailing blank lines — internal blank lines (e.g. editor
-	// padding in copy-friendly mode) must be preserved.
+	// padding in copy-friendly mode) must be preserved. A component whose whole
+	// render is blank (Pi's above-editor widget container renders one empty row
+	// when no widget is registered) contributes nothing: keeping a row for it
+	// leaves a gap between the status line and the editor border.
 	let end = lines.length;
-	while (end > 0 && visibleWidth(lines[end - 1]) === 0) end--;
-	return lines.slice(0, Math.max(end, 1));
+	while (end > 0 && isBlankRow(lines[end - 1] ?? "")) end--;
+	return lines.slice(0, end);
 }
 
 /**
@@ -83,7 +91,7 @@ export function renderCluster(
 
 	// Strip leading blank lines (e.g. empty status line above the editor border).
 	let start = 0;
-	while (start < allLines.length - 1 && visibleWidth(allLines[start]) === 0) start++;
+	while (start < allLines.length - 1 && isBlankRow(allLines[start] ?? "")) start++;
 	allLines = allLines.slice(start);
 
 	let cursor: { row: number; col: number } | null = null;

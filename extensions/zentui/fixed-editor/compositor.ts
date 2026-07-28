@@ -13,7 +13,7 @@
 
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
-import { renderCluster } from "./cluster";
+import { isBlankRow, renderCluster } from "./cluster";
 import { resolveEditorInternals } from "./editor-text-cursor";
 import { clampScrollOffset, parseKeyboardScroll, parseMouseEvent } from "./input";
 import type {
@@ -61,11 +61,6 @@ function restoreMethod(capability: PiMethodCapability): void {
 	} else {
 		Reflect.deleteProperty(capability.target, capability.key);
 	}
-}
-
-/** A row with nothing on it. Pi pads its output with spaces, so trim first. */
-function isBlankRow(line: string): boolean {
-	return line.replace(/\x1b\[[0-9;:?]*[ -/]*[@-~]/g, "").trim() === "";
 }
 
 function hideRenderable(capability: PiRenderableCapability | null): void {

@@ -762,6 +762,42 @@ describe("cluster", () => {
 			// Trailing blanks stripped, but content preserved
 			expect(result.lines).toEqual(["status", "editor", "footer"]);
 		});
+
+		it("drops a component that renders nothing but blanks", () => {
+			// Captured from a real Pi 0.82.1 frame: while the working spinner is up,
+			// the above-editor widget container renders a single empty line. Keeping
+			// it leaves a blank row between "Working..." and the editor border.
+			const cluster = {
+				status: makeCapability(["", " ⠋ Working...".padEnd(80, " ")]),
+				aboveWidget: makeCapability([""]),
+				editor: makeCapability(["─".repeat(80), "│ input", "│", "─".repeat(80)]),
+				belowWidget: null,
+				footer: makeCapability([" footer "]),
+			};
+			const result = renderCluster(cluster, 80, 24);
+			expect(result.lines).toEqual([
+				" ⠋ Working...".padEnd(80, " "),
+				"─".repeat(80),
+				"│ input",
+				"│",
+				"─".repeat(80),
+				" footer ",
+			]);
+		});
+
+		it("treats space-padded rows as blank when trimming a component", () => {
+			// Pi pads its lines out to the full terminal width, so a "blank" row is
+			// whitespace, not zero-width.
+			const cluster = {
+				status: makeCapability(["status"]),
+				aboveWidget: makeCapability([" ".repeat(80), `\x1b[39m${" ".repeat(80)}`]),
+				editor: makeCapability(["editor"]),
+				belowWidget: null,
+				footer: makeCapability(["footer", " ".repeat(80)]),
+			};
+			const result = renderCluster(cluster, 80, 24);
+			expect(result.lines).toEqual(["status", "editor", "footer"]);
+		});
 	});
 });
 
