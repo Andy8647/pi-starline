@@ -13,7 +13,7 @@ import { visibleWidth } from "@earendil-works/pi-tui";
 const ANSI_RE = /\u001b\[[0-9;?]*[ -/]*[@-~]/g;
 const OSC_RE = /\u001b\][^\u0007]*(?:\u0007|\u001b\\)/g;
 
-function stripAnsi(line: string): string {
+export function stripAnsi(line: string): string {
 	return line.replace(OSC_RE, "").replace(ANSI_RE, "");
 }
 
@@ -38,7 +38,7 @@ function extractOsc8Links(line: string): string {
 }
 
 /** Background laid over the selected run. Foreground styling is left alone. */
-const HIGHLIGHT_BG = "\x1b[48;5;238m";
+const HIGHLIGHT_BG = "\x1b[48;5;240m";
 
 const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
@@ -52,6 +52,67 @@ function sliceColumns(text: string, startCol: number, endCol: number): string {
 		col += width;
 	}
 	return result;
+}
+
+/**
+ * What a double click treats as one word. Beyond letters and digits this keeps
+ * `_-./` in, so a path, a filename or a `file.ts` reference comes out whole —
+ * the thing most worth grabbing out of a transcript. Matches what iTerm2 and
+ * Ghostty do by default.
+ */
+const WORD_CHAR = /[\p{L}\p{N}_\-./]/u;
+
+/** Visible columns of a plain (ANSI-stripped) line, one entry per column. */
+function columnsOf(plain: string): string[] {
+	const cells: string[] = [];
+	for (const { segment } of graphemeSegmenter.segment(plain)) {
+		const width = Math.max(1, visibleWidth(segment));
+		for (let i = 0; i < width; i++) cells.push(segment);
+	}
+	return cells;
+}
+
+/**
+ * Inclusive column range of the word under `col`, for a double click.
+ *
+ * Whitespace selects the run of whitespace it is in, and anything else that is
+ * not a word character selects just itself — the same three cases a terminal's
+ * own double click has.
+ */
+export function wordRangeAt(
+	plain: string,
+	col: number,
+	minCol = 0,
+): { startCol: number; endCol: number } | null {
+	const cells = columnsOf(plain);
+	if (col < minCol || col >= cells.length) return null;
+
+	const at = cells[col] ?? "";
+	const matches = (cell: string): boolean =>
+		/\s/.test(at) ? /\s/.test(cell) : WORD_CHAR.test(at) && WORD_CHAR.test(cell);
+	if (!/\s/.test(at) && !WORD_CHAR.test(at)) return { startCol: col, endCol: col };
+
+	let startCol = col;
+	while (startCol > minCol && matches(cells[startCol - 1] ?? "")) startCol--;
+	let endCol = col;
+	while (endCol < cells.length - 1 && matches(cells[endCol + 1] ?? "")) endCol++;
+	return { startCol, endCol };
+}
+
+/**
+ * Inclusive column range of the line's text, for a triple click. Trailing blanks
+ * are left out — Pi pads every row to the full terminal width, and selecting
+ * that padding would copy a tail of spaces.
+ */
+export function lineRangeAt(
+	plain: string,
+	minCol = 0,
+): { startCol: number; endCol: number } | null {
+	const cells = columnsOf(plain);
+	let endCol = cells.length - 1;
+	while (endCol >= minCol && /\s/.test(cells[endCol] ?? "")) endCol--;
+	if (endCol < minCol) return null;
+	return { startCol: minCol, endCol };
 }
 
 function comparePoints(a: { line: number; col: number }, b: { line: number; col: number }): number {

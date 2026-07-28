@@ -13,7 +13,12 @@ import {
 	inspectPiTui,
 	type PiRenderableCapability,
 } from "../extensions/zentui/fixed-editor/pi-compat";
-import { highlightSelection, SelectionState } from "../extensions/zentui/fixed-editor/selection";
+import {
+	highlightSelection,
+	lineRangeAt,
+	SelectionState,
+	wordRangeAt,
+} from "../extensions/zentui/fixed-editor/selection";
 import {
 	DISABLE_MOUSE,
 	ENABLE_ALT_SCROLL,
@@ -878,15 +883,56 @@ describe("selection", () => {
 		});
 	});
 
+	describe("wordRangeAt", () => {
+		it("covers the word under the column", () => {
+			expect(wordRangeAt("hello world", 2)).toEqual({ startCol: 0, endCol: 4 });
+			expect(wordRangeAt("hello world", 8)).toEqual({ startCol: 6, endCol: 10 });
+		});
+
+		// The point of double click in a transcript is grabbing a path in one go.
+		it("keeps a path or filename whole", () => {
+			expect(wordRangeAt("see src/foo.ts:12 now", 10)).toEqual({ startCol: 4, endCol: 13 });
+		});
+
+		it("selects a run of whitespace as one", () => {
+			expect(wordRangeAt("a   b", 2)).toEqual({ startCol: 1, endCol: 3 });
+		});
+
+		it("selects a lone punctuation cell by itself", () => {
+			expect(wordRangeAt("(x)", 0)).toEqual({ startCol: 0, endCol: 0 });
+		});
+
+		it("stops at the left margin and off the end", () => {
+			expect(wordRangeAt("│ hello", 3, 2)).toEqual({ startCol: 2, endCol: 6 });
+			expect(wordRangeAt("hi", 5)).toBeNull();
+			expect(wordRangeAt("│ hi", 0, 2)).toBeNull();
+		});
+	});
+
+	describe("lineRangeAt", () => {
+		it("covers the line without its trailing padding", () => {
+			expect(lineRangeAt("hello   ")).toEqual({ startCol: 0, endCol: 4 });
+		});
+
+		it("starts at the left margin", () => {
+			expect(lineRangeAt("│ hello  ", 2)).toEqual({ startCol: 2, endCol: 6 });
+		});
+
+		it("returns nothing for a blank line", () => {
+			expect(lineRangeAt("     ")).toBeNull();
+			expect(lineRangeAt("│    ", 2)).toBeNull();
+		});
+	});
+
 	describe("highlightSelection", () => {
 		it("applies inverse video to selected region", () => {
 			const sel = new SelectionState();
 			sel.start(0, 2);
 			sel.extend(0, 5);
 			const result = highlightSelection("hello world", 0, sel);
-			expect(result).toContain("\x1b[48;5;238m");
+			expect(result).toContain("\x1b[48;5;240m");
 			expect(result).toContain("\x1b[49m");
-			expect(result).toBe("he\x1b[48;5;238mllo \x1b[49mworld");
+			expect(result).toBe("he\x1b[48;5;240mllo \x1b[49mworld");
 		});
 
 		it("does not modify non-selected lines", () => {
@@ -903,7 +949,7 @@ describe("selection", () => {
 			sel.extend(2, 5);
 			// Line 1 is a middle line — full highlight
 			const result = highlightSelection("middle line", 1, sel);
-			expect(result).toBe("\x1b[48;5;238mmiddle line\x1b[49m");
+			expect(result).toBe("\x1b[48;5;240mmiddle line\x1b[49m");
 		});
 
 		it("preserves ANSI colors in selected region", () => {
@@ -912,7 +958,7 @@ describe("selection", () => {
 			sel.extend(0, 5);
 			const result = highlightSelection("\x1b[32mhello\x1b[0m world", 0, sel);
 			expect(result).toContain("\x1b[32m"); // green preserved
-			expect(result).toContain("\x1b[48;5;238m"); // inverse added
+			expect(result).toContain("\x1b[48;5;240m"); // inverse added
 			expect(result).toContain("\x1b[49m"); // inverse off
 			expect(result).toContain("\x1b[0m"); // original reset preserved
 			expect(result).toContain("hello");
@@ -925,7 +971,7 @@ describe("selection", () => {
 			sel.extend(0, 11);
 			const result = highlightSelection("\x1b[32mhello\x1b[0m world", 0, sel);
 			expect(result).toContain("\x1b[32mhello\x1b[0m"); // before selection unchanged
-			expect(result).toContain("\x1b[48;5;238m"); // inverse on selected part
+			expect(result).toContain("\x1b[48;5;240m"); // inverse on selected part
 		});
 
 		it("handles multiple SGR codes within selection", () => {
@@ -936,7 +982,7 @@ describe("selection", () => {
 			const result = highlightSelection(input, 0, sel);
 			expect(result).toContain("\x1b[1m"); // bold preserved
 			expect(result).toContain("\x1b[31m"); // red preserved
-			expect(result).toContain("\x1b[48;5;238m"); // inverse added
+			expect(result).toContain("\x1b[48;5;240m"); // inverse added
 			expect(result).toContain("\x1b[49m"); // inverse off
 		});
 
@@ -948,7 +994,7 @@ describe("selection", () => {
 			sel.extend(0, 12);
 			const result = highlightSelection("ab\x1b[0mcd\x1b[0mef world", 0, sel);
 			expect(result).toBe(
-				"\x1b[48;5;238mab\x1b[0m\x1b[48;5;238mcd\x1b[0m\x1b[48;5;238mef world\x1b[49m",
+				"\x1b[48;5;240mab\x1b[0m\x1b[48;5;240mcd\x1b[0m\x1b[48;5;240mef world\x1b[49m",
 			);
 		});
 
@@ -957,7 +1003,7 @@ describe("selection", () => {
 			sel.start(0, 0);
 			sel.extend(0, 1);
 			const result = highlightSelection("ab\x1b[0mcd", 0, sel);
-			expect(result).toBe("\x1b[48;5;238mab\x1b[49m\x1b[0mcd");
+			expect(result).toBe("\x1b[48;5;240mab\x1b[49m\x1b[0mcd");
 		});
 
 		// Real shape of a Pi editor row: coloured rail, two resets, then the text.
@@ -969,10 +1015,10 @@ describe("selection", () => {
 			const result = highlightSelection(row, 1, sel, 2);
 
 			// The rail and the space after it stay untinted...
-			expect(result.indexOf("\x1b[48;5;238m")).toBeGreaterThan(result.indexOf("│"));
+			expect(result.indexOf("\x1b[48;5;240m")).toBeGreaterThan(result.indexOf("│"));
 			expect(result).toContain("\x1b[38;2;203;166;247m│\x1b[0m\x1b[0m ");
 			// ...and the text after the resets is tinted all the way.
-			expect(result).toContain("\x1b[48;5;238mAAAA BBBB");
+			expect(result).toContain("\x1b[48;5;240mAAAA BBBB");
 			expect(result.endsWith("\x1b[49m")).toBe(true);
 		});
 	});

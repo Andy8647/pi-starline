@@ -707,6 +707,7 @@ Drag-select in the transcript area works whenever the fixed editor is on.
 
 - `copyOnSelect: true` (default) — releasing the mouse copies the selection and clears the highlight. `copyNotice` controls the "copied to clipboard" toast.
 - `copyOnSelect: false` — the highlight stays after release and nothing is written to the clipboard. The editor's bottom border shows `N characters selected, ctrl+c to copy` until you act on it.
+- **Double click selects a word, triple click selects the line.** A word keeps `_-./` in it, so a path, a filename or a `src/foo.ts` reference comes out whole. A fourth click starts over as a plain click. Both follow the same `copyOnSelect` rule as a drag, and both work in the input box too. Pi has no mouse selection of its own; because zentui turns on mouse reporting to do this, the terminal's own double click no longer reaches the screen — in most terminals holding shift while dragging bypasses reporting and gives you the native selection back.
 - `ctrl+c` copies the current selection under either setting. With no selection it falls through to Pi's normal ctrl+c, so interrupting still works.
 - Right-clicking inside a selection copies it outright; right-clicking anywhere else falls through to the terminal's native context menu as before.
 - Any other keystroke dismisses the highlight, so it never lingers over text that has scrolled on.
@@ -716,7 +717,8 @@ Drag-select in the transcript area works whenever the fixed editor is on.
 Inside the input box:
 
 - Clicking in your text moves the caret there. `editorClickCursor` (default on) turns it off.
-- Dragging selects the text, following the same `copyOnSelect` rule as the transcript. The rail, the borders and the metadata row are never part of what gets copied — a drag off the bottom stops at the last line of your input.
+- Dragging selects the text, following the same `copyOnSelect` rule as the transcript. The rail, the borders and the metadata row are never part of a selection — neither highlighted nor copied — and a drag off the bottom stops at the last line of your input.
+- Dragging backwards selects the same range as dragging forwards: the cell you pressed on and the cell you released on are both in.
 
 Both need the fixed editor, and both reach into Pi internals that carry no compatibility promise. If a Pi release moves them, the click simply stops doing anything rather than breaking the editor.
 

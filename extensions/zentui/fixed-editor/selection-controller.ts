@@ -15,7 +15,13 @@ import { visibleWidth } from "@earendil-works/pi-tui";
 import { type EditorBoxGeometry, findEditorBox, hitTestEditorBox } from "./editor-hit-test";
 import { positionEditorTextCursor } from "./editor-text-cursor";
 import { pasteExpandHintText } from "./paste-collapse";
-import { highlightSelection, SelectionState } from "./selection";
+import {
+	highlightSelection,
+	lineRangeAt,
+	SelectionState,
+	stripAnsi as stripAnsiForText,
+	wordRangeAt,
+} from "./selection";
 
 export type CopySource = "auto" | "explicit";
 
@@ -57,6 +63,9 @@ export type MouseEvent = { button: string; action: string; col: number; row: num
 /** Ctrl+C, as the terminal delivers it. */
 const ETX = "\x03";
 
+/** How close together two presses on one cell count as a double or triple click. */
+const MULTI_CLICK_MS = 400;
+
 export class SelectionController {
 	private readonly host: SelectionHost;
 	/**
@@ -72,6 +81,16 @@ export class SelectionController {
 	private dragged = false;
 	/** Editor-box geometry captured at press, so a drag keeps the same frame. */
 	private editorBox: EditorBoxGeometry | null = null;
+	/** Last press, for telling a second and third click from two separate ones. */
+	private lastPress: {
+		area: "transcript" | "editor";
+		line: number;
+		col: number;
+		at: number;
+		count: number;
+	} | null = null;
+	/** Set by a double or triple click, so the release that follows leaves it alone. */
+	private multiClick = false;
 
 	constructor(host: SelectionHost) {
 		this.host = host;
@@ -150,6 +169,67 @@ export class SelectionController {
 		return `${count} character${count === 1 ? "" : "s"} selected, ctrl+c to copy`;
 	}
 
+	/**
+	 * How many clicks this press makes, counting a repeat only when it lands on
+	 * the same cell soon enough. Wraps back to one after three, the way a
+	 * terminal's own click counter does.
+	 */
+	private clickCount(area: "transcript" | "editor", line: number, col: number): number {
+		const now = Date.now();
+		const last = this.lastPress;
+		const repeat =
+			last !== null &&
+			last.area === area &&
+			last.line === line &&
+			last.col === col &&
+			now - last.at <= MULTI_CLICK_MS;
+		const count = repeat ? ((last?.count ?? 0) % 3) + 1 : 1;
+		this.lastPress = { area, line, col, at: now, count };
+		return count;
+	}
+
+	/**
+	 * Select the word (double click) or the whole line (triple click) that was
+	 * clicked. Returns false when there is nothing there to select, in which case
+	 * the press goes on to behave like a normal one.
+	 */
+	private selectAtClick(
+		area: "transcript" | "editor",
+		line: number,
+		col: number,
+		count: number,
+	): boolean {
+		const raw =
+			area === "editor" ? this.host.getClusterLines()[line] : this.host.getRootLines()[line];
+		if (raw === undefined) return false;
+		const minCol = area === "editor" ? this.editorTextColumn() : 0;
+		const plain = stripAnsiForText(raw);
+		const range = count === 2 ? wordRangeAt(plain, col, minCol) : lineRangeAt(plain, minCol);
+		if (!range) return false;
+
+		const selection = area === "editor" ? this.editorSelection : this.selection;
+		const box = this.editorBox;
+		this.clear();
+		this.editorBox = area === "editor" ? box : null;
+		this.area = area;
+		selection.start(line, range.startCol);
+		selection.extend(line, range.endCol);
+		selection.setDragging(false);
+		this.multiClick = true;
+		this.dragged = false;
+		this.pressPoint = null;
+
+		if (this.host.getConfig().copyOnSelect) {
+			const text = this.selectedText();
+			this.clear();
+			this.host.requestRender();
+			this.copy(text, "auto");
+			return true;
+		}
+		this.host.requestRender();
+		return true;
+	}
+
 	private copy(text: string, source: CopySource): void {
 		if (!text) return;
 		void copyToClipboard(text);
@@ -222,10 +302,19 @@ export class SelectionController {
 		const col = Math.max(0, event.col - 1);
 
 		if (event.action === "press") {
+			const count = this.clickCount("transcript", line, col);
+			if (count > 1 && this.selectAtClick("transcript", line, col, count)) return;
+			this.multiClick = false;
 			this.selection.start(line, col);
 			this.pressPoint = { line, col };
 			this.dragged = false;
 			this.host.requestRender();
+			return;
+		}
+
+		if (this.multiClick) {
+			// The release closing a double or triple click must not collapse it.
+			if (event.action === "release") this.multiClick = false;
 			return;
 		}
 
@@ -268,10 +357,20 @@ export class SelectionController {
 			this.clear();
 			this.area = "editor";
 			this.editorBox = box;
+
+			const count = this.clickCount("editor", clusterRow, clusterCol);
+			if (count > 1 && this.selectAtClick("editor", clusterRow, clusterCol, count)) return;
+			this.multiClick = false;
+
 			this.editorSelection.start(clusterRow, clusterCol);
 			this.pressPoint = { line: clusterRow, col: clusterCol };
 			this.dragged = false;
 			this.host.requestRender();
+			return;
+		}
+
+		if (this.multiClick) {
+			if (event.action === "release") this.multiClick = false;
 			return;
 		}
 

@@ -132,6 +132,60 @@ describe("copyOnSelect: false", () => {
 	});
 });
 
+describe("double and triple click", () => {
+	/** Press and release on one cell, `times` in a row. Rows and cols are 1-based. */
+	function click(
+		controller: InstanceType<typeof SelectionController>,
+		at: [number, number],
+		times: number,
+	) {
+		for (let i = 0; i < times; i++) {
+			controller.handleMouse({ button: "left", action: "press", row: at[0], col: at[1] });
+			controller.handleMouse({ button: "left", action: "release", row: at[0], col: at[1] });
+		}
+	}
+
+	it("selects the word under a double click", () => {
+		const { controller } = makeHarness({ copyOnSelect: false, copyNotice: true });
+		// "first line here", double click inside "line".
+		click(controller, [1, 8], 2);
+		expect(controller.hintText()).toBe("4 characters selected, ctrl+c to copy");
+	});
+
+	it("selects the whole line on a third click", () => {
+		const { controller } = makeHarness({ copyOnSelect: false, copyNotice: true });
+		click(controller, [1, 8], 3);
+		expect(controller.hintText()).toBe("15 characters selected, ctrl+c to copy");
+	});
+
+	it("starts counting again on a fourth click", () => {
+		const { controller } = makeHarness({ copyOnSelect: false, copyNotice: true });
+		click(controller, [1, 8], 4);
+		// Back to a plain click, which selects nothing.
+		expect(controller.hintText()).toBe("");
+	});
+
+	it("does not count clicks on different cells as a double click", () => {
+		const { controller } = makeHarness({ copyOnSelect: false, copyNotice: true });
+		click(controller, [1, 8], 1);
+		click(controller, [1, 12], 1);
+		expect(controller.hintText()).toBe("");
+	});
+
+	it("copies straight away with copyOnSelect on", () => {
+		const { controller } = makeHarness({ copyOnSelect: true, copyNotice: true });
+		click(controller, [1, 8], 2);
+		expect(copyToClipboard).toHaveBeenCalledWith("line");
+		expect(controller.hintText()).toBe("");
+	});
+
+	it("selects nothing when the double click lands past the text", () => {
+		const { controller } = makeHarness({ copyOnSelect: false, copyNotice: true });
+		click(controller, [1, 60], 2);
+		expect(controller.hintText()).toBe("");
+	});
+});
+
 describe("the border hint is shared", () => {
 	/** Arms a collapsed paste the way a real editor would, and returns a disposer. */
 	function armPaste() {
