@@ -70,6 +70,15 @@ const DELETE_KEYS = new Set(["\x7f", "\b", "\x1b[3~"]);
 /** How close together two presses on one cell count as a double or triple click. */
 const MULTI_CLICK_MS = 400;
 
+/**
+ * Whether this input is somebody typing text, as opposed to a key that means
+ * something. Control bytes and escapes are out, which also keeps a bracketed
+ * paste out — that goes through Pi's own paste path, not this one.
+ */
+function isTypedText(data: string): boolean {
+	return data.length > 0 && !/[\x00-\x1f\x7f]/.test(data);
+}
+
 export class SelectionController {
 	private readonly host: SelectionHost;
 	/**
@@ -285,12 +294,17 @@ export class SelectionController {
 	 * Handle a key. Returns true when the key was consumed.
 	 *
 	 * ctrl+c copies a pending selection, and otherwise falls through to Pi's
-	 * normal ctrl+c. Any other key that reaches the editor dismisses the
+	 * normal ctrl+c. Backspace and delete remove an editor selection; typing
+	 * replaces one. Any other key that reaches the editor dismisses the
 	 * highlight, which would otherwise linger over text that has moved on.
 	 */
 	handleKey(data: string): boolean {
-		if (DELETE_KEYS.has(data) && this.area === "editor" && this.editorSelection.active) {
-			if (this.deleteEditorSelection()) return true;
+		if (this.area === "editor" && this.editorSelection.active) {
+			if (DELETE_KEYS.has(data) && this.deleteEditorSelection()) return true;
+			// Typing over a selection replaces it: cut it out, then let the key
+			// through to Pi, which inserts at the caret the deletion just left
+			// where the selection started.
+			if (isTypedText(data) && this.deleteEditorSelection()) return false;
 		}
 
 		if (data === ETX) {

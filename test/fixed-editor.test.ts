@@ -740,6 +740,35 @@ describe("cluster", () => {
 			expect(result.lines.length).toBeLessThanOrEqual(9);
 		});
 
+		// `slice(-0)` returns the whole array, so a cluster with no room left for
+		// the footer used to get all of it — and every other component too, ending
+		// up taller than the terminal.
+		it("keeps the cluster inside maxHeight when the editor fills it", () => {
+			const cluster = {
+				status: makeCapability(["status"]),
+				aboveWidget: makeCapability(["above"]),
+				editor: makeCapability(Array.from({ length: 30 }, (_, i) => `ed-${i}`)),
+				belowWidget: makeCapability(["below"]),
+				footer: makeCapability(["footer"]),
+			};
+			const result = renderCluster(cluster, 80, 10);
+			expect(result.lines.length).toBeLessThanOrEqual(9);
+			expect(result.lines.every((line) => line.startsWith("ed-"))).toBe(true);
+		});
+
+		it("gives what room is left to the footer first, then the widgets", () => {
+			const cluster = {
+				status: makeCapability(["status"]),
+				aboveWidget: makeCapability(["above"]),
+				editor: makeCapability(["ed-0", "ed-1", "ed-2"]),
+				belowWidget: makeCapability(["below"]),
+				footer: makeCapability(["footer"]),
+			};
+			// maxRows = 4: the three editor rows leave one, which the footer takes.
+			const result = renderCluster(cluster, 80, 5);
+			expect(result.lines).toEqual(["ed-0", "ed-1", "ed-2", "footer"]);
+		});
+
 		it("preserves internal blank lines (copy-friendly editor padding)", () => {
 			// In copy-friendly mode the editor renders truly empty strings as
 			// padding: [border, "", text, "", meta, border]. These must survive.

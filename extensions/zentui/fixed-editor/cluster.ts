@@ -76,16 +76,22 @@ export function renderCluster(
 	const editorLines = capEditorLines(editorSource, maxRows);
 	let remaining = maxRows - editorLines.length;
 
-	const footer = footerLines.slice(-remaining);
+	// `slice(-0)` is the whole array, not none of it, so an exhausted budget has
+	// to be spelled out — otherwise a tall editor hands every other component
+	// its full height and the cluster ends up taller than the terminal.
+	const lastRows = (lines: string[], count: number): string[] =>
+		count > 0 ? lines.slice(-count) : [];
+
+	const footer = lastRows(footerLines, remaining);
 	remaining -= footer.length;
 
-	const below = belowLines.slice(-remaining);
+	const below = lastRows(belowLines, remaining);
 	remaining -= below.length;
 
-	const above = aboveLines.slice(-remaining);
+	const above = lastRows(aboveLines, remaining);
 	remaining -= above.length;
 
-	const status = statusLines.slice(-remaining);
+	const status = lastRows(statusLines, remaining);
 
 	let allLines = [...status, ...above, ...editorLines, ...below, ...footer];
 

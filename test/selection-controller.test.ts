@@ -285,6 +285,50 @@ describe("deleting an editor selection", () => {
 		expect(text()).toBe("hello world\nsecond line");
 	});
 
+	it("typing replaces the selection, leaving the key to Pi to insert", () => {
+		const { controller, editor, text } = makeHarnessWithEditor({
+			copyOnSelect: false,
+			copyNotice: true,
+		});
+		dragInEditor(controller, [2, 3], [2, 7]); // "hello"
+		// Not consumed: Pi still gets the key and inserts it at the caret, which
+		// the deletion left where the selection started.
+		expect(controller.handleKey("x")).toBe(false);
+		expect(text()).toBe(" world\nsecond line");
+		expect(editor.state.cursorLine).toBe(0);
+		expect(editor.state.cursorCol).toBe(0);
+		expect(controller.hintText()).toBe("");
+	});
+
+	it("does not treat a control key or an escape sequence as typing", () => {
+		const { controller, text } = makeHarnessWithEditor({ copyOnSelect: false, copyNotice: true });
+		dragInEditor(controller, [2, 3], [2, 7]);
+		controller.handleKey("\x1b[A"); // arrow up
+		expect(text()).toBe("hello world\nsecond line");
+
+		dragInEditor(controller, [2, 3], [2, 7]);
+		controller.handleKey("\r"); // submit
+		expect(text()).toBe("hello world\nsecond line");
+	});
+
+	// A paste is Pi's own path, complete with the collapse threshold; replacing
+	// the selection here would insert the text twice over.
+	it("does not treat a bracketed paste as typing", () => {
+		const { controller, text } = makeHarnessWithEditor({ copyOnSelect: false, copyNotice: true });
+		dragInEditor(controller, [2, 3], [2, 7]);
+		controller.handleKey("\x1b[200~pasted\x1b[201~");
+		expect(text()).toBe("hello world\nsecond line");
+	});
+
+	it("leaves typing alone when the selection is in the transcript", () => {
+		const { controller, text } = makeHarnessWithEditor({ copyOnSelect: false, copyNotice: true });
+		controller.handleMouse({ button: "left", action: "press", row: 1, col: 1 });
+		controller.handleMouse({ button: "left", action: "drag", row: 1, col: 6 });
+		controller.handleMouse({ button: "left", action: "release", row: 1, col: 6 });
+		expect(controller.handleKey("x")).toBe(false);
+		expect(text()).toBe("hello world\nsecond line");
+	});
+
 	it("pushes one undo snapshot for the whole deletion", () => {
 		const { controller, editor } = makeHarnessWithEditor({ copyOnSelect: false, copyNotice: true });
 		dragInEditor(controller, [2, 3], [2, 7]);
