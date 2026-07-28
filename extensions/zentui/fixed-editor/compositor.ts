@@ -479,7 +479,11 @@ export class TerminalSplitCompositor {
 		if (cluster.lines.length === 0) return "";
 		const startRow = Math.max(1, rawRows - cluster.lines.length + 1);
 		this.lastClusterLines = cluster.lines;
-		const lines = overlayHintOnBorder(cluster.lines, this.selectionController.hintText(), width);
+		const lines = overlayHintOnBorder(
+			this.selectionController.highlightCluster(cluster.lines),
+			this.selectionController.hintText(),
+			width,
+		);
 		let buf = RESET_SCROLL_REGION;
 		for (let i = 0; i < lines.length; i++) {
 			buf += cursorTo(startRow + i, 1) + CLEAR_LINE + sanitizeLine(lines[i] ?? "", width);

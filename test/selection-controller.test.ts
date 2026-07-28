@@ -270,3 +270,155 @@ describe("overlayHintOnBorder", () => {
 		expect(out[0]?.startsWith("\x1b[38;2;69;71;90m")).toBe(true);
 	});
 });
+
+/**
+ * Selecting inside the editor box works over the rendered cluster lines, not
+ * the transcript, so it needs its own state and its own bounds. The chrome —
+ * the rail on the left, the borders and the metadata row — must stay out of
+ * whatever gets copied.
+ */
+describe("selecting inside the editor box", () => {
+	const RULE = "─".repeat(40);
+	const CLUSTER = [
+		RULE, // 0  top border
+		"│ ", // 1  padding
+		"│ hello world", // 2  text
+		"│ second line", // 3  text
+		"│ ", // 4  padding
+		"│ meta", // 5  metadata
+		RULE, // 6  bottom border
+		"footer", // 7
+	];
+	const SCROLLABLE = 5;
+
+	function makeEditorHarness(config: Config) {
+		const selection = new SelectionState();
+		const calls = { render: 0, pauseMouse: 0, notice: 0 };
+		const controller = new SelectionController({
+			selection,
+			getRootLines: () => TRANSCRIPT,
+			getVisibleRootStart: () => 0,
+			getVisibleScrollableRows: () => SCROLLABLE,
+			getConfig: () => ({ editorClickCursor: true, ...config }),
+			getClusterLines: () => CLUSTER,
+			getEditorPaddingY: () => 1,
+			getEditorTextColumn: () => 2,
+			getEditorComponent: () => undefined,
+			requestRender: () => {
+				calls.render++;
+			},
+			pauseMouseReporting: () => {
+				calls.pauseMouse++;
+			},
+			showCopyNotice: () => {
+				calls.notice++;
+			},
+		});
+		return { controller, calls };
+	}
+
+	/** Cluster row `r` (0-based) is screen row SCROLLABLE + r + 1. */
+	const screenRow = (clusterRow: number) => SCROLLABLE + clusterRow + 1;
+
+	function dragInEditor(
+		controller: InstanceType<typeof SelectionController>,
+		from: [number, number],
+		to: [number, number],
+	) {
+		controller.handleMouse({
+			button: "left",
+			action: "press",
+			row: screenRow(from[0]),
+			col: from[1],
+		});
+		controller.handleMouse({ button: "left", action: "drag", row: screenRow(to[0]), col: to[1] });
+		controller.handleMouse({
+			button: "left",
+			action: "release",
+			row: screenRow(to[0]),
+			col: to[1],
+		});
+	}
+
+	it("copies the dragged text", () => {
+		const { controller } = makeEditorHarness({ copyOnSelect: true, copyNotice: true });
+		// Text starts at column 2, so screen column 3 is the first character.
+		dragInEditor(controller, [2, 3], [2, 8]);
+		expect(copyToClipboard).toHaveBeenCalledTimes(1);
+		expect(copyToClipboard.mock.calls[0]?.[0]).toBe("hello");
+	});
+
+	it("never includes the rail, even when the drag starts on it", () => {
+		const { controller } = makeEditorHarness({ copyOnSelect: true, copyNotice: true });
+		dragInEditor(controller, [2, 1], [2, 8]);
+		expect(String(copyToClipboard.mock.calls[0]?.[0])).not.toContain("│");
+	});
+
+	it("clamps a drag that runs off the bottom onto the last text row", () => {
+		const { controller } = makeEditorHarness({ copyOnSelect: true, copyNotice: true });
+		dragInEditor(controller, [2, 3], [7, 20]);
+		const copied = String(copyToClipboard.mock.calls[0]?.[0]);
+		expect(copied).toContain("hello world");
+		expect(copied).toContain("second line");
+		expect(copied).not.toContain("meta");
+		expect(copied).not.toContain("─");
+	});
+
+	it("holds the highlight for ctrl+c when copyOnSelect is off", () => {
+		const { controller } = makeEditorHarness({ copyOnSelect: false, copyNotice: true });
+		dragInEditor(controller, [2, 3], [2, 8]);
+		expect(copyToClipboard).not.toHaveBeenCalled();
+		expect(controller.hintText()).toBe("5 characters selected, ctrl+c to copy");
+		expect(controller.handleKey("\x03")).toBe(true);
+		expect(copyToClipboard).toHaveBeenCalledWith("hello");
+	});
+
+	it("highlights only inside the box", () => {
+		const { controller } = makeEditorHarness({ copyOnSelect: false, copyNotice: true });
+		dragInEditor(controller, [2, 3], [2, 8]);
+		const painted = controller.highlightCluster(CLUSTER);
+		expect(painted[2]).not.toBe(CLUSTER[2]);
+		expect(painted[0]).toBe(CLUSTER[0]);
+		expect(painted[5]).toBe(CLUSTER[5]);
+		expect(painted[7]).toBe(CLUSTER[7]);
+	});
+
+	it("leaves the lines untouched with no selection", () => {
+		const { controller } = makeEditorHarness({ copyOnSelect: false, copyNotice: true });
+		expect(controller.highlightCluster(CLUSTER)).toBe(CLUSTER);
+	});
+
+	it("starts nothing when the press lands on the chrome", () => {
+		const { controller } = makeEditorHarness({ copyOnSelect: true, copyNotice: true });
+		dragInEditor(controller, [0, 5], [2, 8]);
+		expect(copyToClipboard).not.toHaveBeenCalled();
+	});
+
+	it("starts nothing when the press lands on the footer", () => {
+		const { controller } = makeEditorHarness({ copyOnSelect: true, copyNotice: true });
+		dragInEditor(controller, [7, 3], [7, 5]);
+		expect(copyToClipboard).not.toHaveBeenCalled();
+	});
+
+	// The two areas share the hint and the ctrl+c path, so one must replace the
+	// other rather than both being live at once.
+	it("drops a transcript selection when a drag starts in the editor", () => {
+		const { controller } = makeEditorHarness({ copyOnSelect: false, copyNotice: true });
+		controller.handleMouse({ button: "left", action: "press", row: 1, col: 1 });
+		controller.handleMouse({ button: "left", action: "drag", row: 1, col: 6 });
+		controller.handleMouse({ button: "left", action: "release", row: 1, col: 6 });
+		expect(controller.hintText()).toBe("5 characters selected, ctrl+c to copy");
+
+		dragInEditor(controller, [3, 3], [3, 9]);
+		expect(controller.hintText()).toBe("6 characters selected, ctrl+c to copy");
+		controller.handleKey("\x03");
+		expect(copyToClipboard).toHaveBeenCalledWith("second");
+	});
+
+	it("dismisses an editor highlight on the next keystroke", () => {
+		const { controller } = makeEditorHarness({ copyOnSelect: false, copyNotice: true });
+		dragInEditor(controller, [2, 3], [2, 8]);
+		expect(controller.handleKey("a")).toBe(false);
+		expect(controller.hintText()).toBe("");
+	});
+});

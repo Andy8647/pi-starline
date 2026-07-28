@@ -12,9 +12,9 @@
 import { copyToClipboard } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
 
-import { findEditorBox, hitTestEditorBox } from "./editor-hit-test";
+import { type EditorBoxGeometry, findEditorBox, hitTestEditorBox } from "./editor-hit-test";
 import { positionEditorTextCursor } from "./editor-text-cursor";
-import type { SelectionState } from "./selection";
+import { highlightSelection, SelectionState } from "./selection";
 
 export type CopySource = "auto" | "explicit";
 
@@ -58,9 +58,19 @@ const ETX = "\x03";
 
 export class SelectionController {
 	private readonly host: SelectionHost;
+	/**
+	 * Selection inside the editor box, over rendered cluster lines rather than
+	 * transcript lines. Kept separate from the transcript selection so the two
+	 * never overlap; starting one drops the other.
+	 */
+	private readonly editorSelection = new SelectionState();
+	/** Which area the live selection belongs to. */
+	private area: "transcript" | "editor" = "transcript";
 	/** Set between press and release, to tell a click from a drag. */
 	private pressPoint: { line: number; col: number } | null = null;
 	private dragged = false;
+	/** Editor-box geometry captured at press, so a drag keeps the same frame. */
+	private editorBox: EditorBoxGeometry | null = null;
 
 	constructor(host: SelectionHost) {
 		this.host = host;
@@ -76,8 +86,25 @@ export class SelectionController {
 	 * the visible text.
 	 */
 	private selectedText(): string {
+		if (this.area === "editor") {
+			if (!this.editorSelection.active) return "";
+			return this.editorSelection.getSelectedText(this.host.getClusterLines());
+		}
 		if (!this.selection.active) return "";
 		return this.selection.getSelectedText(this.host.getRootLines());
+	}
+
+	private get activeSelection(): SelectionState {
+		return this.area === "editor" ? this.editorSelection : this.selection;
+	}
+
+	/**
+	 * Paint the editor-box selection onto cluster lines. Only ever highlights
+	 * inside the box, because that is the only place the selection can reach.
+	 */
+	highlightCluster(lines: string[]): string[] {
+		if (!this.editorSelection.active) return lines;
+		return lines.map((line, index) => highlightSelection(line, index, this.editorSelection));
 	}
 
 	/**
@@ -87,7 +114,7 @@ export class SelectionController {
 	 */
 	hintText(): string {
 		if (this.host.getConfig().copyOnSelect) return "";
-		if (this.selection.isDragging) return "";
+		if (this.activeSelection.isDragging) return "";
 		const count = this.selectedText().length;
 		if (count === 0) return "";
 		return `${count} character${count === 1 ? "" : "s"} selected, ctrl+c to copy`;
@@ -102,13 +129,15 @@ export class SelectionController {
 
 	private clear(): void {
 		this.selection.clear();
+		this.editorSelection.clear();
 		this.pressPoint = null;
 		this.dragged = false;
+		this.editorBox = null;
 	}
 
 	/** Drop the highlight, if any. Returns whether anything changed. */
 	clearSelection(): boolean {
-		const had = this.selection.active;
+		const had = this.selection.active || this.editorSelection.active;
 		this.clear();
 		return had;
 	}
@@ -130,7 +159,7 @@ export class SelectionController {
 			return true;
 		}
 
-		if (this.selection.active) {
+		if (this.selection.active || this.editorSelection.active) {
 			this.clear();
 			this.host.requestRender();
 		}
@@ -149,13 +178,14 @@ export class SelectionController {
 		if (event.button !== "left") return;
 
 		// Below the transcript is the cluster: the editor box and the footer.
-		// A click in the editor's text moves the caret there.
 		const scrollableRows = this.host.getVisibleScrollableRows();
 		if (event.row > scrollableRows) {
-			if (event.action === "release") this.clickInCluster(event, scrollableRows);
+			this.handleEditorMouse(event, scrollableRows);
 			return;
 		}
 
+		if (this.area === "editor") this.clear();
+		this.area = "transcript";
 		const line = this.host.getVisibleRootStart() + event.row - 1;
 		// Rows above a short transcript map before its first line; nothing to select.
 		if (line < 0) return;
@@ -184,29 +214,93 @@ export class SelectionController {
 	}
 
 	/**
-	 * Resolve a click below the transcript. Only a click in the editor's own
-	 * text does anything; the footer and the box chrome are inert.
+	 * Mouse inside the cluster. Dragging selects the editor's text; a press with
+	 * no movement is a click, which moves the caret. The footer and the box
+	 * chrome are inert.
 	 */
-	private clickInCluster(event: MouseEvent, scrollableRows: number): void {
-		if (!this.host.getConfig().editorClickCursor) return;
-
+	private handleEditorMouse(event: MouseEvent, scrollableRows: number): void {
 		const clusterRow = event.row - scrollableRows - 1;
 		const clusterCol = Math.max(0, event.col - 1);
+
+		if (event.action === "press") {
+			const box = findEditorBox(
+				this.host.getClusterLines(),
+				this.host.getEditorPaddingY(),
+				this.host.getEditorTextColumn(),
+			);
+			const point = box ? hitTestEditorBox(box, clusterRow, clusterCol) : null;
+			if (!box || !point) {
+				// Chrome or footer: drop any highlight, but do not start one.
+				if (this.clearSelection()) this.host.requestRender();
+				return;
+			}
+
+			this.clear();
+			this.area = "editor";
+			this.editorBox = box;
+			this.editorSelection.start(clusterRow, clusterCol);
+			this.pressPoint = { line: clusterRow, col: clusterCol };
+			this.dragged = false;
+			this.host.requestRender();
+			return;
+		}
+
+		if (this.area !== "editor" || !this.editorBox) return;
+		// Keep the drag inside the text area: never past the chrome on the left,
+		// never onto a row that is not editor text.
+		const box = this.editorBox;
+		const col = Math.max(box.textColumn, clusterCol);
+		const row = Math.min(Math.max(clusterRow, box.firstTextRow), box.lastTextRow);
+
+		if (event.action === "drag" && this.editorSelection.isDragging) {
+			if (this.pressPoint && (this.pressPoint.line !== row || this.pressPoint.col !== col)) {
+				this.dragged = true;
+			}
+			this.editorSelection.extend(row, col + 1);
+			this.host.requestRender();
+			return;
+		}
+
+		if (event.action === "release" && this.editorSelection.isDragging) {
+			this.finishEditorDrag(row, col, clusterRow, clusterCol);
+		}
+	}
+
+	private finishEditorDrag(row: number, col: number, clusterRow: number, clusterCol: number): void {
+		this.editorSelection.extend(row, col + 1);
+		this.editorSelection.setDragging(false);
+
+		if (this.dragged) {
+			const text = this.selectedText();
+			if (this.host.getConfig().copyOnSelect) {
+				this.clear();
+				this.host.requestRender();
+				this.copy(text, "auto");
+				return;
+			}
+			this.pressPoint = null;
+			this.dragged = false;
+			this.host.requestRender();
+			return;
+		}
+
+		// No movement: this was a click, so move the caret instead.
+		this.clear();
+		this.moveCaretTo(clusterRow, clusterCol);
+		this.host.requestRender();
+	}
+
+	private moveCaretTo(clusterRow: number, clusterCol: number): void {
+		if (!this.host.getConfig().editorClickCursor) return;
 		const box = findEditorBox(
 			this.host.getClusterLines(),
 			this.host.getEditorPaddingY(),
 			this.host.getEditorTextColumn(),
 		);
 		if (!box) return;
-
 		const point = hitTestEditorBox(box, clusterRow, clusterCol);
 		if (!point) return;
-
-		if (
-			positionEditorTextCursor(this.host.getEditorComponent(), point.visualRow, point.visualCol)
-		) {
-			this.host.requestRender();
-		}
+		positionEditorTextCursor(this.host.getEditorComponent(), point.visualRow, point.visualCol);
 	}
 
 	private finishDrag(line: number, col: number): void {

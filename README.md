@@ -681,7 +681,12 @@ Drag-select in the transcript area works whenever the fixed editor is on.
 - An explicit copy (ctrl+c, right click) shows no toast — the hint disappearing is the confirmation.
 - OSC 8 hyperlink targets are copied along with the visible text.
 
-Not yet ported from the powerline fork: selecting inside the editor box itself, and click-to-position within it. Selection is limited to the transcript area.
+Inside the input box:
+
+- Clicking in your text moves the caret there. `editorClickCursor` (default on) turns it off.
+- Dragging selects the text, following the same `copyOnSelect` rule as the transcript. The rail, the borders and the metadata row are never part of what gets copied — a drag off the bottom stops at the last line of your input.
+
+Both need the fixed editor, and both reach into Pi internals that carry no compatibility promise. If a Pi release moves them, the click simply stops doing anything rather than breaking the editor.
 
 ### Conflicts and limitations
 
