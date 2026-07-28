@@ -186,6 +186,113 @@ describe("double and triple click", () => {
 	});
 });
 
+describe("deleting an editor selection", () => {
+	const RULE = "─".repeat(40);
+	const CLUSTER = [RULE, "│ ", "│ hello world", "│ second line", "│ ", "│ meta", RULE, "footer"];
+	const SCROLLABLE = 5;
+	const screenRow = (clusterRow: number) => SCROLLABLE + clusterRow + 1;
+
+	function makeHarnessWithEditor(config: Config) {
+		const editor = {
+			state: { lines: ["hello world", "second line"], cursorLine: 0, cursorCol: 0 },
+			lastWidth: 40,
+			scrollOffset: 0,
+			preferredVisualCol: null as number | null,
+			snappedFromCursorCol: null as number | null,
+			pushUndoSnapshot: vi.fn(),
+			setCursorCol: (col: number) => {
+				editor.state.cursorCol = col;
+			},
+			buildVisualLineMap: () =>
+				editor.state.lines.map((line, logicalLine) => ({
+					logicalLine,
+					startCol: 0,
+					length: line.length,
+				})),
+		};
+		const controller = new SelectionController({
+			selection: new SelectionState(),
+			getRootLines: () => TRANSCRIPT,
+			getVisibleRootStart: () => 0,
+			getVisibleScrollableRows: () => SCROLLABLE,
+			getConfig: () => ({ editorClickCursor: true, ...config }),
+			getClusterLines: () => CLUSTER,
+			getEditorPaddingY: () => 1,
+			getEditorTextColumn: () => 2,
+			getEditorComponent: () => editor,
+			requestRender: () => {},
+			pauseMouseReporting: () => {},
+			showCopyNotice: () => {},
+		});
+		return { controller, editor, text: () => editor.state.lines.join("\n") };
+	}
+
+	function dragInEditor(
+		controller: InstanceType<typeof SelectionController>,
+		from: [number, number],
+		to: [number, number],
+	) {
+		controller.handleMouse({
+			button: "left",
+			action: "press",
+			row: screenRow(from[0]),
+			col: from[1],
+		});
+		controller.handleMouse({ button: "left", action: "drag", row: screenRow(to[0]), col: to[1] });
+		controller.handleMouse({
+			button: "left",
+			action: "release",
+			row: screenRow(to[0]),
+			col: to[1],
+		});
+	}
+
+	it("backspace deletes the selected text and consumes the key", () => {
+		const { controller, text } = makeHarnessWithEditor({ copyOnSelect: false, copyNotice: true });
+		dragInEditor(controller, [2, 3], [2, 7]); // "hello"
+		expect(controller.handleKey("\x7f")).toBe(true);
+		expect(text()).toBe(" world\nsecond line");
+		expect(controller.hintText()).toBe("");
+	});
+
+	it("the delete key does the same", () => {
+		const { controller, text } = makeHarnessWithEditor({ copyOnSelect: false, copyNotice: true });
+		dragInEditor(controller, [2, 3], [2, 7]);
+		expect(controller.handleKey("\x1b[3~")).toBe(true);
+		expect(text()).toBe(" world\nsecond line");
+	});
+
+	it("deletes across lines, joining what is left", () => {
+		const { controller, text } = makeHarnessWithEditor({ copyOnSelect: false, copyNotice: true });
+		dragInEditor(controller, [2, 8], [3, 8]); // " world" + newline + "second"
+		expect(controller.handleKey("\x7f")).toBe(true);
+		expect(text()).toBe("hello line");
+	});
+
+	it("leaves the key to Pi when nothing is selected", () => {
+		const { controller, text } = makeHarnessWithEditor({ copyOnSelect: false, copyNotice: true });
+		expect(controller.handleKey("\x7f")).toBe(false);
+		expect(text()).toBe("hello world\nsecond line");
+	});
+
+	// The transcript is not editable, so a delete there is just a dismissal.
+	it("leaves the key to Pi for a transcript selection", () => {
+		const { controller, text } = makeHarnessWithEditor({ copyOnSelect: false, copyNotice: true });
+		controller.handleMouse({ button: "left", action: "press", row: 1, col: 1 });
+		controller.handleMouse({ button: "left", action: "drag", row: 1, col: 6 });
+		controller.handleMouse({ button: "left", action: "release", row: 1, col: 6 });
+		expect(controller.handleKey("\x7f")).toBe(false);
+		expect(text()).toBe("hello world\nsecond line");
+	});
+
+	it("pushes one undo snapshot for the whole deletion", () => {
+		const { controller, editor } = makeHarnessWithEditor({ copyOnSelect: false, copyNotice: true });
+		dragInEditor(controller, [2, 3], [2, 7]);
+		controller.handleKey("\x7f");
+		expect(editor.pushUndoSnapshot).toHaveBeenCalledTimes(1);
+	});
+});
+
 describe("the border hint is shared", () => {
 	/** Arms a collapsed paste the way a real editor would, and returns a disposer. */
 	function armPaste() {

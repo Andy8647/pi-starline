@@ -14,6 +14,7 @@ import { visibleWidth } from "@earendil-works/pi-tui";
 
 import { type EditorBoxGeometry, findEditorBox, hitTestEditorBox } from "./editor-hit-test";
 import { positionEditorTextCursor } from "./editor-text-cursor";
+import { deleteEditorVisualRange } from "./editor-text-edit";
 import { pasteExpandHintText } from "./paste-collapse";
 import {
 	highlightSelection,
@@ -62,6 +63,9 @@ export type MouseEvent = { button: string; action: string; col: number; row: num
 
 /** Ctrl+C, as the terminal delivers it. */
 const ETX = "\x03";
+
+/** Backspace and delete, in the forms a terminal sends them. */
+const DELETE_KEYS = new Set(["\x7f", "\b", "\x1b[3~"]);
 
 /** How close together two presses on one cell count as a double or triple click. */
 const MULTI_CLICK_MS = 400;
@@ -170,6 +174,31 @@ export class SelectionController {
 	}
 
 	/**
+	 * Delete the text the editor selection covers, as backspace or delete would
+	 * on a selection anywhere else. Returns false when the span cannot be mapped
+	 * back onto the editor's text, in which case the key goes through to Pi
+	 * untouched and deletes a character as it always did.
+	 */
+	private deleteEditorSelection(): boolean {
+		const span = this.editorSelection.span;
+		const box = this.editorBox;
+		if (!span || !box) return false;
+
+		const start = hitTestEditorBox(box, span.start.line, Math.max(span.start.col, box.textColumn));
+		// The exclusive end can sit one past the last cell of a row, which is
+		// still a valid text position — hit-testing only rejects columns left of
+		// the text, and rows are already clamped to the box.
+		const end = hitTestEditorBox(box, span.end.line, Math.max(span.end.col, box.textColumn));
+		if (!start || !end) return false;
+
+		if (!deleteEditorVisualRange(this.host.getEditorComponent(), start, end)) return false;
+
+		this.clear();
+		this.host.requestRender();
+		return true;
+	}
+
+	/**
 	 * How many clicks this press makes, counting a repeat only when it lands on
 	 * the same cell soon enough. Wraps back to one after three, the way a
 	 * terminal's own click counter does.
@@ -260,6 +289,10 @@ export class SelectionController {
 	 * highlight, which would otherwise linger over text that has moved on.
 	 */
 	handleKey(data: string): boolean {
+		if (DELETE_KEYS.has(data) && this.area === "editor" && this.editorSelection.active) {
+			if (this.deleteEditorSelection()) return true;
+		}
+
 		if (data === ETX) {
 			const text = this.selectedText();
 			if (!text) return false;

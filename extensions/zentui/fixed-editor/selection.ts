@@ -175,6 +175,14 @@ export class SelectionState {
 	}
 
 	/**
+	 * The selection as a pair of points, `end` exclusive, or null when there is
+	 * none. For callers that need the span itself rather than one line of it.
+	 */
+	get span(): { start: { line: number; col: number }; end: { line: number; col: number } } | null {
+		return this.bounds;
+	}
+
+	/**
 	 * Get column range for a given line index, or null if line is not selected.
 	 *
 	 * `minCol` keeps a selection out of chrome to the left of the text — the

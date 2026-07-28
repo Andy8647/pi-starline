@@ -719,6 +719,7 @@ Inside the input box:
 - Clicking in your text moves the caret there. `editorClickCursor` (default on) turns it off.
 - Dragging selects the text, following the same `copyOnSelect` rule as the transcript. The rail, the borders and the metadata row are never part of a selection — neither highlighted nor copied — and a drag off the bottom stops at the last line of your input.
 - Dragging backwards selects the same range as dragging forwards: the cell you pressed on and the cell you released on are both in.
+- **Backspace or delete removes the selected text**, as one undoable step — `ctrl+z` puts it back. Pi's editor has no selection of its own, so this splices the range straight out of its buffer; if the editor is not the shape zentui expects, the key falls through to Pi and deletes a character as usual. Typing over a selection does not replace it: the highlight is dismissed and the character is inserted at the caret.
 
 Both need the fixed editor, and both reach into Pi internals that carry no compatibility promise. If a Pi release moves them, the click simply stops doing anything rather than breaking the editor.
 

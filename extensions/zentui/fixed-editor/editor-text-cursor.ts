@@ -17,14 +17,23 @@ import { displayColumnToStringIndex } from "./editor-hit-test";
 
 type VisualLine = { logicalLine: number; startCol: number; length: number };
 
-type EditorInternals = {
+export type EditorInternals = {
 	state?: { lines?: string[]; cursorLine?: number; cursorCol?: number };
 	buildVisualLineMap?: (width: number) => VisualLine[];
 	scrollOffset?: number;
 	lastWidth?: number;
 	preferredVisualCol?: number | null;
 	snappedFromCursorCol?: number | null;
+	setCursorCol?: (col: number) => void;
+	pushUndoSnapshot?: () => void;
+	cancelAutocomplete?: () => void;
+	exitHistoryBrowsing?: () => void;
+	onChange?: (text: string) => void;
+	lastAction?: unknown;
 };
+
+/** A point in the editor's own text: which logical line, and where in it. */
+export type EditorTextPoint = { line: number; index: number };
 
 function asEditorInternals(value: unknown): EditorInternals | null {
 	if (typeof value !== "object" || value === null) return null;
@@ -66,6 +75,40 @@ export function resolveEditorInternals(root: unknown): unknown {
 }
 
 /**
+ * Resolve a visual row/column of the rendered editor to a point in its text.
+ * Returns null when the point is out of range or the editor cannot be read.
+ */
+export function resolveEditorTextPoint(
+	value: unknown,
+	visualRow: number,
+	visualCol: number,
+	fallbackWidth = 80,
+): EditorTextPoint | null {
+	const editor = asEditorInternals(value);
+	if (!editor?.state?.lines) return null;
+
+	try {
+		const width = Math.max(1, editor.lastWidth ?? fallbackWidth);
+		const visualLines = editor.buildVisualLineMap?.(width);
+		if (!Array.isArray(visualLines)) return null;
+
+		// Visual rows are relative to what is on screen; the map is absolute.
+		const row = visualRow + (editor.scrollOffset ?? 0);
+		const visual = visualLines[row];
+		if (!visual) return null;
+
+		const text = editor.state.lines[visual.logicalLine] ?? "";
+		const index = displayColumnToStringIndex(text, visual.startCol, visualCol);
+		return {
+			line: visual.logicalLine,
+			index: Math.max(visual.startCol, Math.min(index, visual.startCol + visual.length)),
+		};
+	} catch {
+		return null;
+	}
+}
+
+/**
  * Place the cursor at a visual row/column of the editor's own text.
  * Returns false when the point is out of range or the editor cannot be driven.
  */
@@ -76,32 +119,15 @@ export function positionEditorTextCursor(
 	fallbackWidth = 80,
 ): boolean {
 	const editor = asEditorInternals(value);
-	if (!editor?.state?.lines) return false;
+	if (!editor?.state) return false;
+	const point = resolveEditorTextPoint(value, visualRow, visualCol, fallbackWidth);
+	if (!point) return false;
 
-	try {
-		const width = Math.max(1, editor.lastWidth ?? fallbackWidth);
-		const visualLines = editor.buildVisualLineMap?.(width);
-		if (!Array.isArray(visualLines)) return false;
-
-		// Visual rows are relative to what is on screen; the map is absolute.
-		const row = visualRow + (editor.scrollOffset ?? 0);
-		const visual = visualLines[row];
-		if (!visual) return false;
-
-		const text = editor.state.lines[visual.logicalLine] ?? "";
-		const index = displayColumnToStringIndex(text, visual.startCol, visualCol);
-
-		editor.state.cursorLine = visual.logicalLine;
-		editor.state.cursorCol = Math.max(
-			visual.startCol,
-			Math.min(index, visual.startCol + visual.length),
-		);
-		// Clear the sticky column, or the next up/down press jumps back to
-		// wherever the cursor used to be rather than where it was just put.
-		editor.preferredVisualCol = null;
-		editor.snappedFromCursorCol = null;
-		return true;
-	} catch {
-		return false;
-	}
+	editor.state.cursorLine = point.line;
+	editor.state.cursorCol = point.index;
+	// Clear the sticky column, or the next up/down press jumps back to
+	// wherever the cursor used to be rather than where it was just put.
+	editor.preferredVisualCol = null;
+	editor.snappedFromCursorCol = null;
+	return true;
 }
