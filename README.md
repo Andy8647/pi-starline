@@ -158,11 +158,38 @@ Default config values — copy this and change any value you want:
 ```json
 {
 	"projectRefreshIntervalMs": 30000,
+	"footerStyle": "text",
+	"pill": {
+		"segments": [
+			"model",
+			"thinking",
+			"cwd",
+			"gitBranch",
+			"gitStatus",
+			"context",
+			"cost",
+			"extensionStatus"
+		],
+		"separator": "powerline",
+		"bold": true,
+		"caps": "round"
+	},
 	"footerFormat": "",
 	"editorMetadataFormat": "$model  $provider(  $thinking)",
 	"separator": "pipe",
 	"contextStyle": "text",
+	"segmentOptions": {
+		"context": {
+			"format": "full"
+		},
+		"tokens": {
+			"cache": "percent"
+		}
+	},
 	"editorModelLabel": "id",
+	"editorCursor": "block",
+	"editorPaddingY": 1,
+	"userMessagePaddingY": 1,
 	"contextThresholds": {
 		"warning": 70,
 		"error": 90
@@ -174,6 +201,7 @@ Default config values — copy this and change any value you want:
 	"gitBranch": {
 		"maxLength": "full"
 	},
+	"gitHostIcon": false,
 	"icons": {
 		"mode": "auto",
 		"cwd": "",
@@ -194,9 +222,20 @@ Default config values — copy this and change any value you want:
 		"rail": "│",
 		"username": "",
 		"time": "",
-		"os": ""
+		"os": "",
+		"package": "",
+		"model": "",
+		"thinking": "",
+		"context": "",
+		"cost": "",
+		"tokens": "",
+		"gitHostGithub": "",
+		"gitHostGitlab": "",
+		"gitHostBitbucket": "",
+		"gitHostGeneric": ""
 	},
 	"colors": {
+		"model": "bold blue",
 		"cwd": "bold cyan",
 		"sessionName": "bold green",
 		"gitBranch": "bold purple",
@@ -205,10 +244,11 @@ Default config values — copy this and change any value you want:
 		"contextWarning": "bold yellow",
 		"contextError": "bold red",
 		"tokens": "bright-black",
+		"cacheHit": "bright-black",
 		"cost": "bold green",
-		"extensionStatus": "bright-black",
 		"separator": "bright-black",
 		"runtimePrefix": "",
+		"extensionStatus": "bright-black",
 		"sessionDuration": "yellow",
 		"packageVersion": "208",
 		"gitCommit": "bold green",
@@ -216,18 +256,7 @@ Default config values — copy this and change any value you want:
 		"gitMetricsDeleted": "bold red",
 		"username": "bold yellow",
 		"time": "bold yellow",
-		"os": "bold white",
-		"editorAccent": "accent",
-		"editorPrompt": "accent",
-		"editorBorder": "borderMuted",
-		"editorModel": "accent",
-		"editorProvider": "text",
-		"editorThinking": "muted",
-		"editorThinkingMinimal": "thinkingMinimal",
-		"editorThinkingLow": "thinkingLow",
-		"editorThinkingMedium": "thinkingMedium",
-		"editorThinkingHigh": "thinkingHigh",
-		"editorThinkingXhigh": "thinkingXhigh"
+		"os": "bold white"
 	},
 	"colorSources": {
 		"starship": "theme",
@@ -240,6 +269,8 @@ Default config values — copy this and change any value you want:
 		"copyFriendly": false
 	},
 	"footerSegments": {
+		"model": false,
+		"thinking": false,
 		"cwd": true,
 		"sessionName": true,
 		"gitBranch": true,
@@ -248,6 +279,7 @@ Default config values — copy this and change any value you want:
 		"runtime": true,
 		"context": true,
 		"tokens": true,
+		"cacheHit": false,
 		"cost": true,
 		"sessionDuration": false,
 		"username": false,
@@ -269,12 +301,15 @@ Default config values — copy this and change any value you want:
 	"extensionStatuses": {
 		"defaultPlacement": "right",
 		"placements": {},
-		"colorModes": {}
+		"colorModes": {},
+		"colors": {},
+		"icons": {}
 	},
 	"fixedEditor": {
 		"enabled": false,
 		"mouseScroll": true,
-		"copyNotice": true
+		"copyNotice": true,
+		"copyOnSelect": true
 	}
 }
 ```

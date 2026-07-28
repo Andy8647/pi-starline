@@ -16,16 +16,20 @@
 | P4 segmentOptions | ✅ |
 | P5 编辑框颜色补齐 | ✅ |
 | P7 editorCursor 三档 | ✅ |
-| P6 复制行为 | ⚠️ 9 条交付 7 条(1–6、9) |
-| P6b 编辑框内选区与单击定位(#7 #8) | ⬜ 未做,见下 |
-| P8 粘贴折叠 + 再粘展开 | ⬜ 未做 |
 | P10 文档 | ✅ |
+| P6 复制行为 | ⚠️ 9 条交付 7 条(1–6、9) |
+| P6b 编辑框内选区与单击定位(#7 #8) | ⬜ 未做 |
+| P8 粘贴折叠 + 再粘展开 | ⬜ 未做 |
 
-**P6b** 拆出来的原因:#7(编辑框内选区排除边框/prompt)和 #8(编辑框内单击定位光标)都需要「屏幕列 → 编辑器文本偏移」的映射,依赖 pi 编辑器内部,与 P6 其余七条的风险面完全不同。其余七条只作用在 transcript 区,那里本来就参与选择。
+计划外追加(实机使用后提出):`extensionStatuses.colors` / `.icons`、`editorPaddingY` / `userMessagePaddingY`、`cacheHit` 独立段、pill 同色分隔线、硬件光标断言、短 transcript 贴底对齐、vitest 测试隔离。
 
-**P8 未做的原因**:它的正确性依赖真实粘贴事件在活的 pi TUI 中的行为(影子 `handlePaste`、marker id 重编号、submit 时的 `expandPasteMarkers`),无法在无头环境中验证。设计已在 §3 写清,实现时务必先做 feature-detect + 静默降级。
+**P6b 未做的原因**:需要「屏幕列 → 编辑器文本偏移」的映射,而 pi-tui 把 `buildVisualLineMap` 和 `state`(光标位置)都声明为 `private`,公开 API 只有只读的 `getCursor()`。只能 Reflect,与 P8 同一脆弱级别。
 
-**当前约束状态**:`compositor.ts` 对 `upstream/main` 的 diff 为 **+20 −52**(净减 32 行,§6.7 上限 100);`git merge upstream/main` 无冲突(§6.8);`npm run verify` 654 tests / 26 files 全绿。
+**P8 未做的原因**:正确性依赖真实粘贴事件在活的 pi TUI 中的行为(影子 `handlePaste`、marker id 重编号、submit 时的 `expandPasteMarkers`),无头环境验证不了。
+
+两项的详细实现路线见 `HANDOFF.md` §3。
+
+**当前约束状态**:`compositor.ts` 对 `upstream/main` 的 diff 为 **+37 −57**(净减 20 行,§6.7 上限 100);`git merge upstream/main` 无冲突(§6.8);`npm run verify` 686 tests / 27 files 全绿。
 
 ---
 
