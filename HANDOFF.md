@@ -5,15 +5,16 @@
 
 ## 1. 当前状态
 
-- `npm run verify` → **686 tests / 27 files 全绿**
-- `git log upstream/main..HEAD` → 18 个 commit,每个阶段一个
+- `npm run verify` → **756 tests / 29 files 全绿**
+- `git log upstream/main..HEAD` → 25 个 commit
+- **有一个未修复的显示 bug,见 §3.0。已经改了三次都没修好,不要在没拿到数据前再改第四次。**
 - 扩展已安装到本机 pi 并在实际使用中(见 §4)
 
 ### 硬约束(SPEC §6.7 / §6.8)
 
 | 约束 | 状态 |
 |---|---|
-| `git diff upstream/main -- fixed-editor/compositor.ts` < 100 行 | **+37 −57**,净减 20 行 |
+| `git diff upstream/main -- fixed-editor/compositor.ts` < 100 行 | **+69 −63** |
 | `git merge upstream/main` 在合成器文件上无冲突 | 无冲突(上游尚未前进,真正的考验在上游发版后) |
 | text 模式(`footerStyle: "text"`)与上游逐字节一致 | 守住。所有新段/新图标默认关或空;`renderStyle` / `renderThemeStyle` 一字节未动,4 条测试钉死其精确输出 |
 
@@ -35,7 +36,9 @@
 | P6(部分) | 复制行为 9 条中的 7 条(1–6、9) |
 | P10 | README 配色/pill/各选项文档,LICENSE 双版权 |
 | 后续修复 | pill 同色分隔线、`extensionStatuses.colors` / `.icons`、硬件光标断言、`editorPaddingY` / `userMessagePaddingY`、vitest 测试隔离 |
-| 追加 | `cacheHit` 独立段(`$cache_hit`);短 transcript 改为贴着编辑框对齐 |
+| P6b | **编辑框内单击定位光标 + 拖选**,两个 commit。已可用 |
+| P8(一半) | `pasteCollapseLines`(2–10)。**"再粘一次展开"未做** |
+| 追加 | `cacheHit` 独立段(`$cache_hit`)、`extensionStatuses.icons` |
 
 ### 追加的两项细节
 
@@ -43,50 +46,68 @@
 
 **短 transcript 的对齐**。`compositor.ts` 原先用 `visible.push("")` 把空白填在内容**下方**,于是短于滚动区的 transcript 会浮在屏幕顶端、空隙全落在编辑框上方。改为填在上方。**注意**:屏幕行 → transcript 索引的原点要同步回退 `padTop`(`renderScrollableRoot` 里的 `origin`),否则选区映射会整体错位;`SelectionController` 另加了 `line < 0` 的守卫,处理点在填充行上的情况。
 
-## 3. 未完成 —— 下一轮的两件事
+## 3. 未完成
 
-两件都卡在同一个地方:**pi-tui 把需要的东西声明为 `private`**。因此两者都必须写成 feature-detect + 探测不到就整个特性静默关闭,绝不能让编辑器崩。
+### 3.0 ⚠️ 未修复的 bug:transcript 与编辑框之间有大片空隙
 
-### P6b · 编辑框内单击定位光标 + 拖选(SPEC §3.4 的第 7、8 条)
+**现象**:会话内容很少时(比如只有一行 `∴ Working...`),那一行浮在屏幕**顶端**,它和编辑框上边框之间留着好几行空白。期望是内容贴着编辑框,像 pi 原生 scrollback 那样。
 
-用户已多次提出,是当前最想要的缺失功能。
+**改了三次,三次都没修好。** 记录如下,避免重复:
 
-**为什么没做**:需要「屏幕列 → 编辑器文本偏移」的映射,而 pi-tui 0.82.1 `dist/components/editor.d.ts` 里:
+| # | 改了什么 | 结果 |
+|---|---|---|
+| 1 | `renderScrollableRoot` 里空白填充从 `push`(填在内容下方)改成 `unshift`(填在上方) | 逻辑正确,但该路径没被走到 |
+| 2 | 窗口长度改为「按最后一行有内容的位置量」,不再用 `lines.length` | 逻辑正确,但"有内容"的判断是错的 |
+| 3 | blank 的定义从 `visibleWidth(line) === 0` 改成「剥样式后 trim 为空」 | 仍未修好 |
 
-- `buildVisualLineMap` —— 视觉行 → `{ logicalLine, startCol, length }` 的映射,**private**(d.ts:179)
-- `state`(`lines` / `cursorLine` / `cursorCol`)—— 写光标位置要用,**private**(d.ts:34)
-- 公开的只有 `getCursor()`(只读),**没有 setter**
+第 3 次是有依据的:pi 把每一行都用空格填满整个终端宽度,所以 `visibleWidth` 判断确实是错的。改完两条新测试(空格填充行、纯样式行)在旧判断下失败、新判断下通过。**但用户实测仍有空隙**,说明这不是(或不只是)原因。
 
-**实现路线**:
+**唯一一次拿到的真实数据**(启动瞬间,`ZENTUI_DEBUG_LAYOUT` 一次性 dump):
 
-1. 新建 `fixed-editor/box-chrome.ts`:给定 cluster 行,算出编辑框内容的列区间——要扣掉 rail(`icons.rail`,宽度来自 `ui.ts:getEditorChromeWidths`)、prompt 前缀、以及 `editorPaddingY` 带来的行偏移。纯边框行整行丢弃(第 7 条)。
-2. 新建 `fixed-editor/editor-cursor-map.ts`:Reflect 取 `buildVisualLineMap`,把「cluster 行号 + 列」映射到 `{ logicalLine, col }`。
-3. 单击定位:Reflect 写 `state.cursorLine` / `state.cursorCol`,然后 `requestRender`。**注意**还要同步 `preferredVisualCol`(d.ts 里的 sticky column),否则之后按上下键会跳。
-4. 拖选:`SelectionController` 现在遇到 `ev.row > visibleScrollableRows` 直接 return(`selection-controller.ts:140`),把这个分支换成对 box-chrome 的委托。第 8 条(press 起选、release 时未移动才判定为单击)的状态机 `SelectionController` **已经有了**(`pressPoint` / `dragged`),transcript 区在用,直接复用。
+```
+rawRows=51 scrollableRows=46 padTop=23
+rootLines=24 contentLength=23 clusterLines=5
+```
 
-**参考实现**:powerline fork `combined` 分支的 `00de497`(`git -C ../pi-powerline-footer show 00de497`)。
+启动帧是**正常的**——`padTop=23` 说明填充生效了。问题出在 "Working..." 那一帧,而那次 dump 是一次性的(`didDumpLayout`),抓的是启动帧,**没抓到出问题的那一帧**。这是当时最大的失误。
 
-**风险**:`compositor.ts` 的 diff 预算还剩 ~70 行,委托调用应该只占几行,但要盯住。
+**最有价值的未验证假设:空隙可能根本不在滚动区,而在 cluster 里。**
 
-### P8 · 粘贴折叠阈值 + 再粘展开(SPEC §3.5)
+`renderCluster`(`cluster.ts`)把 `[status, aboveWidget, editor, belowWidget, footer]` 拼起来,然后**只剥掉开头的空行**:
 
-用户原 powerline 配置里有 `pasteCollapseLines: 3`,现在回到了 pi 默认的 >10 行。
+```ts
+while (start < allLines.length - 1 && visibleWidth(allLines[start]) === 0) start++;
+```
 
-**为什么没做**:正确性依赖真实粘贴事件在活的 pi TUI 里的行为,无头环境验证不了。写了也只能说"应该能跑"。
+如果 `∴ Working...` 是 **cluster 的 status 组件**渲染的,而该组件输出的是 `["∴ Working...", "", "", ""]`,那么开头不是空行、剥不掉,中间那几行空白会原样留在 status 和 editor 之间 —— **正好就是观察到的现象**,而且完美解释了为什么三次改滚动区的代码全都无效。
 
-**已查清的事实**(PLAN.md §0.1):
+那次 dump 里有 `--- cluster ---` 段(`clusterLines=5`),但**当时只看了根渲染那段就把文件删了**,cluster 的内容始终没看过。这是下一步第一件要做的事。
 
-- pi-tui **0.82.1 仍然没有** `getPasteContent` / `replacePaste`。SPEC 里"≥0.81 改用官方 API"这条分支不存在,别再去找。
-- 私有字段形状与 0.80 完全一致:`pastes: Map<number,string>`、`pasteCounter: number`
-- 折叠阈值硬编码在 `dist/components/editor.js:1005`:`pastedLines.length > 10 || totalChars > 1000`
-- marker 正则:`/\[paste #(\d+)( (\+\d+ lines|\d+ chars))?\]/`
-- **删除 marker 时 pi 会把后续 id 前移**(`editor.js:1086-1103`),自建 marker 必须与 pi 格式逐字节一致,否则 submit 时的 `expandPasteMarkers` 展不开
+**下一步怎么做(不要跳过)**:
 
-**参考实现**:powerline fork 的 `7ffc128`(阈值)、`9f1901b`(再粘展开)、`ce94fd6`(提示放到下边框)。
+1. 把诊断加回 `compositor.ts`(上一版实现见 commit `cdc4533` 的父提交),但改成**按布局签名变化时才 dump**,而不是一次性 —— 一次性只会抓到启动帧。签名用 `rootLines/contentLength/scrollableRows/padTop/clusterLines` 拼一下即可。
+2. 让用户在**出现空隙的那一帧**跑,然后**先看 `--- cluster ---` 段**。
+3. 如果空隙在 cluster 里 → 改 `renderCluster` 的空行处理(注意 `cluster.ts` 在「尽量跟上游逐字节一致」的清单里,但既然要动,同样只留最小改动)。
+4. 如果空隙在滚动区 → 看 `contentLength` 与 `scrollableRows` 的实际关系再判断。
+5. **先写一条能复现该帧的测试再改代码。** 前两次失败都是因为没有;第三次有测试,但测试数据(`""`)不是 pi 真实输出的形态(空格填充行),所以测试通过而 bug 仍在。
 
-**好消息**:`ce94fd6` 需要的下边框提示基础设施 **P6 已经建好了** —— `selection-controller.ts` 的 `overlayHintOnBorder()`。只需让它接受两段提示并用 `⋅` 连接。
+### 3.1 未完成的功能:再粘一次展开(P8 的另一半)
 
-**移植时必须改掉**源码注释里"迁移到官方 `getPasteContent`/`replacePaste` API"的说法。
+`pasteCollapseLines` 已经做了(阈值 2–10,你的配置设的 3)。**没做的是**:折叠后出现「再粘一次可展开」提示,再粘同样内容时占位符就地变回全文。
+
+它才是真正碰 pi 私有 `pastes` map 的 id 重编号的部分,也是「悄悄丢内容」风险的所在。参考实现 `9f1901b`(展开)、`ce94fd6`(提示放到下边框)。
+
+好消息:`ce94fd6` 需要的下边框提示基础设施已经有了 —— `selection-controller.ts` 的 `overlayHintOnBorder()`,只需让它接受两段提示并用 `⋅` 连接。
+
+**移植时必须改掉**源码注释里"迁移到官方 `getPasteContent`/`replacePaste` API"的说法:0.82.1 仍然没有该 API。
+
+### 3.2 P6b 和 P8 前半的实现要点(已完成,供参考)
+
+两者都靠 Reflect 进 pi 的私有成员,都写成了 feature-detect + 探测不到就静默关闭:
+
+- `editor-hit-test.ts` —— 屏幕行列 → 编辑器视觉坐标。**行算术依赖 `editorPaddingY`**,配错就点哪都不对
+- `editor-text-cursor.ts` —— 写光标位置。`resolveEditorInternals` 会往下走过容器和 `WrappedPolishedEditor` 的 `base`,因为 compositor 记的是**容器**不是编辑器
+- `paste-collapse.ts` —— 影子 `handlePaste`。清洗流程逐字对着 pi 0.82.1 抄,任何 pi 会区别对待的情况一律原样交还
 
 ## 4. 本机安装状态
 
@@ -132,7 +153,11 @@ cp ~/.pi/agent/zentui.json.before-zentui-fork ~/.pi/agent/zentui.json
 
 8. **改 `renderScrollableRoot` 里可见行的构造时,`visibleRootStart` 必须同步。** 它是「屏幕行 → transcript 绝对索引」的原点,选区高亮和鼠标映射都用它。加填充行而不改原点 = 选区静默错位,测试抓不到(没有覆盖该映射的测试)。
 
-9. **不要试图去动别的扩展的 widget 位置。** 位置由注册方通过 `placement` 决定,通常它自己就有配置项(pi-subagents 的 `fleetViewPlacement` 即是)。zentui 唯一能做的是整体重排 cluster 的组成顺序,那会波及所有扩展,太粗暴。
+9. **测试数据必须是 pi 真实输出的形态。** 修「空隙」那个 bug 时,测试用 `""` 当空行,而 pi 实际输出的是**填满整行宽度的空格**。测试通过了,bug 还在。写涉及渲染输出的测试前,先 dump 一份真实的行看看长什么样。
+
+10. **一次性诊断会抓错帧。** 用 `didDumpLayout` 之类的标志只 dump 第一帧,拿到的是启动画面,不是出问题的那一帧。要按状态签名变化 dump。
+
+11. **不要试图去动别的扩展的 widget 位置。** 位置由注册方通过 `placement` 决定,通常它自己就有配置项(pi-subagents 的 `fleetViewPlacement` 即是)。zentui 唯一能做的是整体重排 cluster 的组成顺序,那会波及所有扩展,太粗暴。
 
 ## 6. 其余遗留
 
