@@ -12,6 +12,8 @@
 import { copyToClipboard } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
 
+import { findEditorBox, hitTestEditorBox } from "./editor-hit-test";
+import { positionEditorTextCursor } from "./editor-text-cursor";
 import type { SelectionState } from "./selection";
 
 export type CopySource = "auto" | "explicit";
@@ -21,6 +23,8 @@ export type SelectionControllerConfig = {
 	copyOnSelect: boolean;
 	/** Show the "copied" toast. Only ever shown for an automatic copy. */
 	copyNotice: boolean;
+	/** Clicking in the editor text moves the cursor there. */
+	editorClickCursor: boolean;
 };
 
 export type SelectionHost = {
@@ -32,6 +36,14 @@ export type SelectionHost = {
 	/** Height of the scrollable region, in rows. */
 	getVisibleScrollableRows(): number;
 	getConfig(): SelectionControllerConfig;
+	/** Rendered cluster lines, for locating the editor box. */
+	getClusterLines(): string[];
+	/** Blank rows inside the editor box, needed to find its text rows. */
+	getEditorPaddingY(): number;
+	/** Visible column where editor text starts, past the rail or prompt. */
+	getEditorTextColumn(): number;
+	/** The live editor component, or undefined when it cannot be reached. */
+	getEditorComponent(): unknown;
 	requestRender(): void;
 	/** Suspend mouse reporting so the terminal's own context menu works. */
 	pauseMouseReporting(): void;
@@ -136,8 +148,13 @@ export class SelectionController {
 		}
 		if (event.button !== "left") return;
 
-		// The cluster region (editor, footer) does not take part in selection yet.
-		if (event.row > this.host.getVisibleScrollableRows()) return;
+		// Below the transcript is the cluster: the editor box and the footer.
+		// A click in the editor's text moves the caret there.
+		const scrollableRows = this.host.getVisibleScrollableRows();
+		if (event.row > scrollableRows) {
+			if (event.action === "release") this.clickInCluster(event, scrollableRows);
+			return;
+		}
 
 		const line = this.host.getVisibleRootStart() + event.row - 1;
 		// Rows above a short transcript map before its first line; nothing to select.
@@ -163,6 +180,32 @@ export class SelectionController {
 
 		if (event.action === "release" && this.selection.isDragging) {
 			this.finishDrag(line, col);
+		}
+	}
+
+	/**
+	 * Resolve a click below the transcript. Only a click in the editor's own
+	 * text does anything; the footer and the box chrome are inert.
+	 */
+	private clickInCluster(event: MouseEvent, scrollableRows: number): void {
+		if (!this.host.getConfig().editorClickCursor) return;
+
+		const clusterRow = event.row - scrollableRows - 1;
+		const clusterCol = Math.max(0, event.col - 1);
+		const box = findEditorBox(
+			this.host.getClusterLines(),
+			this.host.getEditorPaddingY(),
+			this.host.getEditorTextColumn(),
+		);
+		if (!box) return;
+
+		const point = hitTestEditorBox(box, clusterRow, clusterCol);
+		if (!point) return;
+
+		if (
+			positionEditorTextCursor(this.host.getEditorComponent(), point.visualRow, point.visualCol)
+		) {
+			this.host.requestRender();
 		}
 	}
 

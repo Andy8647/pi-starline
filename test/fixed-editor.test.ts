@@ -263,6 +263,9 @@ describe("Pi fixed-editor compatibility", () => {
 			copyNotice: true,
 			copyOnSelect: true,
 			hardwareCursor: false,
+			editorClickCursor: true,
+			editorPaddingY: 1,
+			editorTextColumn: 2,
 		}));
 
 		expect(compositor.install()).toBe(true);
@@ -310,6 +313,9 @@ describe("Pi fixed-editor compatibility", () => {
 			copyNotice: true,
 			copyOnSelect: true,
 			hardwareCursor: false,
+			editorClickCursor: true,
+			editorPaddingY: 1,
+			editorTextColumn: 2,
 		}));
 
 		expect(compositor.install()).toBe(false);
@@ -331,6 +337,9 @@ describe("Pi fixed-editor compatibility", () => {
 			copyNotice: true,
 			copyOnSelect: true,
 			hardwareCursor: false,
+			editorClickCursor: true,
+			editorPaddingY: 1,
+			editorTextColumn: 2,
 		}));
 		expect(compositor.install()).toBe(true);
 		const patchedRender = fixture.tui.render;
@@ -366,6 +375,9 @@ describe("Pi fixed-editor compatibility", () => {
 			copyNotice: true,
 			copyOnSelect: true,
 			hardwareCursor: true,
+			editorClickCursor: true,
+			editorPaddingY: 1,
+			editorTextColumn: 2,
 		}));
 		expect(compositor.install()).toBe(true);
 
@@ -389,6 +401,9 @@ describe("Pi fixed-editor compatibility", () => {
 			copyNotice: true,
 			copyOnSelect: true,
 			hardwareCursor: false,
+			editorClickCursor: true,
+			editorPaddingY: 1,
+			editorTextColumn: 2,
 		}));
 		expect(compositor.install()).toBe(true);
 
@@ -410,6 +425,9 @@ describe("Pi fixed-editor compatibility", () => {
 				copyNotice: true,
 				copyOnSelect: true,
 				hardwareCursor: false,
+				editorClickCursor: true,
+				editorPaddingY: 1,
+				editorTextColumn: 2,
 			}));
 			expect(compositor.install()).toBe(true);
 			fixture.getInputListener()?.("\u001b[<2;1;1M");

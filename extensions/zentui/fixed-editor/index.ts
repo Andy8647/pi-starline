@@ -15,6 +15,7 @@ import type { PolishedTuiConfig } from "../config";
 import type { SessionLifecycle } from "../session-lifecycle";
 import { renderStyleForSourceOrFallback } from "../style";
 import { TerminalSplitCompositor } from "./compositor";
+import { editorTextColumn } from "./editor-hit-test";
 import { inspectPiTui } from "./pi-compat";
 
 let compositor: TerminalSplitCompositor | null = null;
@@ -145,6 +146,13 @@ function installFromProbe(
 				copyNotice: getConfig().fixedEditor?.copyNotice ?? true,
 				copyOnSelect: getConfig().fixedEditor?.copyOnSelect ?? true,
 				hardwareCursor: getConfig().editorCursor === "terminal",
+				editorClickCursor: getConfig().editorClickCursor,
+				editorPaddingY: getConfig().editorPaddingY,
+				editorTextColumn: editorTextColumn({
+					copyFriendly: getConfig().features.copyFriendly,
+					railIcon: getConfig().icons.rail,
+					promptIcon: getConfig().icons.editorPrompt,
+				}),
 			}),
 			ctx.hasUI ? () => showCopyNotice(ctx, getConfig) : undefined,
 			ctx.hasUI ? () => clearCopyNotice(ctx) : undefined,

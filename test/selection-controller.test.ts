@@ -8,7 +8,7 @@ const { overlayHintOnBorder, SelectionController } = await import(
 	"../extensions/zentui/fixed-editor/selection-controller"
 );
 
-type Config = { copyOnSelect: boolean; copyNotice: boolean };
+type Config = { copyOnSelect: boolean; copyNotice: boolean; editorClickCursor?: boolean };
 
 const TRANSCRIPT = ["first line here", "second line here", "third line here"];
 
@@ -20,7 +20,11 @@ function makeHarness(config: Config, lines: string[] = TRANSCRIPT) {
 		getRootLines: () => lines,
 		getVisibleRootStart: () => 0,
 		getVisibleScrollableRows: () => lines.length,
-		getConfig: () => config,
+		getConfig: () => ({ editorClickCursor: true, ...config }),
+		getClusterLines: () => [],
+		getEditorPaddingY: () => 1,
+		getEditorTextColumn: () => 2,
+		getEditorComponent: () => undefined,
 		requestRender: () => {
 			calls.render++;
 		},

@@ -31,6 +31,12 @@ export type CompositorConfig = {
 	copyOnSelect: boolean;
 	/** editorCursor "terminal": the real cursor is the only cursor, so assert it. */
 	hardwareCursor: boolean;
+	/** Clicking in the editor text moves the caret there. */
+	editorClickCursor: boolean;
+	/** Blank rows inside the editor box; needed to find its text rows. */
+	editorPaddingY: number;
+	/** Visible column where editor text starts, past the rail or prompt. */
+	editorTextColumn: number;
 };
 
 /** Result of rendering the pinned cluster. */

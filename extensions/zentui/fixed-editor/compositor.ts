@@ -14,6 +14,7 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 import { renderCluster } from "./cluster";
+import { resolveEditorInternals } from "./editor-text-cursor";
 import { clampScrollOffset, parseKeyboardScroll, parseMouseEvent } from "./input";
 import type {
 	PiFixedEditorCapabilities,
@@ -114,6 +115,8 @@ export class TerminalSplitCompositor {
 	private readonly selection = new SelectionState();
 	/** Selection and copy policy. Kept out of here so this file stays near upstream. */
 	private readonly selectionController: SelectionController;
+	/** Cluster lines from the last paint, for locating the editor box on click. */
+	private lastClusterLines: string[] = [];
 	/** Timer for right-click context menu mouse reporting pause. */
 	private mouseResumeTimer: ReturnType<typeof setTimeout> | null = null;
 	private cursorVisible = true;
@@ -139,6 +142,10 @@ export class TerminalSplitCompositor {
 			getVisibleRootStart: () => this.visibleRootStart,
 			getVisibleScrollableRows: () => this.visibleScrollableRows,
 			getConfig: () => this.getConfig(),
+			getClusterLines: () => this.lastClusterLines,
+			getEditorPaddingY: () => this.getConfig().editorPaddingY,
+			getEditorTextColumn: () => this.getConfig().editorTextColumn,
+			getEditorComponent: () => resolveEditorInternals(this.capabilities.cluster.editor?.target),
 			requestRender: () => this.capabilities.requestRender?.(),
 			pauseMouseReporting: () => this.pauseMouseReporting(),
 			showCopyNotice: () => this.onCopy?.(),
@@ -471,6 +478,7 @@ export class TerminalSplitCompositor {
 	private paintCluster(cluster: ClusterRender, rawRows: number, width: number): string {
 		if (cluster.lines.length === 0) return "";
 		const startRow = Math.max(1, rawRows - cluster.lines.length + 1);
+		this.lastClusterLines = cluster.lines;
 		const lines = overlayHintOnBorder(cluster.lines, this.selectionController.hintText(), width);
 		let buf = RESET_SCROLL_REGION;
 		for (let i = 0; i < lines.length; i++) {

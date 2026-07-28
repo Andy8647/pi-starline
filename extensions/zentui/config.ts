@@ -163,6 +163,8 @@ export type PolishedTuiConfig = {
 	segmentOptions: SegmentOptionsConfig;
 	editorModelLabel: ModelLabelSource;
 	editorCursor: EditorCursorStyle;
+	/** Clicking in the editor text moves the caret there. Needs the fixed editor. */
+	editorClickCursor: boolean;
 	/** Blank rows inside the editor box, above the input and above the metadata row. */
 	editorPaddingY: number;
 	/** Blank rows inside the previous-message box, above and below the body. */
@@ -282,6 +284,7 @@ export const defaultConfig: PolishedTuiConfig = {
 	segmentOptions: { context: { format: "full" }, tokens: { cache: "percent" } },
 	editorModelLabel: "id",
 	editorCursor: "block",
+	editorClickCursor: true,
 	editorPaddingY: 1,
 	userMessagePaddingY: 1,
 	contextThresholds: { warning: 70, error: 90 },
@@ -969,6 +972,7 @@ export function mergeConfig(parsed: unknown): PolishedTuiConfig {
 		segmentOptions: normalizeSegmentOptions(config.segmentOptions),
 		editorModelLabel: parseEditorModelLabel(config.editorModelLabel),
 		editorCursor: parseEditorCursorStyle(config.editorCursor),
+		editorClickCursor: config.editorClickCursor !== false,
 		editorPaddingY: parseBoxPadding(config.editorPaddingY, defaultConfig.editorPaddingY),
 		userMessagePaddingY: parseBoxPadding(
 			config.userMessagePaddingY,
