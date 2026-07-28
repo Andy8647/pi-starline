@@ -38,6 +38,7 @@ import {
 	installFixedEditorProbe,
 	removeFixedEditorProbe,
 } from "./fixed-editor";
+import { installPasteCollapse } from "./fixed-editor/paste-collapse";
 import { installFooter } from "./footer";
 import { buildSessionDurationLabel, invalidateUsageTotalsCache } from "./format";
 import { emptyGitStatus, readGitHost, readGitStatus } from "./git";
@@ -110,6 +111,7 @@ export default function (pi: ExtensionAPI) {
 	let stopSessionTimer: () => void = () => {};
 	let lastDurationLabel = "";
 	let lastProjectCwd: string | undefined;
+	let disposePasteCollapse: (() => void) | undefined;
 
 	const refresh = () => {
 		if (sessionLifecycle.isCurrent()) requestFooterRender?.();
@@ -259,11 +261,25 @@ export default function (pi: ExtensionAPI) {
 		}
 	};
 
+	/**
+	 * Lower the paste-collapse threshold on a freshly built editor. Patching the
+	 * instance rather than subclassing covers the wrapped path too, where the
+	 * base editor is somebody else's. A no-op when the editor does not expose
+	 * what it needs, or when the option is left at Pi's own threshold.
+	 */
+	const applyPasteCollapse = (editor: unknown) => {
+		disposePasteCollapse?.();
+		disposePasteCollapse = installPasteCollapse(
+			editor,
+			() => getCurrentConfig().pasteCollapseLines,
+		);
+	};
+
 	const makeEditorFactory = (ctx: ExtensionContext): ZentuiEditorFactory => {
 		const sessionTheme = ctx.ui.theme;
 		const factory = ((tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) => {
 			syncHardwareCursor(tui);
-			return new PolishedEditor(
+			const editor = new PolishedEditor(
 				tui,
 				theme,
 				keybindings,
@@ -278,6 +294,8 @@ export default function (pi: ExtensionAPI) {
 				}),
 				getThinkingLevel,
 			);
+			applyPasteCollapse(editor);
+			return editor;
 		}) as ZentuiEditorFactory;
 		factory[ZENTUI_EDITOR_FACTORY] = true;
 		return factory;
@@ -290,8 +308,10 @@ export default function (pi: ExtensionAPI) {
 		const sessionTheme = ctx.ui.theme;
 		const factory = ((tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) => {
 			syncHardwareCursor(tui);
+			const base = baseFactory(tui, theme, keybindings);
+			applyPasteCollapse(base);
 			return new WrappedPolishedEditor(
-				baseFactory(tui, theme, keybindings),
+				base,
 				sessionTheme,
 				getCurrentConfig,
 				() => ({

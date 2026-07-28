@@ -165,6 +165,8 @@ export type PolishedTuiConfig = {
 	editorCursor: EditorCursorStyle;
 	/** Clicking in the editor text moves the caret there. Needs the fixed editor. */
 	editorClickCursor: boolean;
+	/** Collapse pastes at this many lines. 11 (default) leaves Pi's threshold alone. */
+	pasteCollapseLines: number;
 	/** Blank rows inside the editor box, above the input and above the metadata row. */
 	editorPaddingY: number;
 	/** Blank rows inside the previous-message box, above and below the body. */
@@ -285,6 +287,7 @@ export const defaultConfig: PolishedTuiConfig = {
 	editorModelLabel: "id",
 	editorCursor: "block",
 	editorClickCursor: true,
+	pasteCollapseLines: 11,
 	editorPaddingY: 1,
 	userMessagePaddingY: 1,
 	contextThresholds: { warning: 70, error: 90 },
@@ -631,6 +634,15 @@ function normalizeUiFeatures(record: Record<string, unknown>): UiFeaturesConfig 
 	};
 }
 
+/**
+ * Only 2..10 lowers the threshold; anything else — including Pi's own 11 — means
+ * "leave Pi's behaviour alone".
+ */
+function parsePasteCollapseLines(value: unknown): number {
+	if (typeof value !== "number" || !Number.isInteger(value)) return 11;
+	return value >= 2 && value <= 10 ? value : 11;
+}
+
 /** Box padding is 0 or 1 rows; anything else falls back to the default. */
 function parseBoxPadding(value: unknown, fallback: number): number {
 	return value === 0 || value === 1 ? value : fallback;
@@ -973,6 +985,7 @@ export function mergeConfig(parsed: unknown): PolishedTuiConfig {
 		editorModelLabel: parseEditorModelLabel(config.editorModelLabel),
 		editorCursor: parseEditorCursorStyle(config.editorCursor),
 		editorClickCursor: config.editorClickCursor !== false,
+		pasteCollapseLines: parsePasteCollapseLines(config.pasteCollapseLines),
 		editorPaddingY: parseBoxPadding(config.editorPaddingY, defaultConfig.editorPaddingY),
 		userMessagePaddingY: parseBoxPadding(
 			config.userMessagePaddingY,

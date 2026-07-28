@@ -510,6 +510,24 @@ Only `0` and `1` are accepted. The editor frame is parsed back by position when
 one editor wraps another, so the padding the renderer emits and the padding the
 parser assumes have to agree — a second padding row has nowhere to be described.
 
+## Paste collapse threshold
+
+Pi collapses a pasted block into a `[paste #N +L lines]` marker at more than ten
+lines. `pasteCollapseLines` lowers that:
+
+```json
+{ "pasteCollapseLines": 3 }
+```
+
+Accepts 2 through 10; `11` (the default) and anything else leaves Pi's own
+threshold alone. Above Pi's threshold, and for pasted paths, Pi still handles it.
+
+What gets stored is cleaned exactly the way Pi cleans it, so the marker expands
+to the right text on submit and behaves the same when deleted. If the editor
+does not expose what this needs, nothing is patched and Pi's threshold stands.
+
+Not implemented: pasting the same content again to expand the marker in place.
+
 ## Editor cursor
 
 ```json
