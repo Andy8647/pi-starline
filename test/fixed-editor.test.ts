@@ -452,6 +452,19 @@ describe("Pi fixed-editor compatibility", () => {
 			expect(region.filter((line) => line.includes("only line"))).toHaveLength(1);
 		});
 
+		// Pi pads its rows out to the terminal width, so the rows after the last
+		// message are runs of spaces rather than empty strings. Measuring by
+		// visible width counts those as content and the gap comes back.
+		it("ignores space-padded rows too", () => {
+			const region = visibleRegion(["only line", " ".repeat(80), " ".repeat(80)]);
+			expect(region.at(-1)).toContain("only line");
+		});
+
+		it("ignores rows that are only styling", () => {
+			const region = visibleRegion(["only line", `\x1b[38;2;1;2;3m${" ".repeat(40)}\x1b[0m`]);
+			expect(region.at(-1)).toContain("only line");
+		});
+
 		it("still shows the newest lines when the transcript overflows", () => {
 			const many = Array.from({ length: 60 }, (_, index) => `line-${index}`);
 			const region = visibleRegion(many);

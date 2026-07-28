@@ -63,6 +63,11 @@ function restoreMethod(capability: PiMethodCapability): void {
 	}
 }
 
+/** A row with nothing on it. Pi pads its output with spaces, so trim first. */
+function isBlankRow(line: string): boolean {
+	return line.replace(/\x1b\[[0-9;:?]*[ -/]*[@-~]/g, "").trim() === "";
+}
+
 function hideRenderable(capability: PiRenderableCapability | null): void {
 	if (!capability) return;
 	Object.defineProperty(capability.target, "render", {
@@ -361,11 +366,13 @@ export class TerminalSplitCompositor {
 
 		const lines = this.callOriginalRender(Math.max(1, width));
 
-		// Pi's root render ends with blank rows of its own. Counting them as
-		// content pins the transcript to the top of the region and leaves the gap
-		// under it, so measure by the last row that actually has something on it.
+		// Pi's root render ends with rows of its own that carry nothing. Counting
+		// them as content pins the transcript to the top of the region and leaves
+		// the gap under it, so measure by the last row that actually shows
+		// something. Pi pads its lines out to the full width, so "blank" has to
+		// mean whitespace-only, not zero-width.
 		let contentLength = lines.length;
-		while (contentLength > 0 && visibleWidth(lines[contentLength - 1] ?? "") === 0) {
+		while (contentLength > 0 && isBlankRow(lines[contentLength - 1] ?? "")) {
 			contentLength--;
 		}
 
