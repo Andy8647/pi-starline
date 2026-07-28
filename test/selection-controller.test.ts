@@ -7,6 +7,7 @@ const { SelectionState } = await import("../extensions/zentui/fixed-editor/selec
 const { overlayHintOnBorder, SelectionController } = await import(
 	"../extensions/zentui/fixed-editor/selection-controller"
 );
+const { installPasteCollapse } = await import("../extensions/zentui/fixed-editor/paste-collapse");
 
 type Config = { copyOnSelect: boolean; copyNotice: boolean; editorClickCursor?: boolean };
 
@@ -114,6 +115,59 @@ describe("copyOnSelect: false", () => {
 	it("stays quiet with no selection", () => {
 		const { controller } = makeHarness({ copyOnSelect: false, copyNotice: true });
 		expect(controller.hintText()).toBe("");
+	});
+});
+
+describe("the border hint is shared", () => {
+	/** Arms a collapsed paste the way a real editor would, and returns a disposer. */
+	function armPaste() {
+		const editor = {
+			pastes: new Map<number, string>(),
+			pasteCounter: 0,
+			state: { lines: [""], cursorLine: 0, cursorCol: 0 },
+			handlePaste: (_text: string) => {},
+			normalizeText: (text: string) => text,
+			insertTextAtCursorInternal: (text: string) => {
+				editor.state.lines = [text];
+			},
+		};
+		const dispose = installPasteCollapse(editor, () => 3);
+		editor.handlePaste("a\nb\nc\nd");
+		return dispose;
+	}
+
+	it("shows the paste hint on its own", () => {
+		const dispose = armPaste();
+		try {
+			const { controller } = makeHarness({ copyOnSelect: false, copyNotice: true });
+			expect(controller.hintText()).toBe("paste again to expand");
+		} finally {
+			dispose?.();
+		}
+	});
+
+	it("joins the paste hint and the selection hint with a middot", () => {
+		const dispose = armPaste();
+		try {
+			const { controller } = makeHarness({ copyOnSelect: false, copyNotice: true });
+			drag(controller, [1, 1], [1, 6]);
+			expect(controller.hintText()).toBe(
+				"paste again to expand ⋅ 5 characters selected, ctrl+c to copy",
+			);
+		} finally {
+			dispose?.();
+		}
+	});
+
+	it("still shows the paste hint with copyOnSelect on", () => {
+		const dispose = armPaste();
+		try {
+			const { controller } = makeHarness({ copyOnSelect: true, copyNotice: true });
+			drag(controller, [1, 1], [1, 6]);
+			expect(controller.hintText()).toBe("paste again to expand");
+		} finally {
+			dispose?.();
+		}
 	});
 });
 

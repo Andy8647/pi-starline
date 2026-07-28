@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { defaultConfig, mergeConfig } from "../extensions/zentui/config";
 import {
 	installPasteCollapse,
+	pasteExpandHintText,
 	shouldCollapse,
 	supportsPasteCollapse,
 } from "../extensions/zentui/fixed-editor/paste-collapse";
@@ -15,16 +16,46 @@ function makeEditor() {
 		pastes: new Map<number, string>(),
 		pasteCounter: 0,
 		lastAction: "type-word" as unknown,
+		state: { lines: [""], cursorLine: 0, cursorCol: 0 },
+		isInPaste: false,
 		handlePaste: vi.fn(function (this: unknown, _text: string) {}),
+		handleInput: vi.fn(function (this: unknown, _data: string) {}),
 		normalizeText: (text: string) => text.replace(/\r\n?/g, "\n").replace(/\t/g, "  "),
 		insertTextAtCursorInternal: (text: string) => {
 			inserted.push(text);
+			// Enough of Pi's insert to keep the editor text in sync: markers have to
+			// be findable in state.lines for expansion to work at all.
+			const state = editor.state;
+			const line = state.lines[state.cursorLine] ?? "";
+			const merged = line.slice(0, state.cursorCol) + text + line.slice(state.cursorCol);
+			const split = merged.split("\n");
+			state.lines.splice(state.cursorLine, 1, ...split);
+			state.cursorLine += split.length - 1;
+			state.cursorCol = (split.at(-1) ?? "").length - (line.length - state.cursorCol);
+		},
+		setCursorCol: (col: number) => {
+			editor.state.cursorCol = col;
 		},
 		cancelAutocomplete: vi.fn(),
 		exitHistoryBrowsing: vi.fn(),
 		pushUndoSnapshot: vi.fn(),
 	};
-	return { editor, inserted };
+	return { editor, inserted, text: () => editor.state.lines.join("\n") };
+}
+
+/** Stands in for Pi's own collapse of a paste above its hardcoded threshold. */
+function collapseLikePi(editor: ReturnType<typeof makeEditor>["editor"]) {
+	return (text: string) => {
+		const lineCount = text.split("\n").length;
+		if (lineCount <= 10 && text.length <= 1000) {
+			editor.insertTextAtCursorInternal(text);
+			return;
+		}
+		editor.pasteCounter += 1;
+		const id = editor.pasteCounter;
+		editor.pastes.set(id, text);
+		editor.insertTextAtCursorInternal(`[paste #${id} +${lineCount} lines]`);
+	};
 }
 
 describe("pasteCollapseLines config", () => {
@@ -211,5 +242,125 @@ describe("installPasteCollapse", () => {
 		minLines = 3;
 		editor.handlePaste(lines(4));
 		expect(inserted).toEqual(["[paste #1 +4 lines]"]);
+	});
+});
+
+describe("paste again to expand", () => {
+	const HINT = "paste again to expand";
+
+	it("arms the hint after a collapse and clears it after expanding", () => {
+		const { editor, text } = makeEditor();
+		installPasteCollapse(editor, () => 3);
+
+		editor.handlePaste(lines(4));
+		expect(pasteExpandHintText()).toBe(HINT);
+
+		editor.handlePaste(lines(4));
+		expect(pasteExpandHintText()).toBeNull();
+		expect(text()).toBe(lines(4));
+		expect(text()).not.toContain("[paste #");
+	});
+
+	it("leaves the cursor at the end of the expanded text", () => {
+		const { editor } = makeEditor();
+		installPasteCollapse(editor, () => 3);
+
+		editor.handlePaste(lines(4));
+		editor.handlePaste(lines(4));
+
+		expect(editor.state.cursorLine).toBe(3);
+		expect(editor.state.cursorCol).toBe("line 3".length);
+	});
+
+	it("stacks a second marker when different text is pasted, and re-arms for it", () => {
+		const { editor, inserted, text } = makeEditor();
+		installPasteCollapse(editor, () => 3);
+
+		editor.handlePaste(lines(4));
+		editor.handlePaste(lines(5));
+
+		expect(inserted).toEqual(["[paste #1 +4 lines]", "[paste #2 +5 lines]"]);
+		expect(pasteExpandHintText()).toBe(HINT);
+
+		// The hint now belongs to #2: re-pasting that text expands it, not #1.
+		editor.handlePaste(lines(5));
+		expect(text()).toContain("[paste #1 +4 lines]");
+		expect(text()).toContain(lines(5));
+	});
+
+	// Above Pi's own threshold the paste is Pi's to collapse; the affordance still
+	// has to work, since that is where big pastes actually land.
+	it("arms and expands a paste Pi collapsed itself", () => {
+		const { editor, text } = makeEditor();
+		editor.handlePaste.mockImplementation(collapseLikePi(editor));
+		installPasteCollapse(editor, () => 11);
+
+		editor.handlePaste(lines(20));
+		expect(text()).toBe("[paste #1 +20 lines]");
+		expect(pasteExpandHintText()).toBe(HINT);
+
+		editor.handlePaste(lines(20));
+		expect(text()).toBe(lines(20));
+		expect(pasteExpandHintText()).toBeNull();
+	});
+
+	it("does not arm for a paste that stayed inline", () => {
+		const { editor } = makeEditor();
+		editor.handlePaste.mockImplementation(collapseLikePi(editor));
+		installPasteCollapse(editor, () => 3);
+
+		editor.handlePaste("one line");
+		expect(pasteExpandHintText()).toBeNull();
+	});
+
+	// Pi renumbers paste ids when a marker is deleted, so the armed id can end up
+	// pointing at somebody else's text. Expanding then would paste the wrong
+	// content silently — the one outcome worth refusing.
+	it("refuses to expand when the stored text no longer matches", () => {
+		const { editor, inserted } = makeEditor();
+		installPasteCollapse(editor, () => 3);
+
+		editor.handlePaste(lines(4));
+		editor.pastes.set(1, "something else entirely");
+
+		editor.handlePaste(lines(4));
+		expect(inserted).toEqual(["[paste #1 +4 lines]", "[paste #2 +4 lines]"]);
+	});
+
+	it("clears the hint when the marker is deleted from the editor", () => {
+		const { editor } = makeEditor();
+		installPasteCollapse(editor, () => 3);
+
+		editor.handlePaste(lines(4));
+		editor.state.lines = [""];
+		expect(pasteExpandHintText()).toBeNull();
+	});
+
+	it("disarms on any non-paste input", () => {
+		const { editor } = makeEditor();
+		installPasteCollapse(editor, () => 3);
+
+		editor.handlePaste(lines(4));
+		editor.handleInput("x");
+		expect(pasteExpandHintText()).toBeNull();
+	});
+
+	it("keeps the hint armed across the chunks of a bracketed paste", () => {
+		const { editor } = makeEditor();
+		installPasteCollapse(editor, () => 3);
+
+		editor.handlePaste(lines(4));
+		editor.isInPaste = true;
+		editor.handleInput("chunk");
+		expect(pasteExpandHintText()).toBe(HINT);
+	});
+
+	it("reports no hint once disposed", () => {
+		const { editor } = makeEditor();
+		const dispose = installPasteCollapse(editor, () => 3);
+
+		editor.handlePaste(lines(4));
+		dispose?.();
+		expect(pasteExpandHintText()).toBeNull();
 	});
 });

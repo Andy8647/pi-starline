@@ -14,6 +14,7 @@ import { visibleWidth } from "@earendil-works/pi-tui";
 
 import { type EditorBoxGeometry, findEditorBox, hitTestEditorBox } from "./editor-hit-test";
 import { positionEditorTextCursor } from "./editor-text-cursor";
+import { pasteExpandHintText } from "./paste-collapse";
 import { highlightSelection, SelectionState } from "./selection";
 
 export type CopySource = "auto" | "explicit";
@@ -109,10 +110,25 @@ export class SelectionController {
 
 	/**
 	 * Hint for the editor's bottom border, or "" when there is nothing to say.
-	 * Only shown while a finished selection is waiting for ctrl+c — with
-	 * copyOnSelect on, the copy has already happened and needs no prompt.
+	 *
+	 * Two things can want the border: a collapsed paste offering to expand, and a
+	 * finished selection waiting for ctrl+c. Both can be true at once, so they
+	 * share the line. The selection half is skipped with copyOnSelect on — the
+	 * copy has already happened and needs no prompt.
 	 */
 	hintText(): string {
+		const parts: string[] = [];
+
+		const pasteHint = pasteExpandHintText();
+		if (pasteHint) parts.push(pasteHint);
+
+		const selectionHint = this.selectionHintText();
+		if (selectionHint) parts.push(selectionHint);
+
+		return parts.join(" ⋅ ");
+	}
+
+	private selectionHintText(): string {
 		if (this.host.getConfig().copyOnSelect) return "";
 		if (this.activeSelection.isDragging) return "";
 		const count = this.selectedText().length;
