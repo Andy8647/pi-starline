@@ -238,7 +238,7 @@ describe("positionEditorTextCursor", () => {
 
 /**
  * The compositor tracks the container Pi puts the editor in, not the editor,
- * and Zentui wraps the editor again in the wrapped-editor path. Resolving the
+ * and Starline wraps the editor again in the wrapped-editor path. Resolving the
  * wrong object is a silent failure: clicks simply stop doing anything.
  */
 describe("resolveEditorInternals", () => {

@@ -9,7 +9,7 @@ import {
 } from "../extensions/starline/package-version";
 
 function makeProject(files: Record<string, string>): string {
-	const cwd = mkdtempSync(join(tmpdir(), "zentui-package-version-"));
+	const cwd = mkdtempSync(join(tmpdir(), "starline-package-version-"));
 	for (const [name, content] of Object.entries(files)) {
 		const full = join(cwd, name);
 		if (name.includes("/")) {
@@ -266,7 +266,7 @@ describe("readPackageVersion", () => {
 	});
 
 	it("does not shell out and survives missing manifests silently", () => {
-		const cwd = mkdtempSync(join(tmpdir(), "zentui-empty-project-"));
+		const cwd = mkdtempSync(join(tmpdir(), "starline-empty-project-"));
 		expect(readPackageVersion(cwd)).toBeNull();
 	});
 

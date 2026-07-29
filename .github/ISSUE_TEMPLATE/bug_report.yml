@@ -1,12 +1,12 @@
 name: Bug report
-description: Report Zentui behavior that appears broken
+description: Report Starline behavior that appears broken
 title: "bug: "
 labels: ["bug", "needs-triage"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting a pi-zentui bug. Please include enough Pi, terminal, font, and config detail to reproduce the issue.
+        Thanks for reporting a pi-starline bug. Please include enough Pi, terminal, font, and config detail to reproduce the issue.
 
   - type: checkboxes
     id: preflight
@@ -15,15 +15,15 @@ body:
       options:
         - label: I searched existing issues before opening this one.
           required: true
-        - label: I can reproduce this with the latest published pi-zentui version or current main.
+        - label: I can reproduce this with the latest published pi-starline version or current main.
           required: false
         - label: I am using a Nerd Font when reporting icon or glyph issues.
           required: false
 
   - type: input
-    id: zentui-version
+    id: starline-version
     attributes:
-      label: Zentui version
+      label: Starline version
       description: npm package version, git commit, or install source.
       placeholder: "0.2.7 / main@abc123 / local checkout"
     validations:
@@ -53,7 +53,7 @@ body:
     id: environment
     attributes:
       label: Environment
-      description: Include the terminal/UI details that can affect Zentui rendering or behavior.
+      description: Include the terminal/UI details that can affect Starline rendering or behavior.
       placeholder: |
         OS:
         Terminal app:
@@ -67,8 +67,8 @@ body:
   - type: textarea
     id: config
     attributes:
-      label: Zentui config
-      description: Paste relevant values from ~/.pi/agent/zentui.json. Remove secrets if any.
+      label: Starline config
+      description: Paste relevant values from ~/.pi/agent/starline.json. Remove secrets if any.
       render: json
 
   - type: textarea

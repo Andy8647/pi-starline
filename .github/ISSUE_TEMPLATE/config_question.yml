@@ -1,12 +1,12 @@
 name: Config or usage question
-description: Ask about Zentui configuration or expected behavior
+description: Ask about Starline configuration or expected behavior
 title: "question: "
 labels: ["question", "needs-triage"]
 body:
   - type: markdown
     attributes:
       value: |
-        Use this for questions about pi-zentui configuration, /zentui settings, color sources, or expected terminal UI behavior.
+        Use this for questions about pi-starline configuration, /starline settings, color sources, or expected terminal UI behavior.
 
   - type: checkboxes
     id: preflight
@@ -29,8 +29,8 @@ body:
   - type: textarea
     id: config
     attributes:
-      label: Relevant Zentui config
-      description: Paste relevant values from ~/.pi/agent/zentui.json. Remove secrets if any.
+      label: Relevant Starline config
+      description: Paste relevant values from ~/.pi/agent/starline.json. Remove secrets if any.
       render: json
 
   - type: textarea
@@ -39,7 +39,7 @@ body:
       label: Environment
       description: Include details that may affect config, colors, or rendering.
       placeholder: |
-        Zentui version:
+        Starline version:
         Pi version:
         Install source:
         OS:

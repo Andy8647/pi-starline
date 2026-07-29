@@ -492,7 +492,7 @@ describe("clearSelection", () => {
 });
 
 /**
- * Zentui extracts OSC 8 hyperlink targets alongside the visible text, which the
+ * Starline extracts OSC 8 hyperlink targets alongside the visible text, which the
  * powerline fork never did. Selection goes through SelectionState precisely so
  * this cannot be lost.
  */

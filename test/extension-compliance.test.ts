@@ -655,7 +655,7 @@ describe("Pi docs compliance", () => {
 			() => defaultConfig,
 		);
 
-		const lines = new UserMessageComponent("hello **zentui**").render(80).map(stripPromptMarks);
+		const lines = new UserMessageComponent("hello **starline**").render(80).map(stripPromptMarks);
 		const rendered = lines.join("\n");
 
 		expect(stripTestTags(lines[0])).toMatch(/^─+$/);
@@ -665,7 +665,7 @@ describe("Pi docs compliance", () => {
 		expect(raw).toMatch(/\[borderMuted\]────|\u001b\[90m────/);
 		expect(rendered).toContain("[userMessageText]");
 		expect(rendered).toContain("[bold]");
-		expect(rendered).not.toContain("**zentui**");
+		expect(rendered).not.toContain("**starline**");
 		expect(rendered).not.toContain("claude-sonnet");
 		expect(rendered).not.toContain("Anthropic");
 		expect(rendered).not.toContain("xhigh");

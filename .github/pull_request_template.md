@@ -2,7 +2,7 @@
 
 <!--
 Briefly describe what this PR changes and why.
-Focus on user-facing behavior: footer, editor, user-message styling, runtime/git detection, `/zentui` settings, config, or packaging.
+Focus on user-facing behavior: footer, editor, user-message styling, runtime/git detection, `/starline` settings, config, or packaging.
 Link related issues with "Closes #123" or "Refs #123" where applicable.
 -->
 
@@ -30,5 +30,5 @@ Run these locally before requesting review. Tick everything that applies.
 - [ ] Preserved Nerd Font / private-use icon glyphs (no empty strings or replaced characters).
 - [ ] Updated `README.md` or config docs if user-facing behavior changed.
 - [ ] Kept the diff surgical: no unrelated refactors, formatting, or dependency churn.
-- [ ] `extensions/zentui/index.ts` stays mostly orchestration; new logic lives in a focused module.
+- [ ] `extensions/starline/index.ts` stays mostly orchestration; new logic lives in a focused module.
 - [ ] Used a conventional commit-style PR title (e.g. `feat: add ...`, `fix: handle ...`).

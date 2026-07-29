@@ -91,7 +91,7 @@ describe("parseGitStatusPorcelain", () => {
 
 describe("detectGitState", () => {
 	function fixture(files: Record<string, string>) {
-		const root = mkdtempSync(join(tmpdir(), "zentui-git-state-"));
+		const root = mkdtempSync(join(tmpdir(), "starline-git-state-"));
 		const paths: Record<string, string> = {};
 		for (const [name, content] of Object.entries(files)) {
 			const full = join(root, name);

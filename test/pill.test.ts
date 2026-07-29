@@ -229,7 +229,7 @@ describe("contrastTextSgr", () => {
 });
 
 describe("renderPillBar", () => {
-	const cwd: PillInput = { key: "cwd", text: "pi-zentui", spec: "syntaxKeyword" };
+	const cwd: PillInput = { key: "cwd", text: "pi-starline", spec: "syntaxKeyword" };
 	const cost: PillInput = { key: "cost", text: "$0.42", spec: "success" };
 
 	it("returns empty when nothing has content", () => {
@@ -240,7 +240,7 @@ describe("renderPillBar", () => {
 	it("renders the text with its resolved background", () => {
 		const out = bar([cwd]);
 		expect(out).toContain(MAUVE_BG);
-		expect(stripVTControlCharacters(out)).toContain("pi-zentui");
+		expect(stripVTControlCharacters(out)).toContain("pi-starline");
 	});
 
 	it("joins two pills with an arrow carrying both colours", () => {
@@ -263,7 +263,7 @@ describe("renderPillBar", () => {
 
 	it("omits caps entirely when asked", () => {
 		const plain = stripVTControlCharacters(bar([cwd], { caps: "none" }));
-		expect(plain).toBe(" pi-zentui ");
+		expect(plain).toBe(" pi-starline ");
 	});
 
 	it("uses the thin separator when configured", () => {
@@ -275,7 +275,7 @@ describe("renderPillBar", () => {
 	it("lets backgrounds abut when the separator is off", () => {
 		const plain = stripVTControlCharacters(bar([cwd, cost], { separator: "none" }));
 		expect(plain).not.toContain("");
-		expect(plain).toContain("pi-zentui");
+		expect(plain).toContain("pi-starline");
 		expect(plain).toContain("$0.42");
 	});
 
@@ -284,7 +284,7 @@ describe("renderPillBar", () => {
 		for (const glyph of ["", "", "", ""]) {
 			expect(plain).not.toContain(glyph);
 		}
-		expect(plain).toContain("pi-zentui");
+		expect(plain).toContain("pi-starline");
 	});
 
 	it("falls back to a neutral background when the spec names no colour", () => {
@@ -292,7 +292,7 @@ describe("renderPillBar", () => {
 	});
 
 	it("strips styling the segment text arrived with", () => {
-		const out = bar([{ key: "cwd", text: `${MAUVE_FG}pi-zentui\x1b[39m`, spec: "success" }]);
+		const out = bar([{ key: "cwd", text: `${MAUVE_FG}pi-starline\x1b[39m`, spec: "success" }]);
 		expect(out).not.toContain(MAUVE_FG);
 		expect(out).toContain(GREEN_BG);
 	});

@@ -29,7 +29,7 @@ vi.mock("../extensions/starline/package-version", async (importOriginal) => {
 	return { ...actual, readPackageVersionResult: async () => undefined };
 });
 
-import zentui from "../extensions/starline/index";
+import starline from "../extensions/starline/index";
 
 type Handler = (event: unknown, ctx: unknown) => unknown | Promise<unknown>;
 type Footer = { render(width: number): string[]; dispose?: () => void };
@@ -98,7 +98,7 @@ function persistedEntry(id: string, input: number, output: number, cost: number)
 
 function loadExtension() {
 	const handlers = new Map<string, Handler[]>();
-	zentui({
+	starline({
 		on(name: string, handler: Handler) {
 			handlers.set(name, [...(handlers.get(name) ?? []), handler]);
 		},

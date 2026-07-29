@@ -1,6 +1,6 @@
 ## What this app is
 
-Zentui is a Pi extension package that gives Pi a Starship-inspired footer and an Opencode-style input UI.
+Starline is a Pi extension package that gives Pi a Starship-inspired footer and an Opencode-style input UI.
 
 It shows useful session/project state at a glance:
 
@@ -25,10 +25,10 @@ Pi loads the package from `package.json` via:
 The extension entry point is:
 
 ```text
-extensions/zentui/index.ts
+extensions/starline/index.ts
 ```
 
-On `session_start`, Zentui installs:
+On `session_start`, Starline installs:
 
 - a custom footer (`footer.ts`)
 - a custom editor (`ui.ts`)
@@ -39,27 +39,27 @@ Most updates happen by syncing shared footer state and asking the TUI to re-rend
 
 ## Important files
 
-- `extensions/zentui/index.ts` — extension orchestration and Pi event wiring.
-- `extensions/zentui/config.ts` — config file path, defaults, and config merging.
-- `extensions/zentui/footer.ts` — footer/statusline rendering.
-- `extensions/zentui/style.ts` — Starship-style terminal style rendering (`bold purple`, `fg:202`, `bg:blue`, etc.).
-- `extensions/zentui/format.ts` — small formatting helpers for counts, labels, context, cwd, and runtime segments.
-- `extensions/zentui/state.ts` — footer state shape and sync logic.
-- `extensions/zentui/git.ts` — git porcelain parsing and status summary.
-- `extensions/zentui/runtime.ts` — runtime/language detection and version lookup.
-- `extensions/zentui/settings-command.ts` — `/zentui` settings UI for color-source preferences.
-- `extensions/zentui/ui.ts` — custom editor frame.
-- `extensions/zentui/user-message.ts` — prompt-box-style user message rendering.
+- `extensions/starline/index.ts` — extension orchestration and Pi event wiring.
+- `extensions/starline/config.ts` — config file path, defaults, and config merging.
+- `extensions/starline/footer.ts` — footer/statusline rendering.
+- `extensions/starline/style.ts` — Starship-style terminal style rendering (`bold purple`, `fg:202`, `bg:blue`, etc.).
+- `extensions/starline/format.ts` — small formatting helpers for counts, labels, context, cwd, and runtime segments.
+- `extensions/starline/state.ts` — footer state shape and sync logic.
+- `extensions/starline/git.ts` — git porcelain parsing and status summary.
+- `extensions/starline/runtime.ts` — runtime/language detection and version lookup.
+- `extensions/starline/settings-command.ts` — `/starline` settings UI for color-source preferences.
+- `extensions/starline/ui.ts` — custom editor frame.
+- `extensions/starline/user-message.ts` — prompt-box-style user message rendering.
 
 ## Config
 
 User config is created at:
 
 ```text
-~/.pi/agent/zentui.json
+~/.pi/agent/starline.json
 ```
 
-Use `colors` for Starship-style color strings, hex/256-color values, or Pi theme tokens. `colorSources` controls whether Zentui maps colors through the Pi theme or renders terminal colors directly. `/zentui` changes editor and previous user-message sources together.
+Use `colors` for Starship-style color strings, hex/256-color values, or Pi theme tokens. `colorSources` controls whether Starline maps colors through the Pi theme or renders terminal colors directly. `/starline` changes editor and previous user-message sources together.
 
 ## Things to preserve
 

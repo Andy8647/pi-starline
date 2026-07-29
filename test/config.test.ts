@@ -209,7 +209,7 @@ describe("mergeConfig", () => {
 	});
 
 	it("saves separator style without erasing unknown config", () => {
-		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
+		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
 		const path = join(dir, "starline.json");
 		try {
 			writeFileSync(path, `${JSON.stringify({ unknown: true, contextStyle: "gauge" }, null, 2)}\n`);
@@ -229,8 +229,8 @@ describe("mergeConfig", () => {
 	});
 
 	it("refuses corrupt config without changing its bytes", () => {
-		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
-		const path = join(dir, "zentui.json");
+		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
+		const path = join(dir, "starline.json");
 		const original = "{ invalid json\n";
 		try {
 			writeFileSync(path, original);
@@ -246,8 +246,8 @@ describe("mergeConfig", () => {
 	});
 
 	it("creates missing config atomically and returns the config written to disk", () => {
-		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
-		const path = join(dir, "zentui.json");
+		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
+		const path = join(dir, "starline.json");
 		try {
 			expect(existsSync(path)).toBe(false);
 			const config = saveFooterFormatPatch("$cwd $fill $context", path);
@@ -262,8 +262,8 @@ describe("mergeConfig", () => {
 	});
 
 	it("preserves the existing destination mode during atomic replacement", () => {
-		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
-		const path = join(dir, "zentui.json");
+		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
+		const path = join(dir, "starline.json");
 		try {
 			writeFileSync(path, `${JSON.stringify({ separator: "pipe" }, null, 2)}\n`);
 			chmodSync(path, 0o600);
@@ -279,10 +279,10 @@ describe("mergeConfig", () => {
 	});
 
 	it("updates a symlink target atomically without replacing the symlink", () => {
-		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
+		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
 		const targetDir = join(dir, "target");
 		const targetPath = join(targetDir, "actual.json");
-		const linkPath = join(dir, "zentui.json");
+		const linkPath = join(dir, "starline.json");
 		try {
 			mkdirSync(targetDir);
 			writeFileSync(targetPath, `${JSON.stringify({ unknown: true }, null, 2)}\n`);
@@ -306,10 +306,10 @@ describe("mergeConfig", () => {
 	});
 
 	it("refuses a dangling symlink without changing it", () => {
-		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
+		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
 		const targetDir = join(dir, "target");
 		const missingTarget = join(targetDir, "missing.json");
-		const linkPath = join(dir, "zentui.json");
+		const linkPath = join(dir, "starline.json");
 		try {
 			mkdirSync(targetDir);
 			symlinkSync(missingTarget, linkPath);
@@ -327,8 +327,8 @@ describe("mergeConfig", () => {
 	});
 
 	it("preserves scalar and nested unknown keys through the shared mutation path", () => {
-		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
-		const path = join(dir, "zentui.json");
+		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
+		const path = join(dir, "starline.json");
 		try {
 			writeFileSync(
 				path,
@@ -361,8 +361,8 @@ describe("mergeConfig", () => {
 	});
 
 	it("keeps the destination and removes the temp file when serialization fails", () => {
-		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
-		const path = join(dir, "zentui.json");
+		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
+		const path = join(dir, "starline.json");
 		const original = `${JSON.stringify({ unknown: true }, null, 2)}\n`;
 		try {
 			writeFileSync(path, original);
@@ -424,8 +424,8 @@ describe("mergeConfig", () => {
 	});
 
 	it("saves pathDisplay patches and keeps unknown keys", () => {
-		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
-		const path = join(dir, "zentui.json");
+		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
+		const path = join(dir, "starline.json");
 		try {
 			writeFileSync(
 				path,
@@ -483,8 +483,8 @@ describe("mergeConfig", () => {
 	});
 
 	it("saves git branch length without erasing unknown config", () => {
-		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
-		const path = join(dir, "zentui.json");
+		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
+		const path = join(dir, "starline.json");
 		try {
 			writeFileSync(
 				path,
@@ -636,7 +636,7 @@ describe("mergeConfig", () => {
 		expect(config.colors.editorThinkingXhigh).toBe("thinkingXhigh");
 	});
 
-	it("ignores invalid known values at runtime instead of trusting zentui.json", () => {
+	it("ignores invalid known values at runtime instead of trusting starline.json", () => {
 		const config = mergeConfig({
 			projectRefreshIntervalMs: "fast",
 			icons: {
@@ -766,8 +766,8 @@ describe("mergeConfig", () => {
 	});
 
 	it("saves color source patches without erasing unknown user config", () => {
-		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
-		const path = join(dir, "zentui.json");
+		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
+		const path = join(dir, "starline.json");
 		try {
 			writeFileSync(
 				path,
@@ -812,8 +812,8 @@ describe("mergeConfig", () => {
 	});
 
 	it("preserves invalid and unknown color source data on disk while normalizing runtime", () => {
-		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
-		const path = join(dir, "zentui.json");
+		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
+		const path = join(dir, "starline.json");
 		try {
 			writeFileSync(
 				path,
@@ -850,9 +850,9 @@ describe("mergeConfig", () => {
 		}
 	});
 
-	it("writes only the requested settings when creating zentui.json", () => {
-		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
-		const path = join(dir, "zentui.json");
+	it("writes only the requested settings when creating starline.json", () => {
+		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
+		const path = join(dir, "starline.json");
 		try {
 			const config = saveColorSourcesPatch({ starship: "terminal" }, path);
 			const raw = JSON.parse(readFileSync(path, "utf8"));
@@ -869,8 +869,8 @@ describe("mergeConfig", () => {
 	});
 
 	it("saves UI feature patches without erasing unknown user config", () => {
-		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
-		const path = join(dir, "zentui.json");
+		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
+		const path = join(dir, "starline.json");
 		try {
 			writeFileSync(
 				path,
@@ -906,9 +906,9 @@ describe("mergeConfig", () => {
 		}
 	});
 
-	it("writes only the requested UI feature setting when creating zentui.json", () => {
-		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
-		const path = join(dir, "zentui.json");
+	it("writes only the requested UI feature setting when creating starline.json", () => {
+		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
+		const path = join(dir, "starline.json");
 		try {
 			const config = saveUiFeaturesPatch({ editor: false }, path);
 			const raw = JSON.parse(readFileSync(path, "utf8"));
@@ -925,8 +925,8 @@ describe("mergeConfig", () => {
 	});
 
 	it("saves footer segment patches without erasing unknown user config", () => {
-		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
-		const path = join(dir, "zentui.json");
+		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
+		const path = join(dir, "starline.json");
 		try {
 			writeFileSync(
 				path,
@@ -979,9 +979,9 @@ describe("mergeConfig", () => {
 		}
 	});
 
-	it("writes only the requested footer segment setting when creating zentui.json", () => {
-		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
-		const path = join(dir, "zentui.json");
+	it("writes only the requested footer segment setting when creating starline.json", () => {
+		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
+		const path = join(dir, "starline.json");
 		try {
 			const config = saveFooterSegmentsPatch({ runtime: false }, path);
 			const raw = JSON.parse(readFileSync(path, "utf8"));
@@ -1014,8 +1014,8 @@ describe("mergeConfig", () => {
 	});
 
 	it("toggles and persists the packageVersion footer segment", () => {
-		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
-		const path = join(dir, "zentui.json");
+		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
+		const path = join(dir, "starline.json");
 		try {
 			const config = saveFooterSegmentsPatch({ packageVersion: true }, path);
 			expect(config.footerSegments.packageVersion).toBe(true);
@@ -1031,8 +1031,8 @@ describe("mergeConfig", () => {
 	});
 
 	it("toggles and persists gitCommit and gitMetrics footer segments", () => {
-		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
-		const path = join(dir, "zentui.json");
+		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
+		const path = join(dir, "starline.json");
 		try {
 			const config = saveFooterSegmentsPatch({ gitCommit: true, gitMetrics: true }, path);
 			expect(config.footerSegments.gitCommit).toBe(true);
@@ -1073,8 +1073,8 @@ describe("mergeConfig", () => {
 	});
 
 	it("writes and reads back footerFormat", () => {
-		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
-		const path = join(dir, "zentui.json");
+		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
+		const path = join(dir, "starline.json");
 		try {
 			const config = saveFooterFormatPatch("$cwd on $git_branch $fill $cost", path);
 			const raw = JSON.parse(readFileSync(path, "utf8"));
@@ -1087,8 +1087,8 @@ describe("mergeConfig", () => {
 	});
 
 	it("clears footerFormat when saving empty string", () => {
-		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
-		const path = join(dir, "zentui.json");
+		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
+		const path = join(dir, "starline.json");
 		try {
 			const config = saveFooterFormatPatch("", path);
 			expect(config.footerFormat).toBe("");
@@ -1097,9 +1097,9 @@ describe("mergeConfig", () => {
 		}
 	});
 
-	it("saves extension status placement when creating zentui.json", () => {
-		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
-		const path = join(dir, "zentui.json");
+	it("saves extension status placement when creating starline.json", () => {
+		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
+		const path = join(dir, "starline.json");
 		try {
 			const config = saveExtensionStatusPlacement("plugin.key", "middle", path);
 			const raw = JSON.parse(readFileSync(path, "utf8"));
@@ -1117,9 +1117,9 @@ describe("mergeConfig", () => {
 		}
 	});
 
-	it("saves extension status color mode when creating zentui.json", () => {
-		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
-		const path = join(dir, "zentui.json");
+	it("saves extension status color mode when creating starline.json", () => {
+		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
+		const path = join(dir, "starline.json");
 		try {
 			const config = saveExtensionStatusColorMode("plugin.key", "original", path);
 			const raw = JSON.parse(readFileSync(path, "utf8"));
@@ -1138,8 +1138,8 @@ describe("mergeConfig", () => {
 	});
 
 	it("saves extension status color mode without erasing placement config", () => {
-		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
-		const path = join(dir, "zentui.json");
+		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
+		const path = join(dir, "starline.json");
 		try {
 			writeFileSync(
 				path,
@@ -1193,8 +1193,8 @@ describe("mergeConfig", () => {
 	});
 
 	it("saves extension status placement without erasing unknown user config", () => {
-		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
-		const path = join(dir, "zentui.json");
+		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
+		const path = join(dir, "starline.json");
 		try {
 			writeFileSync(
 				path,
@@ -1360,8 +1360,8 @@ describe("style rendering", () => {
 
 describe("saveFixedEditorPatch", () => {
 	it("saves enabled flag and round-trips", () => {
-		const dir = mkdtempSync(join(tmpdir(), "zentui-cfg-"));
-		const path = join(dir, "zentui.json");
+		const dir = mkdtempSync(join(tmpdir(), "starline-cfg-"));
+		const path = join(dir, "starline.json");
 		try {
 			const config = saveFixedEditorPatch({ enabled: true }, path);
 			expect(config.fixedEditor.enabled).toBe(true);
@@ -1374,8 +1374,8 @@ describe("saveFixedEditorPatch", () => {
 	});
 
 	it("saves mouseScroll flag alongside existing enabled", () => {
-		const dir = mkdtempSync(join(tmpdir(), "zentui-cfg-"));
-		const path = join(dir, "zentui.json");
+		const dir = mkdtempSync(join(tmpdir(), "starline-cfg-"));
+		const path = join(dir, "starline.json");
 		try {
 			saveFixedEditorPatch({ enabled: true }, path);
 			const config = saveFixedEditorPatch({ mouseScroll: true }, path);

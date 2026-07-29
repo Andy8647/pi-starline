@@ -12,13 +12,13 @@ import { createInitialState } from "../extensions/starline/state";
 
 describe("parseGitRemoteHost", () => {
 	it("reads scp-style SSH remotes", () => {
-		expect(parseGitRemoteHost("git@github.com:Andy8647/pi-zentui.git")).toBe("github");
+		expect(parseGitRemoteHost("git@github.com:Andy8647/pi-starline.git")).toBe("github");
 		expect(parseGitRemoteHost("git@gitlab.com:group/repo.git")).toBe("gitlab");
 		expect(parseGitRemoteHost("git@bitbucket.org:team/repo.git")).toBe("bitbucket");
 	});
 
 	it("reads HTTPS remotes", () => {
-		expect(parseGitRemoteHost("https://github.com/Andy8647/pi-zentui.git")).toBe("github");
+		expect(parseGitRemoteHost("https://github.com/Andy8647/pi-starline.git")).toBe("github");
 		expect(parseGitRemoteHost("https://gitlab.com/group/repo")).toBe("gitlab");
 	});
 

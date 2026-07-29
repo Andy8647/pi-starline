@@ -1,10 +1,10 @@
-# Contributing to pi-zentui
+# Contributing to pi-starline
 
-Thanks for your interest in pi-zentui. This document covers the workflow and conventions used in this repository.
+Thanks for your interest in pi-starline. This document covers the workflow and conventions used in this repository.
 
 ## Development setup
 
-Requirements: Node.js and npm. pi-zentui is a Pi extension package, so you'll also want a working `pi` binary for local testing.
+Requirements: Node.js and npm. pi-starline is a Pi extension package, so you'll also want a working `pi` binary for local testing.
 
 ```bash
 npm install
@@ -29,14 +29,14 @@ If your `pi` binary is not at the default path, override it:
 PI_BIN=/absolute/path/to/pi npm run pi:dev
 ```
 
-Manual testing is required for any change that affects the footer, editor, user-message styling, runtime/git detection, colors, or `/zentui` settings.
+Manual testing is required for any change that affects the footer, editor, user-message styling, runtime/git detection, colors, or `/starline` settings.
 
 ## Coding expectations
 
 Please follow the conventions already in this repo. The most important ones:
 
 - **Preserve Nerd Font / private-use icon glyphs.** Many of the icons are private-use Unicode characters; it is easy to replace them with empty strings by accident.
-- **Keep `extensions/zentui/index.ts` orchestration-focused.** Rendering, formatting, and parsing logic belong in focused modules such as `footer.ts`, `format.ts`, `style.ts`, `git.ts`, `runtime.ts`, `ui.ts`, or `user-message.ts`.
+- **Keep `extensions/starline/index.ts` orchestration-focused.** Rendering, formatting, and parsing logic belong in focused modules such as `footer.ts`, `format.ts`, `style.ts`, `git.ts`, `runtime.ts`, `ui.ts`, or `user-message.ts`.
 - **Use focused modules.** New rendering or formatting code should generally go into the matching module rather than being inlined.
 - **Silent fallbacks are intentional.** Git, runtime detection, and config lookups fail silently so that a broken environment does not break the session. Do not add throws or noisy errors for these paths without a strong reason.
 - **`user-message.ts` patches `UserMessageComponent`.** Treat it as fragile and avoid changes unless they are necessary.
@@ -49,11 +49,11 @@ Please follow the conventions already in this repo. The most important ones:
 - Run `npm run verify` and `npm run pack:check` locally.
 - Keep the diff surgical. Don't refactor adjacent code, reformat unrelated files, or upgrade dependencies that aren't part of the fix.
 - Use a conventional commit-style subject (e.g. `feat: add ...`, `fix: handle ...`), lowercase after the type, imperative, and concise. No trailing period.
-- Reviews are assigned to `@lmilojevicc` via `CODEOWNERS`.
+- Reviews are assigned to `@Andy8647` via `CODEOWNERS`.
 
 ## Reporting issues
 
-Please use the GitHub issue forms in [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/) so reports include the environment, config, and Pi/Zentui version context needed to triage them:
+Please use the GitHub issue forms in [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/) so reports include the environment, config, and Pi/Starline version context needed to triage them:
 
 - Bug report
 - Rendering, icon, or color issue
@@ -61,7 +61,7 @@ Please use the GitHub issue forms in [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_T
 - Runtime/language detection
 - Config or usage question
 
-For core Pi issues outside Zentui's footer, editor, and message styling, please open the issue upstream in the Pi project instead.
+For core Pi issues outside Starline's footer, editor, and message styling, please open the issue upstream in the Pi project instead.
 
 ## License
 

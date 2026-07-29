@@ -1,12 +1,12 @@
 name: Feature request
-description: Suggest a new Zentui capability or configuration option
+description: Suggest a new Starline capability or configuration option
 title: "feat: "
 labels: ["enhancement", "needs-triage"]
 body:
   - type: markdown
     attributes:
       value: |
-        Use this for proposed changes to pi-zentui's Pi footer, editor, previous-message styling, config, or runtime/git segments.
+        Use this for proposed changes to pi-starline's Pi footer, editor, previous-message styling, config, or runtime/git segments.
 
   - type: checkboxes
     id: preflight
@@ -15,14 +15,14 @@ body:
       options:
         - label: I searched existing issues before opening this one.
           required: true
-        - label: This request is specific to Zentui's Pi footer, editor, user-message styling, config, or status segments.
+        - label: This request is specific to Starline's Pi footer, editor, user-message styling, config, or status segments.
           required: true
 
   - type: textarea
     id: problem
     attributes:
       label: Problem or use case
-      description: What workflow does this improve in Pi with Zentui enabled?
+      description: What workflow does this improve in Pi with Starline enabled?
     validations:
       required: true
 
@@ -44,7 +44,7 @@ body:
         - Git status
         - Editor/input box
         - User message styling
-        - Config or /zentui settings
+        - Config or /starline settings
         - Packaging/install
         - Other
     validations:
@@ -54,7 +54,7 @@ body:
     id: alternatives
     attributes:
       label: Alternatives considered
-      description: Existing Zentui config, Pi settings, or workarounds considered.
+      description: Existing Starline config, Pi settings, or workarounds considered.
 
   - type: textarea
     id: examples

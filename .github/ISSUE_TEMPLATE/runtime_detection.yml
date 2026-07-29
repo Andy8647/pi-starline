@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Use this for Zentui footer runtime/language segments: missing runtimes, incorrect detection, version display, or new runtime support.
+        Use this for Starline footer runtime/language segments: missing runtimes, incorrect detection, version display, or new runtime support.
 
   - type: checkboxes
     id: preflight
@@ -64,7 +64,7 @@ body:
   - type: textarea
     id: expected
     attributes:
-      label: Expected Zentui segment
+      label: Expected Starline segment
       placeholder: "via  v20.11.1"
     validations:
       required: true
@@ -72,14 +72,14 @@ body:
   - type: textarea
     id: actual
     attributes:
-      label: Actual Zentui segment
+      label: Actual Starline segment
     validations:
       required: true
 
   - type: input
-    id: zentui-version
+    id: starline-version
     attributes:
-      label: Zentui version
+      label: Starline version
       placeholder: "0.2.7 / main@abc123 / local checkout"
     validations:
       required: true
