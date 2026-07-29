@@ -1,16 +1,16 @@
 {
-	"name": "pi-zentui",
-	"version": "0.13.0",
+	"name": "pi-starline",
+	"version": "0.1.0",
 	"description": "A Starship-inspired statusline and Opencode-style TUI for Pi.",
 	"type": "module",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/lmilojevicc/pi-zentui.git"
+		"url": "git+https://github.com/Andy8647/pi-starline.git"
 	},
-	"homepage": "https://github.com/lmilojevicc/pi-zentui#readme",
+	"homepage": "https://github.com/Andy8647/pi-starline#readme",
 	"bugs": {
-		"url": "https://github.com/lmilojevicc/pi-zentui/issues"
+		"url": "https://github.com/Andy8647/pi-starline/issues"
 	},
 	"keywords": [
 		"pi-package",
@@ -43,7 +43,7 @@
 		"extensions": [
 			"./extensions"
 		],
-		"image": "https://raw.githubusercontent.com/lmilojevicc/pi-zentui/main/assets/zentui.png"
+		"image": "https://raw.githubusercontent.com/Andy8647/pi-starline/main/assets/starline.png"
 	},
 	"publishConfig": {
 		"access": "public"
