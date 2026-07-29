@@ -10,3 +10,9 @@ bun.lock
 bun.lockb
 *.tgz
 .serena/
+
+# Working notes, not product
+PLAN.md
+SPEC.md
+HANDOFF.md
+docs/superpowers/
