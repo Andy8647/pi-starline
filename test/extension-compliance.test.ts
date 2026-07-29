@@ -16,14 +16,14 @@ import {
 } from "../extensions/starline/config";
 import { installFooter } from "../extensions/starline/footer";
 import { emptyGitStatus } from "../extensions/starline/git";
-import zentui from "../extensions/starline/index";
+import starline from "../extensions/starline/index";
 import { STARLINE_PROTOTYPE_PATCH_REGISTRY } from "../extensions/starline/prototype-patch-registry";
 import {
 	installSelectorBorderStyle,
 	patchSelectorBorderStyle,
 } from "../extensions/starline/selector-border";
 import { SessionLifecycle } from "../extensions/starline/session-lifecycle";
-import { registerZentuiSettingsCommand } from "../extensions/starline/settings-command";
+import { registerStarlineSettingsCommand } from "../extensions/starline/settings-command";
 import { createInitialState } from "../extensions/starline/state";
 import { PolishedEditor, WrappedPolishedEditor } from "../extensions/starline/ui";
 import { installUserMessageStyle } from "../extensions/starline/user-message";
@@ -215,7 +215,7 @@ function stripTestTags(line: string): string {
 
 function loadExtension(options: { thinkingLevel?: string; commands?: Map<string, unknown> } = {}) {
 	const handlers = new Map<string, Handler[]>();
-	zentui({
+	starline({
 		on(eventName: string, handler: Handler) {
 			handlers.set(eventName, [...(handlers.get(eventName) ?? []), handler]);
 		},
@@ -483,7 +483,7 @@ describe("Pi docs compliance", () => {
 		expect(runner.footerClears).toBe(1);
 	});
 
-	it("refreshes a stale Zentui editor factory on extension reload instead of adopting old closures", async () => {
+	it("refreshes a stale Starline editor factory on extension reload instead of adopting old closures", async () => {
 		const firstHandlers = loadExtension();
 		let editorFactory: unknown;
 		let setEditorCalls = 0;
@@ -512,7 +512,7 @@ describe("Pi docs compliance", () => {
 		expect(editorFactory).toBeTypeOf("function");
 	});
 
-	it("refreshes a stale wrapped Zentui editor without wrapping the old Zentui wrapper", async () => {
+	it("refreshes a stale wrapped Starline editor without wrapping the old Starline wrapper", async () => {
 		const firstHandlers = loadExtension();
 		let baseFactoryCalls = 0;
 		const existingEditorFactory = () => {
@@ -565,7 +565,7 @@ describe("Pi docs compliance", () => {
 		expect(rendered.match(/Anthropic/g)).toHaveLength(1);
 	});
 
-	it("re-wraps an editor component that loads after Zentui", async () => {
+	it("re-wraps an editor component that loads after Starline", async () => {
 		const handlers = loadExtension();
 		const laterEditorFactory = () => ({
 			render: (width: number) => ["─".repeat(width), "late vim editor", "─".repeat(width)],
@@ -590,12 +590,12 @@ describe("Pi docs compliance", () => {
 		});
 
 		await emit(handlers, "session_start", ctx);
-		const originalZentuiFactory = editorFactory;
+		const originalStarlineFactory = editorFactory;
 		editorFactory = laterEditorFactory;
 
 		await new Promise((resolve) => setTimeout(resolve, 1));
 
-		expect(editorFactory).not.toBe(originalZentuiFactory);
+		expect(editorFactory).not.toBe(originalStarlineFactory);
 		expect(editorFactory).not.toBe(laterEditorFactory);
 		expect(editorFactory).toBeTypeOf("function");
 		const editor = (editorFactory as (...args: unknown[]) => ReturnType<typeof laterEditorFactory>)(
@@ -649,7 +649,7 @@ describe("Pi docs compliance", () => {
 		}
 	});
 
-	it("renders user messages like the ZentUI prompt box", () => {
+	it("renders user messages like the Starline prompt box", () => {
 		installUserMessageStyle(
 			() => makeTaggedTheme(),
 			() => defaultConfig,
@@ -866,9 +866,9 @@ describe("Pi docs compliance", () => {
 		const prototype = { render: predecessor };
 		const getTheme = vi.fn(() => makeTaggedTheme());
 		const cleanup = patchSelectorBorderStyle(prototype, getTheme, () => defaultConfig);
-		const zentuiWrapper = prototype.render;
+		const starlineWrapper = prototype.render;
 		const thirdParty = function thirdParty(this: unknown, width: number): string[] {
-			return ["third-party", ...zentuiWrapper.call(this, width)];
+			return ["third-party", ...starlineWrapper.call(this, width)];
 		};
 		prototype.render = thirdParty;
 
@@ -911,12 +911,12 @@ describe("Pi docs compliance", () => {
 			() => makeTaggedTheme(),
 			() => defaultConfig,
 		);
-		const modelZentuiWrapper = ModelSelectorComponent.prototype.render;
+		const modelStarlineWrapper = ModelSelectorComponent.prototype.render;
 		const thirdPartyModelRender = function thirdPartyModelRender(
 			this: unknown,
 			width: number,
 		): string[] {
-			return modelZentuiWrapper.call(this as never, width);
+			return modelStarlineWrapper.call(this as never, width);
 		};
 		ModelSelectorComponent.prototype.render = thirdPartyModelRender;
 
@@ -1063,9 +1063,9 @@ describe("Pi docs compliance", () => {
 		prototype.invalidate = predecessorInvalidate;
 		const getTheme = vi.fn(() => makeTaggedTheme("old:"));
 		const cleanup = installUserMessageStyle(getTheme, () => defaultConfig);
-		const zentuiWrapper = prototype.render;
+		const starlineWrapper = prototype.render;
 		const thirdParty = function thirdParty(this: unknown, width: number): string[] {
-			return ["third-party", ...zentuiWrapper.call(this as never, width)];
+			return ["third-party", ...starlineWrapper.call(this as never, width)];
 		};
 		prototype.render = thirdParty;
 
@@ -2272,19 +2272,19 @@ describe("Pi docs compliance", () => {
 		expect(rendered).toContain("[error]────");
 	});
 
-	it("registers the Zentui settings command", () => {
+	it("registers the Starline settings command", () => {
 		const commands = new Map<string, unknown>();
 		loadExtension({ commands });
 
-		expect(commands.has("zentui")).toBe(true);
+		expect(commands.has("starline")).toBe(true);
 	});
 
-	it("does not use interactive UI when the Zentui settings command has no UI", async () => {
+	it("does not use interactive UI when the Starline settings command has no UI", async () => {
 		let command: { handler: (args: string, ctx: unknown) => Promise<void> } | undefined;
 		let notified = false;
 		let customOpened = false;
 
-		registerZentuiSettingsCommand(
+		registerStarlineSettingsCommand(
 			{
 				registerCommand(_name: string, options: unknown) {
 					command = options as typeof command;
@@ -2326,11 +2326,11 @@ describe("Pi docs compliance", () => {
 		expect(customOpened).toBe(false);
 	});
 
-	it("does not open interactive Zentui settings outside TUI mode", async () => {
+	it("does not open interactive Starline settings outside TUI mode", async () => {
 		let command: { handler: (args: string, ctx: unknown) => Promise<void> } | undefined;
 		let customOpened = false;
 
-		registerZentuiSettingsCommand(
+		registerStarlineSettingsCommand(
 			{
 				registerCommand(_name: string, options: unknown) {
 					command = options as typeof command;
@@ -2370,13 +2370,13 @@ describe("Pi docs compliance", () => {
 		expect(customOpened).toBe(false);
 	});
 
-	it("toggles the editor from direct Zentui slash-command arguments", async () => {
+	it("toggles the editor from direct Starline slash-command arguments", async () => {
 		let command: { handler: (args: string, ctx: unknown) => Promise<void> } | undefined;
 		const featureChanges: Partial<PolishedTuiConfig["features"]>[] = [];
 		const notifications: Array<{ message: string; level: string }> = [];
 		let renderRequests = 0;
 
-		registerZentuiSettingsCommand(
+		registerStarlineSettingsCommand(
 			{
 				registerCommand(_name: string, options: unknown) {
 					command = options as typeof command;
@@ -2421,11 +2421,11 @@ describe("Pi docs compliance", () => {
 		expect(notifications).toEqual([{ message: "Editor: disabled", level: "info" }]);
 	});
 
-	it("toggles the status line from direct Zentui slash-command arguments", async () => {
+	it("toggles the status line from direct Starline slash-command arguments", async () => {
 		let command: { handler: (args: string, ctx: unknown) => Promise<void> } | undefined;
 		const featureChanges: Partial<PolishedTuiConfig["features"]>[] = [];
 
-		registerZentuiSettingsCommand(
+		registerStarlineSettingsCommand(
 			{
 				registerCommand(_name: string, options: unknown) {
 					command = options as typeof command;
@@ -2459,12 +2459,12 @@ describe("Pi docs compliance", () => {
 		expect(featureChanges).toEqual([{ statusLine: false }]);
 	});
 
-	it("toggles copy-friendly mode from direct Zentui slash-command arguments", async () => {
+	it("toggles copy-friendly mode from direct Starline slash-command arguments", async () => {
 		let command: { handler: (args: string, ctx: unknown) => Promise<void> } | undefined;
 		const featureChanges: Partial<PolishedTuiConfig["features"]>[] = [];
 		const notifications: Array<{ message: string; level: string }> = [];
 
-		registerZentuiSettingsCommand(
+		registerStarlineSettingsCommand(
 			{
 				registerCommand(_name: string, options: unknown) {
 					command = options as typeof command;
@@ -2510,7 +2510,7 @@ describe("Pi docs compliance", () => {
 		let command: { handler: (args: string, ctx: unknown) => Promise<void> } | undefined;
 		const notifications: Array<{ message: string; level: string }> = [];
 
-		registerZentuiSettingsCommand(
+		registerStarlineSettingsCommand(
 			{
 				registerCommand(_name: string, options: unknown) {
 					command = options as typeof command;
@@ -2558,7 +2558,7 @@ describe("Pi docs compliance", () => {
 		]);
 	});
 
-	it("closes the Zentui settings UI before applying an editor feature change", async () => {
+	it("closes the Starline settings UI before applying an editor feature change", async () => {
 		vi.useFakeTimers();
 		try {
 			let command: { handler: (args: string, ctx: unknown) => Promise<void> } | undefined;
@@ -2567,7 +2567,7 @@ describe("Pi docs compliance", () => {
 			const sessionLifecycle = new SessionLifecycle();
 			sessionLifecycle.start();
 
-			registerZentuiSettingsCommand(
+			registerStarlineSettingsCommand(
 				{
 					registerCommand(_name: string, options: unknown) {
 						command = options as typeof command;
@@ -2634,7 +2634,7 @@ describe("Pi docs compliance", () => {
 		let command: { handler: (args: string, ctx: unknown) => Promise<void> } | undefined;
 		const attemptedPatches: Partial<PolishedTuiConfig["features"]>[] = [];
 		const notifications: string[] = [];
-		registerZentuiSettingsCommand(
+		registerStarlineSettingsCommand(
 			{
 				registerCommand(_name: string, options: unknown) {
 					command = options as typeof command;
@@ -2693,8 +2693,8 @@ describe("Pi docs compliance", () => {
 
 		expect(attemptedPatches).toEqual([{ statusLine: false }, { statusLine: false }]);
 		expect(notifications).toEqual([
-			"Could not update Zentui settings: config is corrupt",
-			"Could not update Zentui settings: config is corrupt",
+			"Could not update Starline settings: config is corrupt",
+			"Could not update Starline settings: config is corrupt",
 		]);
 	});
 
@@ -2706,7 +2706,7 @@ describe("Pi docs compliance", () => {
 			let stale = false;
 			const sessionLifecycle = new SessionLifecycle();
 			sessionLifecycle.start();
-			registerZentuiSettingsCommand(
+			registerStarlineSettingsCommand(
 				{
 					registerCommand(_name: string, options: unknown) {
 						command = options as typeof command;
@@ -2770,13 +2770,13 @@ describe("Pi docs compliance", () => {
 		}
 	});
 
-	it("renders Zentui settings with mode-aware top and bottom borders", async () => {
+	it("renders Starline settings with mode-aware top and bottom borders", async () => {
 		const settingsWidth = 160;
 		async function renderSettings(config: PolishedTuiConfig) {
 			let command: { handler: (args: string, ctx: unknown) => Promise<void> } | undefined;
 			let lines: string[] = [];
 
-			registerZentuiSettingsCommand(
+			registerStarlineSettingsCommand(
 				{
 					registerCommand(_name: string, options: unknown) {
 						command = options as typeof command;
@@ -2848,10 +2848,10 @@ describe("Pi docs compliance", () => {
 		).toBe(true);
 	});
 
-	it("renders Zentui settings without using invalid theme color tokens", async () => {
+	it("renders Starline settings without using invalid theme color tokens", async () => {
 		let command: { handler: (args: string, ctx: unknown) => Promise<void> } | undefined;
 
-		registerZentuiSettingsCommand(
+		registerStarlineSettingsCommand(
 			{
 				registerCommand(_name: string, options: unknown) {
 					command = options as typeof command;
@@ -2902,14 +2902,14 @@ describe("Pi docs compliance", () => {
 		).resolves.toBeUndefined();
 	});
 
-	it("cycles the separator from the Zentui layout settings", async () => {
+	it("cycles the separator from the Starline layout settings", async () => {
 		let command: { handler: (args: string, ctx: unknown) => Promise<void> } | undefined;
 		const changes: SeparatorStyle[] = [];
 		const notifications: string[] = [];
 		let dependencyRenderRequests = 0;
 		let tuiRenderRequests = 0;
 
-		registerZentuiSettingsCommand(
+		registerStarlineSettingsCommand(
 			{
 				registerCommand(_name: string, options: unknown) {
 					command = options as typeof command;
@@ -2991,7 +2991,7 @@ describe("Pi docs compliance", () => {
 		const run = async (maxLength: PolishedTuiConfig["gitBranch"]["maxLength"], presses: number) => {
 			let command: { handler: (args: string, ctx: unknown) => Promise<void> } | undefined;
 			const changes: Array<PolishedTuiConfig["gitBranch"]["maxLength"]> = [];
-			registerZentuiSettingsCommand(
+			registerStarlineSettingsCommand(
 				{
 					registerCommand(_name: string, options: unknown) {
 						command = options as typeof command;
@@ -3049,14 +3049,14 @@ describe("Pi docs compliance", () => {
 		expect(await run(17, 1)).toEqual(["full"]);
 	});
 
-	it("keeps the Zentui settings command open after applying a change", async () => {
+	it("keeps the Starline settings command open after applying a change", async () => {
 		let command: { handler: (args: string, ctx: unknown) => Promise<void> } | undefined;
 		const changes: Partial<PolishedTuiConfig["colorSources"]>[] = [];
 		let dependencyRenderRequests = 0;
 		let tuiRenderRequests = 0;
 		let doneCalls = 0;
 
-		registerZentuiSettingsCommand(
+		registerStarlineSettingsCommand(
 			{
 				registerCommand(_name: string, options: unknown) {
 					command = options as typeof command;
@@ -3129,7 +3129,7 @@ describe("Pi docs compliance", () => {
 		const changes: Partial<PolishedTuiConfig["colorSources"]>[] = [];
 		let rendered = "";
 
-		registerZentuiSettingsCommand(
+		registerStarlineSettingsCommand(
 			{
 				registerCommand(_name: string, options: unknown) {
 					command = options as typeof command;
@@ -3199,7 +3199,7 @@ describe("Pi docs compliance", () => {
 		let command: { handler: (args: string, ctx: unknown) => Promise<void> } | undefined;
 		let rendered = "";
 
-		registerZentuiSettingsCommand(
+		registerStarlineSettingsCommand(
 			{
 				registerCommand(_name: string, options: unknown) {
 					command = options as typeof command;
@@ -3258,7 +3258,7 @@ describe("Pi docs compliance", () => {
 		let command: { handler: (args: string, ctx: unknown) => Promise<void> } | undefined;
 		let rendered = "";
 
-		registerZentuiSettingsCommand(
+		registerStarlineSettingsCommand(
 			{
 				registerCommand(_name: string, options: unknown) {
 					command = options as typeof command;
@@ -3322,7 +3322,7 @@ describe("Pi docs compliance", () => {
 		let rendered = "";
 		const placements: Array<{ key: string; placement: ExtensionStatusPlacement }> = [];
 
-		registerZentuiSettingsCommand(
+		registerStarlineSettingsCommand(
 			{
 				registerCommand(_name: string, options: unknown) {
 					command = options as typeof command;
@@ -3386,7 +3386,7 @@ describe("Pi docs compliance", () => {
 		let dependencyRenderRequests = 0;
 		let tuiRenderRequests = 0;
 
-		registerZentuiSettingsCommand(
+		registerStarlineSettingsCommand(
 			{
 				registerCommand(_name: string, options: unknown) {
 					command = options as typeof command;
@@ -3455,7 +3455,7 @@ describe("Pi docs compliance", () => {
 		let command: { handler: (args: string, ctx: unknown) => Promise<void> } | undefined;
 		let rendered = "";
 
-		registerZentuiSettingsCommand(
+		registerStarlineSettingsCommand(
 			{
 				registerCommand(_name: string, options: unknown) {
 					command = options as typeof command;

@@ -148,7 +148,7 @@ function renderPromptBoxLine(
 	return truncateToWidth(`${rail}${content}`, width, "");
 }
 
-function renderZentuiUserMessage(
+function renderStarlineUserMessage(
 	instance: PatchableUserMessagePrototype,
 	width: number,
 	theme: Theme | undefined,
@@ -246,7 +246,7 @@ export function installUserMessageStyle(
 		({ predecessor, receiver, args }) => {
 			const width = args[0];
 			if (typeof width !== "number") return Reflect.apply(predecessor, receiver, args);
-			const lines = renderZentuiUserMessage(
+			const lines = renderStarlineUserMessage(
 				receiver as PatchableUserMessagePrototype,
 				width,
 				getTheme(),

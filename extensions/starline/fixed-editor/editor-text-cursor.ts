@@ -52,7 +52,7 @@ export function supportsEditorTextCursor(value: unknown): boolean {
  * Find the object that actually holds the editor state.
  *
  * What the compositor tracks is the *container* Pi puts the editor in, and
- * Zentui may itself wrap the editor in a decorator. So walk down through
+ * Starline may itself wrap the editor in a decorator. So walk down through
  * children and wrapped bases until something answers the probe. The visited
  * set keeps a cyclic component graph from looping.
  */

@@ -217,7 +217,7 @@ export function buildTokenLabel(
 
 	const hasCacheTokens = totals.cacheRead > 0 || totals.cacheWrite > 0;
 	if (hasCacheTokens && cache !== "off") {
-		// "percent" is zentui's long-standing display; "tokens" shows the raw
+		// "percent" is starline's long-standing display; "tokens" shows the raw
 		// cache-read count instead, which is what the powerline footer showed.
 		const cacheText =
 			cache === "tokens"

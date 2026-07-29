@@ -23,7 +23,7 @@ let didWarnUnsupported = false;
 let copyNoticeTimer: ReturnType<typeof setTimeout> | null = null;
 let storedCtx: ExtensionContext | null = null;
 let cancelProbeInstall: (() => void) | null = null;
-const COPY_NOTICE_KEY = "zentui-copy-notice";
+const COPY_NOTICE_KEY = "starline-copy-notice";
 const COPY_NOTICE_MS = 2500;
 
 function clearCopyNotice(ctx: ExtensionContext): void {
@@ -118,7 +118,7 @@ function warnUnsupported(ctx: ExtensionContext): void {
 	if (didWarnUnsupported || !ctx.hasUI) return;
 	didWarnUnsupported = true;
 	console.warn(
-		"[zentui] Fixed editor: unsupported Pi TUI layout — falling back to normal rendering.",
+		"[starline] Fixed editor: unsupported Pi TUI layout — falling back to normal rendering.",
 	);
 }
 
@@ -169,7 +169,7 @@ function installFromProbe(
 	}
 }
 
-const WIDGET_KEY = "zentui-fixed-editor-probe";
+const WIDGET_KEY = "starline-fixed-editor-probe";
 
 /**
  * Register the fixed-editor probe widget.

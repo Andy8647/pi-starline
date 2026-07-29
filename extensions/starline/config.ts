@@ -932,7 +932,7 @@ function mutateConfig(path: string, mutate: (record: ConfigRecord) => void): Pol
 }
 
 export function ensureConfigExists(): void {
-	// Intentionally left as a no-op. Zentui config is user-owned and
+	// Intentionally left as a no-op. Starline config is user-owned and
 	// compatibility-sensitive: runtime defaults come from `mergeConfig({})`, and
 	// the extension should not persist opinionated defaults unless the user
 	// explicitly changes a setting.

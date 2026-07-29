@@ -54,7 +54,7 @@ describe("fixed-editor probe lifecycle", () => {
 			hasUI: true,
 			ui: {
 				setWidget(key: string, factory: unknown) {
-					if (key === "zentui-fixed-editor-probe" && typeof factory === "function") {
+					if (key === "starline-fixed-editor-probe" && typeof factory === "function") {
 						widgetFactory = factory as typeof widgetFactory;
 					}
 				},
@@ -104,7 +104,7 @@ describe("fixed-editor probe lifecycle", () => {
 			hasUI: true,
 			ui: {
 				setWidget(key: string, factory: unknown) {
-					if (key === "zentui-fixed-editor-probe" && typeof factory === "function") {
+					if (key === "starline-fixed-editor-probe" && typeof factory === "function") {
 						widgetFactory = factory as typeof widgetFactory;
 					}
 				},

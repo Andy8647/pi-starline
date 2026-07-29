@@ -6,7 +6,7 @@
  * same top-level entries the runtime detector sees, then hands back a
  * silent null when no manifest is present or any parser fails.
  *
- * Supported manifest sources (intersected with runtimes Zentui detects):
+ * Supported manifest sources (intersected with runtimes Starline detects):
  *   bun / nodejs → package.json
  *   deno         → deno.json / deno.jsonc
  *   maven        → pom.xml

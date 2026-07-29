@@ -116,8 +116,8 @@ const featureSettingLabels: Record<FeatureSettingId, string> = {
 
 const featureSettingDescriptions: Record<FeatureSettingId, string> = {
 	editor:
-		"Enable or disable Zentui's custom editor, selector borders, and previous-message chrome.",
-	statusLine: "Enable or disable Zentui's custom footer/status line.",
+		"Enable or disable Starline's custom editor, selector borders, and previous-message chrome.",
+	statusLine: "Enable or disable Starline's custom footer/status line.",
 	copyFriendly:
 		"Hide editor and previous-message rail glyphs for cleaner native terminal selection.",
 };
@@ -312,7 +312,7 @@ function footerSegmentPatch(
 }
 
 function usageText(): string {
-	return 'Usage: /zentui [editor|statusline|copy-friendly] [enable|disable|toggle] or /zentui format "<template>"';
+	return 'Usage: /starline [editor|statusline|copy-friendly] [enable|disable|toggle] or /starline format "<template>"';
 }
 
 function featureNotification(
@@ -604,9 +604,9 @@ function withSectionFooter(lines: string[], theme: ExtensionContext["ui"]["theme
 	return next;
 }
 
-export function registerZentuiSettingsCommand(pi: ExtensionAPI, deps: SettingsCommandDeps): void {
-	pi.registerCommand("zentui", {
-		description: "Configure Zentui",
+export function registerStarlineSettingsCommand(pi: ExtensionAPI, deps: SettingsCommandDeps): void {
+	pi.registerCommand("starline", {
+		description: "Configure Starline",
 		getArgumentCompletions: argumentCompletions,
 		handler: async (_args, ctx) => {
 			const args = typeof _args === "string" ? _args : "";
@@ -650,7 +650,7 @@ export function registerZentuiSettingsCommand(pi: ExtensionAPI, deps: SettingsCo
 					}
 				} catch (error) {
 					const message = error instanceof Error ? error.message : String(error);
-					if (ctx.hasUI) ctx.ui.notify(`Could not update Zentui settings: ${message}`, "error");
+					if (ctx.hasUI) ctx.ui.notify(`Could not update Starline settings: ${message}`, "error");
 				}
 				return;
 			}
@@ -715,7 +715,7 @@ export function registerZentuiSettingsCommand(pi: ExtensionAPI, deps: SettingsCo
 												applyFeatureChange(id, newValue);
 											} catch (error) {
 												const message = error instanceof Error ? error.message : String(error);
-												ctx.ui.notify(`Could not update Zentui settings: ${message}`, "error");
+												ctx.ui.notify(`Could not update Starline settings: ${message}`, "error");
 											}
 										};
 										deps.sessionLifecycle.defer(applyEditorChange);
@@ -856,7 +856,7 @@ export function registerZentuiSettingsCommand(pi: ExtensionAPI, deps: SettingsCo
 								settingsList = makeSettingsList();
 								tui.requestRender();
 								const message = error instanceof Error ? error.message : String(error);
-								ctx.ui.notify(`Could not update Zentui settings: ${message}`, "error");
+								ctx.ui.notify(`Could not update Starline settings: ${message}`, "error");
 							}
 						},
 						() => done(undefined),

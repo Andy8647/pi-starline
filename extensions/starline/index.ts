@@ -59,7 +59,7 @@ import { applyProjectRefreshToState } from "./project-state";
 import { readRuntimeInfo } from "./runtime";
 import { installSelectorBorderStyle } from "./selector-border";
 import { SessionLifecycle } from "./session-lifecycle";
-import { registerZentuiSettingsCommand } from "./settings-command";
+import { registerStarlineSettingsCommand } from "./settings-command";
 import { createInitialState, type FooterState, syncState } from "./state";
 import { PolishedEditor, WrappedPolishedEditor } from "./ui";
 import { installUserMessageStyle } from "./user-message";
@@ -496,7 +496,7 @@ export default function (pi: ExtensionAPI) {
 		scheduleEditorReconciliation(ctx);
 	});
 
-	registerZentuiSettingsCommand(pi, {
+	registerStarlineSettingsCommand(pi, {
 		sessionLifecycle,
 		getConfig: getCurrentConfig,
 		setColorSources(patch: Partial<ColorSourcesConfig>) {
