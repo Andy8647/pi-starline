@@ -1,14 +1,32 @@
 name: Publish
-run-name: Publish ${{ github.ref_name }}
+run-name: >-
+  ${{ github.event_name == 'workflow_dispatch'
+      && 'Publish (manual run)'
+      || format('Publish {0}', github.ref_name) }}
 
 on:
   push:
     tags:
       - "v*.*.*"
+  # Lets you exercise the whole pipeline before committing to a tag. See the
+  # caveat in the dry-run summary step: this proves everything except the
+  # OIDC handshake itself, which only a real publish performs.
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run the checks and pack, but do not publish"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
   id-token: write
+
+# Two publishes racing would leave the registry and the tags disagreeing.
+# Never cancel one in flight — a half-published version is worse than a wait.
+concurrency:
+  group: publish
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -26,6 +44,15 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: npm
 
+      # Trusted publishing is an npm-CLI feature, not a registry-only one:
+      # versions below 11.5.1 ignore the OIDC token and fall back to looking
+      # for an auth token that does not exist here, failing with a misleading
+      # ENEEDAUTH. The bundled npm is usually new enough; this makes it certain.
+      - name: Ensure npm can do trusted publishing
+        run: |
+          npm install -g npm@latest
+          echo "npm $(npm --version) on node $(node --version)"
+
       - name: Install dependencies
         run: npm ci
 
@@ -36,16 +63,40 @@ jobs:
         run: npm run pack:check
 
       - name: Check tag matches package version
+        if: github.event_name == 'push'
         run: |
           VERSION=$(node -p "require('./package.json').version")
           TAG="${GITHUB_REF_NAME#v}"
-          test "$VERSION" = "$TAG"
+          if [ "$VERSION" != "$TAG" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} implies version ${TAG}, but package.json says ${VERSION}. Delete the tag, fix the version, and tag again."
+            exit 1
+          fi
+          echo "Tag ${GITHUB_REF_NAME} matches package.json version ${VERSION}."
 
+      # No NODE_AUTH_TOKEN: the OIDC token minted by `id-token: write` is
+      # exchanged for a short-lived credential, and npm attaches provenance
+      # automatically. If this step fails with ENEEDAUTH, the trusted publisher
+      # on npmjs.com does not match this repo, this workflow path, or the
+      # environment named above.
       - name: Publish to npm
+        if: github.event_name == 'push' || inputs.dry_run == false
         run: npm publish
+
+      - name: Explain what a manual dry run did and did not prove
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run
+        run: |
+          {
+            echo "### Dry run complete"
+            echo
+            echo "Verified: install, lint, typecheck, tests, and the packed tarball's contents."
+            echo
+            echo "**Not** verified: the OIDC exchange with npm. Only a real publish performs it,"
+            echo "so a green dry run does not prove the trusted publisher is configured correctly."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   release:
     needs: publish
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
