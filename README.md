@@ -6,7 +6,7 @@ A Starship-inspired statusline and Opencode-style TUI for [Pi](https://pi.dev).
 
 ## Screenshots
 
-![Zentui](https://raw.githubusercontent.com/lmilojevicc/pi-zentui/main/assets/zentui.png)
+![Starline](https://raw.githubusercontent.com/Andy8647/pi-starline/main/assets/starline.png)
 
 ## What is this?
 
