@@ -118,8 +118,8 @@ describe("isKnownPillSegment", () => {
 
 describe("collectPillInputs", () => {
 	const statuses: ExtensionStatusSegment[] = [
-		{ key: "automode", text: "AM", placement: "right", colorMode: "zentui" },
-		{ key: "balance", text: "5h 15%", placement: "right", colorMode: "zentui" },
+		{ key: "automode", text: "AM", placement: "right", colorMode: "themed" },
+		{ key: "balance", text: "5h 15%", placement: "right", colorMode: "themed" },
 		{ key: "mcp", text: "mcp 3", placement: "right", colorMode: "original" },
 	];
 	const renderVariable = (name: string) => `<${name}>`;
@@ -358,7 +358,7 @@ describe("renderPillBar", () => {
 
 describe("per-status icons in the bar", () => {
 	const statuses: ExtensionStatusSegment[] = [
-		{ key: "balance", text: "¥327", placement: "right", colorMode: "zentui" },
+		{ key: "balance", text: "¥327", placement: "right", colorMode: "themed" },
 		{ key: "mcp", text: "3", placement: "right", colorMode: "original" },
 	];
 

@@ -43,7 +43,7 @@ const extensionStatusPlacementValues: ExtensionStatusPlacement[] = [
 	"middle",
 	"right",
 ];
-const extensionStatusColorModeValues: ExtensionStatusColorMode[] = ["zentui", "original"];
+const extensionStatusColorModeValues: ExtensionStatusColorMode[] = ["themed", "original"];
 const contextStyleValues: ContextStyle[] = ["text", "gauge", "text+gauge"];
 const separatorStyleValues: SeparatorStyle[] = ["pipe", "dot", "chevron", "none"];
 const pathDisplayModeValues: PathDisplayMode[] = ["basename", "full"];

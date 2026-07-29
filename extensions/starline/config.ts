@@ -114,7 +114,7 @@ export type FixedEditorConfig = {
 };
 
 export type ExtensionStatusPlacement = "off" | "left" | "middle" | "right";
-export type ExtensionStatusColorMode = "zentui" | "original";
+export type ExtensionStatusColorMode = "themed" | "original";
 
 /**
  * Starship `git_commit`-style options.
@@ -135,7 +135,7 @@ export type GitMetricsConfig = {
 	ignoreSubmodules: boolean;
 };
 
-const DEFAULT_EXTENSION_STATUS_COLOR_MODE: ExtensionStatusColorMode = "zentui";
+const DEFAULT_EXTENSION_STATUS_COLOR_MODE: ExtensionStatusColorMode = "themed";
 
 export type ExtensionStatusesConfig = {
 	defaultPlacement: ExtensionStatusPlacement;
@@ -273,7 +273,7 @@ export const FOOTER_FORMAT_ALIASES: Record<string, string> = {
 	separator: "sep",
 };
 
-export const configPath = join(getAgentDir(), "zentui.json");
+export const configPath = join(getAgentDir(), "starline.json");
 
 export const defaultConfig: PolishedTuiConfig = {
 	projectRefreshIntervalMs: DEFAULT_PROJECT_REFRESH_INTERVAL_MS,
@@ -722,7 +722,7 @@ export function isExtensionStatusPlacement(value: unknown): value is ExtensionSt
 }
 
 export function isExtensionStatusColorMode(value: unknown): value is ExtensionStatusColorMode {
-	return value === "zentui" || value === "original";
+	return value === "themed" || value === "original";
 }
 
 function normalizeExtensionStatuses(
@@ -919,7 +919,7 @@ function mutateConfig(path: string, mutate: (record: ConfigRecord) => void): Pol
 	if (state.kind === "corrupt") {
 		const detail = state.error instanceof Error ? ` (${state.error.message})` : "";
 		throw new Error(
-			`Refusing to save Zentui config because ${path} is corrupt or unreadable; fix or remove it first.${detail}`,
+			`Refusing to save Starline config because ${path} is corrupt or unreadable; fix or remove it first.${detail}`,
 		);
 	}
 	mutate(state.record);

@@ -104,7 +104,7 @@ describe("collectExtensionStatusSegments", () => {
 		const config = configWithExtensionStatuses({
 			colorModes: {
 				alpha: "original",
-				beta: "zentui",
+				beta: "themed",
 			},
 		});
 		const segments = collectExtensionStatusSegments(
@@ -117,7 +117,7 @@ describe("collectExtensionStatusSegments", () => {
 
 		expect(segments.right).toEqual([
 			{ key: "alpha", text: "\x1b[31mred\x1b[0m", placement: "right", colorMode: "original" },
-			{ key: "beta", text: "green", placement: "right", colorMode: "zentui" },
+			{ key: "beta", text: "green", placement: "right", colorMode: "themed" },
 		]);
 	});
 });

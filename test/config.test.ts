@@ -13,11 +13,14 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+	configPath,
 	DEFAULT_EDITOR_METADATA_FORMAT,
 	defaultConfig,
+	getExtensionStatusColorMode,
+	isExtensionStatusColorMode,
 	mergeConfig,
 	saveColorSourcesPatch,
 	saveContextThresholdsPatch,
@@ -39,7 +42,7 @@ import {
 	renderTerminalStyle,
 } from "../extensions/starline/style";
 
-function configTempFiles(dir: string, filename = "zentui.json"): string[] {
+function configTempFiles(dir: string, filename = "starline.json"): string[] {
 	return readdirSync(dir).filter(
 		(name) => name.startsWith(`.${filename}.`) && name.endsWith(".tmp"),
 	);
@@ -207,7 +210,7 @@ describe("mergeConfig", () => {
 
 	it("saves separator style without erasing unknown config", () => {
 		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
-		const path = join(dir, "zentui.json");
+		const path = join(dir, "starline.json");
 		try {
 			writeFileSync(path, `${JSON.stringify({ unknown: true, contextStyle: "gauge" }, null, 2)}\n`);
 
@@ -233,7 +236,7 @@ describe("mergeConfig", () => {
 			writeFileSync(path, original);
 
 			expect(() => saveSeparatorPatch("dot", path)).toThrow(
-				/Refusing to save Zentui config.*corrupt/,
+				/Refusing to save Starline config.*corrupt/,
 			);
 			expect(readFileSync(path, "utf8")).toBe(original);
 			expect(configTempFiles(dir)).toEqual([]);
@@ -312,7 +315,7 @@ describe("mergeConfig", () => {
 			symlinkSync(missingTarget, linkPath);
 			const originalLink = readlinkSync(linkPath);
 
-			expect(() => saveSeparatorPatch("dot", linkPath)).toThrow(/Refusing to save Zentui config/);
+			expect(() => saveSeparatorPatch("dot", linkPath)).toThrow(/Refusing to save Starline config/);
 			expect(lstatSync(linkPath).isSymbolicLink()).toBe(true);
 			expect(readlinkSync(linkPath)).toBe(originalLink);
 			expect(existsSync(missingTarget)).toBe(false);
@@ -547,7 +550,7 @@ describe("mergeConfig", () => {
 				},
 				colorModes: {
 					alpha: "original",
-					beta: "zentui",
+					beta: "themed",
 				},
 				colors: {},
 				icons: {},
@@ -563,7 +566,7 @@ describe("mergeConfig", () => {
 			},
 			colorModes: {
 				alpha: "original",
-				beta: "zentui",
+				beta: "themed",
 			},
 			colors: {},
 			icons: {},
@@ -1152,7 +1155,7 @@ describe("mergeConfig", () => {
 								invalid: "center",
 							},
 							colorModes: {
-								alpha: "zentui",
+								alpha: "themed",
 								invalid: "muted",
 							},
 						},
@@ -1168,7 +1171,7 @@ describe("mergeConfig", () => {
 			expect(config.extensionStatuses).toEqual({
 				defaultPlacement: "left",
 				placements: { alpha: "right" },
-				colorModes: { alpha: "zentui", beta: "original" },
+				colorModes: { alpha: "themed", beta: "original" },
 				colors: {},
 				icons: {},
 			});
@@ -1180,7 +1183,7 @@ describe("mergeConfig", () => {
 				invalid: "center",
 			});
 			expect(raw.extensionStatuses.colorModes).toEqual({
-				alpha: "zentui",
+				alpha: "themed",
 				invalid: "muted",
 				beta: "original",
 			});
@@ -1385,5 +1388,21 @@ describe("saveFixedEditorPatch", () => {
 		} finally {
 			rmSync(dir, { recursive: true });
 		}
+	});
+});
+
+describe("config identity after the starline rename", () => {
+	it("reads its config from starline.json", () => {
+		expect(basename(configPath)).toBe("starline.json");
+	});
+
+	it("defaults a third-party status to the themed colour mode", () => {
+		expect(getExtensionStatusColorMode(mergeConfig({}), "some.plugin")).toBe("themed");
+	});
+
+	it("accepts themed and original, and rejects the old brand name", () => {
+		expect(isExtensionStatusColorMode("themed")).toBe(true);
+		expect(isExtensionStatusColorMode("original")).toBe(true);
+		expect(isExtensionStatusColorMode("zentui")).toBe(false);
 	});
 });
