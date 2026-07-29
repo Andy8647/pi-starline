@@ -34,6 +34,11 @@ import {
 	type UiFeaturesConfig,
 } from "./config";
 import {
+	getStarlineEditorBaseFactory,
+	isStarlineEditorFactory,
+	markEditorFactory,
+} from "./editor-factory-marker";
+import {
 	disposeFixedEditor,
 	installFixedEditorProbe,
 	removeFixedEditorProbe,
@@ -59,29 +64,13 @@ import { createInitialState, type FooterState, syncState } from "./state";
 import { PolishedEditor, WrappedPolishedEditor } from "./ui";
 import { installUserMessageStyle } from "./user-message";
 
-const ZENTUI_EDITOR_FACTORY = Symbol.for("pi-zentui.editor-factory");
-const ZENTUI_EDITOR_BASE_FACTORY = Symbol.for("pi-zentui.editor-base-factory");
-
 type EditorFactory = NonNullable<Parameters<ExtensionContext["ui"]["setEditorComponent"]>[0]>;
-
-type ZentuiEditorFactory = EditorFactory & {
-	[ZENTUI_EDITOR_FACTORY]?: true;
-	[ZENTUI_EDITOR_BASE_FACTORY]?: EditorFactory;
-};
 
 type ApplyUiResult = {
 	editorBlocked: boolean;
 };
 
 type EditorInstallMode = "none" | "standalone" | "wrapper";
-
-function isZentuiEditorFactory(factory: EditorFactory | undefined): boolean {
-	return Boolean((factory as ZentuiEditorFactory | undefined)?.[ZENTUI_EDITOR_FACTORY]);
-}
-
-function getZentuiEditorBaseFactory(factory: EditorFactory | undefined): EditorFactory | undefined {
-	return (factory as ZentuiEditorFactory | undefined)?.[ZENTUI_EDITOR_BASE_FACTORY];
-}
 
 function isTuiContext(ctx: ExtensionContext): boolean {
 	try {
@@ -275,7 +264,7 @@ export default function (pi: ExtensionAPI) {
 		);
 	};
 
-	const makeEditorFactory = (ctx: ExtensionContext): ZentuiEditorFactory => {
+	const makeEditorFactory = (ctx: ExtensionContext): EditorFactory => {
 		const sessionTheme = ctx.ui.theme;
 		const factory = ((tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) => {
 			syncHardwareCursor(tui);
@@ -296,15 +285,14 @@ export default function (pi: ExtensionAPI) {
 			);
 			applyPasteCollapse(editor);
 			return editor;
-		}) as ZentuiEditorFactory;
-		factory[ZENTUI_EDITOR_FACTORY] = true;
-		return factory;
+		}) as EditorFactory;
+		return markEditorFactory(factory);
 	};
 
 	const makeWrappedEditorFactory = (
 		ctx: ExtensionContext,
 		baseFactory: EditorFactory,
-	): ZentuiEditorFactory => {
+	): EditorFactory => {
 		const sessionTheme = ctx.ui.theme;
 		const factory = ((tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) => {
 			syncHardwareCursor(tui);
@@ -323,10 +311,8 @@ export default function (pi: ExtensionAPI) {
 				}),
 				getThinkingLevel,
 			);
-		}) as ZentuiEditorFactory;
-		factory[ZENTUI_EDITOR_FACTORY] = true;
-		factory[ZENTUI_EDITOR_BASE_FACTORY] = baseFactory;
-		return factory;
+		}) as EditorFactory;
+		return markEditorFactory(factory, baseFactory);
 	};
 
 	const installEditor = (ctx: ExtensionContext): boolean => {
@@ -337,15 +323,15 @@ export default function (pi: ExtensionAPI) {
 		}
 
 		installPrototypePatches();
-		const currentZentuiBaseFactory = getZentuiEditorBaseFactory(currentFactory);
-		if (currentFactory && isZentuiEditorFactory(currentFactory)) {
-			wrappedEditorFactory = currentZentuiBaseFactory;
-			const nextFactory = currentZentuiBaseFactory
-				? makeWrappedEditorFactory(ctx, currentZentuiBaseFactory)
+		const currentStarlineBaseFactory = getStarlineEditorBaseFactory<EditorFactory>(currentFactory);
+		if (currentFactory && isStarlineEditorFactory(currentFactory)) {
+			wrappedEditorFactory = currentStarlineBaseFactory;
+			const nextFactory = currentStarlineBaseFactory
+				? makeWrappedEditorFactory(ctx, currentStarlineBaseFactory)
 				: makeEditorFactory(ctx);
 			ctx.ui.setEditorComponent(nextFactory);
 			installedEditorFactory = nextFactory;
-			editorInstallMode = currentZentuiBaseFactory ? "wrapper" : "standalone";
+			editorInstallMode = currentStarlineBaseFactory ? "wrapper" : "standalone";
 		} else if (currentFactory) {
 			wrappedEditorFactory = currentFactory;
 			const nextFactory = makeWrappedEditorFactory(ctx, currentFactory);
@@ -365,7 +351,7 @@ export default function (pi: ExtensionAPI) {
 
 	const uninstallEditor = (ctx: ExtensionContext): boolean => {
 		const currentFactory = ctx.ui.getEditorComponent();
-		if (currentFactory && !isZentuiEditorFactory(currentFactory)) return false;
+		if (currentFactory && !isStarlineEditorFactory(currentFactory)) return false;
 
 		uninstallPrototypePatches();
 		ctx.ui.setEditorComponent(
@@ -416,7 +402,7 @@ export default function (pi: ExtensionAPI) {
 		activeTheme = ctx.ui.theme;
 		if (currentConfig.features.editor) {
 			const currentFactory = ctx.ui.getEditorComponent();
-			const editorMissingOrReplaced = !editorInstalled || !isZentuiEditorFactory(currentFactory);
+			const editorMissingOrReplaced = !editorInstalled || !isStarlineEditorFactory(currentFactory);
 			if (editorMissingOrReplaced) result.editorBlocked = !installEditor(ctx);
 		} else if (editorInstalled || prototypePatchesInstalled) {
 			result.editorBlocked = !uninstallEditor(ctx);
@@ -473,9 +459,9 @@ export default function (pi: ExtensionAPI) {
 			if (isTuiContext(ctx)) {
 				ctx.ui.setFooter(undefined);
 				const currentFactory = ctx.ui.getEditorComponent();
-				if (!currentFactory || isZentuiEditorFactory(currentFactory)) {
+				if (!currentFactory || isStarlineEditorFactory(currentFactory)) {
 					ctx.ui.setEditorComponent(
-						getZentuiEditorBaseFactory(currentFactory) ??
+						getStarlineEditorBaseFactory<EditorFactory>(currentFactory) ??
 							(editorInstallMode === "wrapper" && wrappedEditorFactory
 								? wrappedEditorFactory
 								: undefined),

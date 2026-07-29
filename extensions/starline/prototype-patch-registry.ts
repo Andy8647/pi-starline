@@ -1,4 +1,11 @@
-export const ZENTUI_PROTOTYPE_PATCH_REGISTRY = Symbol.for("pi-zentui.prototype-patch-registry");
+export const STARLINE_PROTOTYPE_PATCH_REGISTRY = Symbol.for("pi-starline.prototype-patch-registry");
+
+/**
+ * The key this package used before it was renamed from pi-zentui. Read, never
+ * written: if both packages are loaded they must share one registry, or each
+ * patches a prototype the other has already patched.
+ */
+const LEGACY_PROTOTYPE_PATCH_REGISTRY = Symbol.for("pi-zentui.prototype-patch-registry");
 
 type PrototypePatchAdapter =
 	| "user-message-render"
@@ -32,10 +39,11 @@ type PatchRegistry = Map<PrototypePatchAdapter, PatchRecord>;
 type PatchTarget = Record<PropertyKey, unknown>;
 
 function registryFor(target: PatchTarget): PatchRegistry {
-	const existing = target[ZENTUI_PROTOTYPE_PATCH_REGISTRY];
+	const existing =
+		target[STARLINE_PROTOTYPE_PATCH_REGISTRY] ?? target[LEGACY_PROTOTYPE_PATCH_REGISTRY];
 	if (existing instanceof Map) return existing as PatchRegistry;
 	const registry: PatchRegistry = new Map();
-	Object.defineProperty(target, ZENTUI_PROTOTYPE_PATCH_REGISTRY, {
+	Object.defineProperty(target, STARLINE_PROTOTYPE_PATCH_REGISTRY, {
 		value: registry,
 		configurable: true,
 	});
@@ -62,7 +70,10 @@ function createCleanup(
 		if (current !== record) return;
 		if (target[method] === record.wrapper) target[method] = record.predecessor;
 		registry.delete(adapter);
-		if (registry.size === 0) delete target[ZENTUI_PROTOTYPE_PATCH_REGISTRY];
+		if (registry.size === 0) {
+			delete target[STARLINE_PROTOTYPE_PATCH_REGISTRY];
+			delete target[LEGACY_PROTOTYPE_PATCH_REGISTRY];
+		}
 	};
 }
 
@@ -86,7 +97,7 @@ export function installPrototypePatch(
 			predecessor: predecessor as PrototypeMethod,
 			wrapper: () => undefined,
 		};
-		const wrapper: PrototypeMethod = function zentuiPrototypeWrapper(
+		const wrapper: PrototypeMethod = function starlinePrototypeWrapper(
 			this: unknown,
 			...args: unknown[]
 		): unknown {

@@ -17,7 +17,7 @@ import {
 import { installFooter } from "../extensions/starline/footer";
 import { emptyGitStatus } from "../extensions/starline/git";
 import zentui from "../extensions/starline/index";
-import { ZENTUI_PROTOTYPE_PATCH_REGISTRY } from "../extensions/starline/prototype-patch-registry";
+import { STARLINE_PROTOTYPE_PATCH_REGISTRY } from "../extensions/starline/prototype-patch-registry";
 import {
 	installSelectorBorderStyle,
 	patchSelectorBorderStyle,
@@ -266,7 +266,7 @@ afterEach(() => {
 	UserMessageComponent.prototype.render = originalUserMessageRender;
 	UserMessageComponent.prototype.invalidate = originalUserMessageInvalidate;
 	delete (UserMessageComponent.prototype as unknown as Record<PropertyKey, unknown>)[
-		ZENTUI_PROTOTYPE_PATCH_REGISTRY
+		STARLINE_PROTOTYPE_PATCH_REGISTRY
 	];
 
 	ModelSelectorComponent.prototype.render = originalModelSelectorRender;
@@ -276,7 +276,7 @@ afterEach(() => {
 		SettingsSelectorComponent.prototype,
 	]) {
 		delete (selectorPrototype as unknown as Record<PropertyKey, unknown>)[
-			ZENTUI_PROTOTYPE_PATCH_REGISTRY
+			STARLINE_PROTOTYPE_PATCH_REGISTRY
 		];
 	}
 });
