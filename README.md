@@ -1,8 +1,8 @@
-# Zentui
+# Starline
 
 A Starship-inspired statusline and Opencode-style TUI for [Pi](https://pi.dev).
 
-> Forked from [pi-zentui](https://github.com/lmilojevicc/pi-zentui) by Luka. This fork adds a pill footer style, a colour palette with `$ref` expansion, `model`/`thinking` footer segments, a git host icon, per-segment display options, and configurable editor cursor styles.
+> Starline is a fork of [pi-zentui](https://github.com/lmilojevicc/pi-zentui) by Luka, renamed and released on its own. It diverged 33 commits past upstream and adds a pill footer style, a colour palette with `$ref` expansion, `model`/`thinking` footer segments, a git host icon, per-segment display options, configurable editor cursor styles, and mouse selection in the fixed editor.
 
 ## Screenshots
 
@@ -10,7 +10,7 @@ A Starship-inspired statusline and Opencode-style TUI for [Pi](https://pi.dev).
 
 ## What is this?
 
-Zentui brings two popular aesthetics to Pi:
+Starline brings two popular aesthetics to Pi:
 
 - **[Starship](https://starship.rs/) footer** — shows your current directory, git branch, git status indicators, and runtime/version detection in a compact, icon-rich format
 - **[Opencode](https://github.com/opencode-ai/opencode) editor** — clean bordered input box with accent rail, copy-friendly mode, and model/provider display inside the editor frame
@@ -25,17 +25,17 @@ Zentui brings two popular aesthetics to Pi:
 - `via  v5.5.0` — runtime detection with version and Starship-style Nerd Font runtime/language modules
 - Optional segments (off by default): session name, `user@host`, current time, OS icon, session duration, and the **project package version** (e.g. `package.json` → `0.6.0`) — distinct from the runtime segment, which shows the installed toolchain
 - Right side shows context usage, token counts, and cost
-- Built-in footer segments can be shown or hidden individually from `/zentui`
+- Built-in footer segments can be shown or hidden individually from `/starline`
 - Fully custom Starship-style layout via a `footerFormat` template string — see [Footer Format Template](#footer-format-template)
 - Third-party Pi extension statuses from `ctx.ui.setStatus()` can be shown on the left,
-  middle, or right side, or hidden per status key from `/zentui`
+  middle, or right side, or hidden per status key from `/starline`
 
 ### Editor (Opencode-inspired)
 
 - Bordered input box with configurable accent rail and border colors
 - Model name and provider displayed inside the editor frame
 - Configurable model, provider, and thinking-level indicator colors
-- Prompt-box-style user messages matching the ZentUI input chrome
+- Prompt-box-style user messages matching the Starline input chrome
 - Copy-friendly mode hides editor and previous-message rail glyphs so terminal selection copies less chrome
 - **Fixed editor** (experimental, opt-in): Pin the editor and footer at the bottom of the terminal while the transcript scrolls above
 
@@ -56,7 +56,7 @@ Zentui brings two popular aesthetics to Pi:
 
 ### Runtime Detection
 
-Detects Starship Nerd Font runtime/language modules, uses the Starship Nerd Font symbols, and keeps Starship-style defaults such as `bold green` for Node.js. By default Zentui maps those styles through your active Pi theme; switch the Starship/footer color source to `terminal` in `/zentui` if you want your terminal colorscheme to supply the exact ANSI colors.
+Detects Starship Nerd Font runtime/language modules, uses the Starship Nerd Font symbols, and keeps Starship-style defaults such as `bold green` for Node.js. By default Starline maps those styles through your active Pi theme; switch the Starship/footer color source to `terminal` in `/starline` if you want your terminal colorscheme to supply the exact ANSI colors.
 
 | Runtime/language | Detection examples                                            |
 | ---------------- | ------------------------------------------------------------- |
@@ -122,35 +122,65 @@ Detects Starship Nerd Font runtime/language modules, uses the Starship Nerd Font
 
 ```bash
 # From npm
-pi install npm:pi-zentui
+pi install npm:pi-starline
 
 # From git
-pi install git:github.com/lmilojevicc/pi-zentui
+pi install git:github.com/Andy8647/pi-starline
 ```
 
 ## Config
 
-User config lives at `~/.pi/agent/zentui.json`. The file is optional: missing or invalid known values fall back to Zentui defaults, unknown keys are ignored at runtime, and `/zentui` can patch color-source settings, UI feature toggles, built-in footer segment visibility, and active third-party status placements.
+| Key | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `projectRefreshIntervalMs` | number | `30000` | How often git and runtime state are re-read. Minimum 5000. |
+| `footerStyle` | string | `"text"` | Chooses the classic text footer or the pill footer, see [Pill footer](#pill-footer). |
+| `pill` | object | see [Pill footer](#pill-footer) | Segment order, separator glyph, boldness, and cap style for the pill footer. |
+| `footerFormat` | string | `""` | Starship-style template that fully replaces the built-in footer layout, see [Footer Format Template](#footer-format-template). |
+| `editorMetadataFormat` | string | `"$model  $provider(  $thinking)"` | Template for the left side of the editor metadata row, see [Editor Metadata Format](#editor-metadata-format). |
+| `separator` | string | `"pipe"` | Glyph drawn between footer segments and extension-status connectors. |
+| `contextStyle` | string | `"text"` | Whether the context segment shows text, a gauge, or both. |
+| `segmentOptions` | object | see [Segment display options](#segment-display-options) | Formatting details for the context and tokens segments. |
+| `editorModelLabel` | string | `"id"` | Whether the editor frame shows the model id or its display name. |
+| `editorCursor` | string | `"block"` | Cursor style in the editor, see [Editor cursor](#editor-cursor). |
+| `editorClickCursor` | boolean | `true` | Clicking in the editor text moves the caret there, see [Fixed editor](#fixed-editor-experimental-opt-in). |
+| `pasteCollapseLines` | number | `11` | Line count at which a paste collapses into a marker, see [Paste collapse threshold](#paste-collapse-threshold). |
+| `editorPaddingY` | number | `1` | Blank rows inside the editor box, see [Box height](#box-height). |
+| `userMessagePaddingY` | number | `1` | Blank rows inside the previous-message box, see [Box height](#box-height). |
+| `contextThresholds` | object | `{ "warning": 70, "error": 90 }` | Percentages that select the context segment's normal/warning/error colours. |
+| `pathDisplay` | object | `{ "mode": "basename", "depth": 0 }` | Whether the cwd segment shows the basename or a full path, and how many trailing directories to keep. |
+| `gitBranch` | object | `{ "maxLength": "full" }` | Caps the visible width of the branch name. |
+| `gitHostIcon` | boolean | `false` | Replaces the branch icon with the origin remote's forge logo, see [Git host icon](#git-host-icon). |
+| `icons` | object | see the JSON block below | Per-icon glyph overrides and the icon mode (`auto`, `nerd`, `ascii`). |
+| `colors` | object | see [Colors](#colors) | Style string for every themeable segment and editor element. |
+| `colorSources` | object | `{ "starship": "theme", "editor": "theme", "userMessages": "theme" }` | Whether each area's colours come from the Pi theme or the terminal palette. |
+| `features` | object | `{ "editor": true, "statusLine": true, "copyFriendly": false }` | Toggles the custom editor, the custom footer, and copy-friendly mode. |
+| `footerSegments` | object | see the JSON block below | Shows or hides each built-in footer segment individually. |
+| `gitCommit` | object | `{ "hashLength": 7, "onlyDetached": true, "showTag": true }` | Starship `git_commit`-style options for the `gitCommit` footer segment. |
+| `gitMetrics` | object | `{ "onlyNonzero": true, "ignoreSubmodules": false }` | Starship `git_metrics`-style options for the `gitMetrics` footer segment. |
+| `extensionStatuses` | object | see [Pill footer](#pill-footer) | Placement, colour, and icon for third-party extension statuses. |
+| `fixedEditor` | object | `{ "enabled": false, "mouseScroll": true, "copyNotice": true, "copyOnSelect": true }` | Pins the editor and footer at the bottom of the terminal, see [Fixed editor](#fixed-editor-experimental-opt-in). |
 
-The interactive `/zentui` menu is split into five sections. Use `Tab` and `Shift+Tab` to switch between `Coloring`, `Features`, `Layout`, `Built-in segments`, and `Extension segments`.
+User config lives at `~/.pi/agent/starline.json`. The file is optional: missing or invalid known values fall back to Starline defaults, unknown keys are ignored at runtime, and `/starline` can patch color-source settings, UI feature toggles, built-in footer segment visibility, and active third-party status placements.
+
+The interactive `/starline` menu is split into five sections. Use `Tab` and `Shift+Tab` to switch between `Coloring`, `Features`, `Layout`, `Built-in segments`, and `Extension segments`.
 
 Useful slash-command shortcuts:
 
 ```text
-/zentui editor enable
-/zentui editor disable
-/zentui statusline enable
-/zentui statusline disable
-/zentui editor toggle
-/zentui statusline toggle
-/zentui copy-friendly enable
-/zentui copy-friendly disable
-/zentui copy-friendly toggle
-/zentui fixed-editor enable
-/zentui fixed-editor disable
-/zentui fixed-editor toggle
-/zentui format "$cwd on branch $git_branch$git_status using $runtime $fill $context"
-/zentui format clear
+/starline editor enable
+/starline editor disable
+/starline statusline enable
+/starline statusline disable
+/starline editor toggle
+/starline statusline toggle
+/starline copy-friendly enable
+/starline copy-friendly disable
+/starline copy-friendly toggle
+/starline fixed-editor enable
+/starline fixed-editor disable
+/starline fixed-editor toggle
+/starline format "$cwd on branch $git_branch$git_status using $runtime $fill $context"
+/starline format clear
 ```
 
 Default config values — copy this and change any value you want:
@@ -319,19 +349,19 @@ Default config values — copy this and change any value you want:
 - `contextStyle`: `text` (default), `gauge`, or `text+gauge` for the context segment. Context usage refreshes during assistant streaming; token and cost totals remain canonical and finalize at turn boundaries.
 - `editorModelLabel`: controls the model shown in the editor frame. `id` (default) shows the model id; `name` shows the model's display name (including custom `name` values set in `models.json`), falling back to the id when no name is set.
 - `editorMetadataFormat`: JSON-only template for the left side of the editor metadata row. Missing, non-string, or empty values restore the default `$model  $provider(  $thinking)` layout; non-empty strings, including whitespace-only strings, are preserved. See [Editor Metadata Format](#editor-metadata-format) below.
-- `separator`: controls the default footer layout and extension-status connectors: `pipe` (default, ` | `), `dot` (` · `), `chevron` (` › `), or `none` (one space). Cycle it from the `/zentui` **Layout** tab. This selects the separator glyph; `colors.separator` controls its color. Custom `footerFormat` literals and `$sep` keep their existing behavior.
+- `separator`: controls the default footer layout and extension-status connectors: `pipe` (default, ` | `), `dot` (` · `), `chevron` (` › `), or `none` (one space). Cycle it from the `/starline` **Layout** tab. This selects the separator glyph; `colors.separator` controls its color. Custom `footerFormat` literals and `$sep` keep their existing behavior.
 - `contextThresholds`: `{ warning, error }` percentages (default `70` / `90`) that select contextNormal / contextWarning / contextError colors.
-- `pathDisplay`: controls how the cwd/`$cwd` path is shown. `mode` is `basename` (default, last segment only) or `full` (path with home contracted to `~`). In `full` mode, `depth` keeps only the last N trailing directories (`0` = entire path after `~`, max `5`); when parents are dropped the path is prefixed with `…/` (Starship-style). The `/zentui` **Layout** tab cycles path mode and path depth (`0`–`5`; depth is ignored for basename). Example: `~/Projects/foo/bar` with `depth: 2` → `…/foo/bar`.
-- `gitBranch.maxLength`: visible width of the built-in branch name and `$git_branch` / `$branch`. The default `full` preserves the complete name; any positive integer uses that width including the trailing `…`. `/zentui` **Layout** cycles `full`, `10`, `20`, `30`, `40`, and `50`; custom positive integers can be set in JSON.
-- `icons`: every shown icon key is configurable; omit any key to use the Zentui default. `icons.mode` is `auto` | `nerd` | `ascii` (default `auto`, same glyphs as nerd). ASCII mode swaps in plain fallbacks for statusline icons and runtime symbols — useful without a Nerd Font. Custom per-icon strings always win over mode defaults. Custom `icons.os` always wins; when left at the mode default, Zentui maps the OS icon by platform. `rail` sets the vertical glyph drawn as the left rail of the active editor frame and previous user messages when `copyFriendly` is disabled (default `│`; any single Unicode vertical or block glyph). `editorPrompt` controls an optional copy-friendly editor prompt glyph; the default is `""` so copy-friendly mode stays rail-free.
-- `colorSources`: `theme` maps styles through Pi theme tokens; `terminal` emits terminal colors. `/zentui` switches these sources; manual JSON controls specific style values.
-- `features`: `editor` enables Zentui's custom editor, selector borders, and previous-message chrome. `statusLine` enables Zentui's custom footer/status line. `copyFriendly` hides editor and previous-message rail glyphs so native terminal selection copies less chrome. All three can be changed from `/zentui` or direct slash-command arguments.
-- `footerSegments`: show or hide individual built-in footer segments (`cwd`, `sessionName`, `gitBranch`, `gitStatus`, `gitCounts`, `gitCommit`, `gitMetrics`, `runtime`, `packageVersion`, `sessionDuration`, `username`, `time`, `os`, `context`, `tokens`, `cost`). Toggle them from the `Built-in segments` tab in `/zentui`.
-- `footerFormat`: optional Starship-style template string that fully controls the footer layout. When set, it overrides `footerSegments`. See [Footer Format Template](#footer-format-template) below. The `/zentui` **Layout** tab configures context style, separator, path display mode/depth, branch length, and icon mode; set or clear custom formats with `/zentui format`.
+- `pathDisplay`: controls how the cwd/`$cwd` path is shown. `mode` is `basename` (default, last segment only) or `full` (path with home contracted to `~`). In `full` mode, `depth` keeps only the last N trailing directories (`0` = entire path after `~`, max `5`); when parents are dropped the path is prefixed with `…/` (Starship-style). The `/starline` **Layout** tab cycles path mode and path depth (`0`–`5`; depth is ignored for basename). Example: `~/Projects/foo/bar` with `depth: 2` → `…/foo/bar`.
+- `gitBranch.maxLength`: visible width of the built-in branch name and `$git_branch` / `$branch`. The default `full` preserves the complete name; any positive integer uses that width including the trailing `…`. `/starline` **Layout** cycles `full`, `10`, `20`, `30`, `40`, and `50`; custom positive integers can be set in JSON.
+- `icons`: every shown icon key is configurable; omit any key to use the Starline default. `icons.mode` is `auto` | `nerd` | `ascii` (default `auto`, same glyphs as nerd). ASCII mode swaps in plain fallbacks for statusline icons and runtime symbols — useful without a Nerd Font. Custom per-icon strings always win over mode defaults. Custom `icons.os` always wins; when left at the mode default, Starline maps the OS icon by platform. `rail` sets the vertical glyph drawn as the left rail of the active editor frame and previous user messages when `copyFriendly` is disabled (default `│`; any single Unicode vertical or block glyph). `editorPrompt` controls an optional copy-friendly editor prompt glyph; the default is `""` so copy-friendly mode stays rail-free.
+- `colorSources`: `theme` maps styles through Pi theme tokens; `terminal` emits terminal colors. `/starline` switches these sources; manual JSON controls specific style values.
+- `features`: `editor` enables Starline's custom editor, selector borders, and previous-message chrome. `statusLine` enables Starline's custom footer/status line. `copyFriendly` hides editor and previous-message rail glyphs so native terminal selection copies less chrome. All three can be changed from `/starline` or direct slash-command arguments.
+- `footerSegments`: show or hide individual built-in footer segments (`cwd`, `sessionName`, `gitBranch`, `gitStatus`, `gitCounts`, `gitCommit`, `gitMetrics`, `runtime`, `packageVersion`, `sessionDuration`, `username`, `time`, `os`, `context`, `tokens`, `cost`). Toggle them from the `Built-in segments` tab in `/starline`.
+- `footerFormat`: optional Starship-style template string that fully controls the footer layout. When set, it overrides `footerSegments`. See [Footer Format Template](#footer-format-template) below. The `/starline` **Layout** tab configures context style, separator, path display mode/depth, branch length, and icon mode; set or clear custom formats with `/starline format`.
 - `gitCommit`: Starship [`git_commit`](https://starship.rs/config/#git-commit)-style options for the `gitCommit` footer segment. `hashLength` (default `7`, clamped to `4`–`40`) controls the short-hash display length. `onlyDetached` (default `true`) shows the hash mainly on detached HEAD. `showTag` (default `true`) appends an exact-match tag (`git describe --tags --exact-match HEAD`). The tag probe piggybacks on the existing git refresh — it only runs when both the segment and `showTag` are on, and misses/failures degrade silently.
 - `gitMetrics`: Starship [`git_metrics`](https://starship.rs/config/#git-metrics)-style options for the `gitMetrics` footer segment. Uses `git diff HEAD --numstat` (staged + unstaged combined — the Starship “total dirty” view) to show aggregate `+added −deleted` line counts. `onlyNonzero` (default `true`) omits each zero component independently and hides the segment entirely at `0/0`. `ignoreSubmodules` (default `false`) adds `--ignore-submodules=all`. The numstat diff piggybacks on the existing git refresh and uses a hard 2s timeout; a metrics-only failure degrades silently without discarding fresh branch/status data. On very large monorepos the diff may lag or be omitted on timeout.
-- `extensionStatuses`: controls third-party statuses published by other Pi extensions through `ctx.ui.setStatus()`. `defaultPlacement` and each `placements` value can be `off`, `left`, `middle`, or `right`. The `Extension segments` tab in `/zentui` lists only statuses that are currently active.
-- The shown `editor*` values match the default `theme` source. Omit those keys to keep Zentui's source-aware defaults when switching between `theme` and `terminal`.
+- `extensionStatuses`: controls third-party statuses published by other Pi extensions through `ctx.ui.setStatus()`. `defaultPlacement` and each `placements` value can be `off`, `left`, `middle`, or `right`. The `Extension segments` tab in `/starline` lists only statuses that are currently active.
+- The shown `editor*` values match the default `theme` source. Omit those keys to keep Starline's source-aware defaults when switching between `theme` and `terminal`.
 - `editorAccent` styles the active editor rail and previous user-message rail when `features.copyFriendly` is disabled.
 - `editorPrompt` styles the copy-friendly editor prompt glyph. Omit it to use `editorAccent`, then the default accent fallback.
 - `editorBorder` styles the active editor and previous user-message top/bottom border color only; the border glyph stays `─`.
@@ -562,7 +592,7 @@ With the fixed editor running, the compositor also re-asserts the cursor on ever
 
 ## Editor Metadata Format
 
-Set `editorMetadataFormat` in `~/.pi/agent/zentui.json` to customize the left side of the editor metadata row. Set it to `""` to show nothing there — useful when `$model` and `$thinking` have moved to the pill footer. The row itself stays (the frame is parsed back by position, so its line count is fixed); it just renders blank.
+Set `editorMetadataFormat` in `~/.pi/agent/starline.json` to customize the left side of the editor metadata row. Set it to `""` to show nothing there — useful when `$model` and `$thinking` have moved to the pill footer. The row itself stays (the frame is parsed back by position, so its line count is fixed); it just renders blank.
 
 ```json
 {
@@ -577,13 +607,13 @@ The syntax follows the relevant `footerFormat` conventions: `$variable` and `${v
 | `$model`        | label selected by `editorModelLabel` (`id`, or name with ID fallback)                        |
 | `$model_id`     | active Pi model ID                                                                            |
 | `$model_name`   | active Pi model display name; empty when no name is set                                       |
-| `$provider`     | provider label using Zentui's existing formatting                                             |
+| `$provider`     | provider label using Starline's existing formatting                                             |
 | `$thinking`     | current thinking level; empty when thinking is `off`                                          |
 | `$session_name` | current Pi session name; empty when unnamed                                                    |
 
 Model variables use `editorModel`, provider uses `editorProvider`, and thinking uses the matching `editorThinking*` style. Literal text and `$session_name` use the neutral editor border theme style. The template controls spacing. ANSI/VT sequences, control characters, and line-breaking whitespace are sanitized before rendering without collapsing ordinary spaces.
 
-Missing, non-string, or empty values use the default `$model  $provider(  $thinking)`. A non-empty format that resolves to no visible metadata keeps the normal blank spacer and metadata rows so the editor frame height remains stable. This option is configured only through JSON in its first version; `/zentui format` continues to control the footer only.
+Missing, non-string, or empty values use the default `$model  $provider(  $thinking)`. A non-empty format that resolves to no visible metadata keeps the normal blank spacer and metadata rows so the editor frame height remains stable. This option is configured only through JSON in its first version; `/starline format` continues to control the footer only.
 
 ## Footer Format Template
 
@@ -646,19 +676,19 @@ Center the branch between directory and cost:
 - Conditional groups: wrap optional pieces in parentheses, e.g. `$cwd( on $git_branch)($git_status)$fill($context)`. If every `$var` inside a group is empty, the whole group (including its literals) is dropped.
 - `$session_name` is available whenever `footerFormat` is set, independently of `footerSegments.sessionName`; use a conditional group such as `($sep$session_name)` so unnamed sessions leave no separator.
 - Unknown `$variables` render empty.
-- Set or clear at runtime: `/zentui format "<template>"` and `/zentui format clear`.
+- Set or clear at runtime: `/starline format "<template>"` and `/starline format clear`.
 
 ## Fixed editor (experimental, opt-in)
 
-The fixed editor pins the Zentui editor and footer at the bottom of the terminal while the transcript scrolls above. This enables composing follow-up messages while referencing earlier conversation history.
+The fixed editor pins the Starline editor and footer at the bottom of the terminal while the transcript scrolls above. This enables composing follow-up messages while referencing earlier conversation history.
 
 ### How to enable
 
 ```text
-/zentui fixed-editor enable
+/starline fixed-editor enable
 ```
 
-Or in `~/.pi/agent/zentui.json`:
+Or in `~/.pi/agent/starline.json`:
 
 ```json
 {
@@ -678,7 +708,7 @@ Or in `~/.pi/agent/zentui.json`:
 
 ### Mouse scroll (default on)
 
-Mouse wheel scrolling is enabled by default when the fixed editor is on. Disable it via `/zentui` Features or:
+Mouse wheel scrolling is enabled by default when the fixed editor is on. Disable it via `/starline` Features or:
 
 ```json
 {
@@ -707,7 +737,7 @@ Drag-select in the transcript area works whenever the fixed editor is on.
 
 - `copyOnSelect: true` (default) — releasing the mouse copies the selection and clears the highlight. `copyNotice` controls the "copied to clipboard" toast.
 - `copyOnSelect: false` — the highlight stays after release and nothing is written to the clipboard. The editor's bottom border shows `N characters selected, ctrl+c to copy` until you act on it.
-- **Double click selects a word, triple click selects the line.** A word keeps `_-./` in it, so a path, a filename or a `src/foo.ts` reference comes out whole. A fourth click starts over as a plain click. Both follow the same `copyOnSelect` rule as a drag, and both work in the input box too. Pi has no mouse selection of its own; because zentui turns on mouse reporting to do this, the terminal's own double click no longer reaches the screen — in most terminals holding shift while dragging bypasses reporting and gives you the native selection back.
+- **Double click selects a word, triple click selects the line.** A word keeps `_-./` in it, so a path, a filename or a `src/foo.ts` reference comes out whole. A fourth click starts over as a plain click. Both follow the same `copyOnSelect` rule as a drag, and both work in the input box too. Pi has no mouse selection of its own; because starline turns on mouse reporting to do this, the terminal's own double click no longer reaches the screen — in most terminals holding shift while dragging bypasses reporting and gives you the native selection back.
 - `ctrl+c` copies the current selection under either setting. With no selection it falls through to Pi's normal ctrl+c, so interrupting still works.
 - Right-clicking inside a selection copies it outright; right-clicking anywhere else falls through to the terminal's native context menu as before.
 - Any other keystroke dismisses the highlight, so it never lingers over text that has scrolled on.
@@ -719,7 +749,7 @@ Inside the input box:
 - Clicking in your text moves the caret there. `editorClickCursor` (default on) turns it off.
 - Dragging selects the text, following the same `copyOnSelect` rule as the transcript. The rail, the borders and the metadata row are never part of a selection — neither highlighted nor copied — and a drag off the bottom stops at the last line of your input.
 - Dragging backwards selects the same range as dragging forwards: the cell you pressed on and the cell you released on are both in.
-- **Backspace or delete removes the selected text**, as one undoable step — `ctrl+z` puts it back. Pi's editor has no selection of its own, so this splices the range straight out of its buffer; if the editor is not the shape zentui expects, the key falls through to Pi and deletes a character as usual. Typing replaces the selection the same way — the text goes, then your character lands where it was. A paste does not: that goes through Pi's own paste path, threshold and all.
+- **Backspace or delete removes the selected text**, as one undoable step — `ctrl+z` puts it back. Pi's editor has no selection of its own, so this splices the range straight out of its buffer; if the editor is not the shape starline expects, the key falls through to Pi and deletes a character as usual. Typing replaces the selection the same way — the text goes, then your character lands where it was. A paste does not: that goes through Pi's own paste path, threshold and all.
 
 Both need the fixed editor, and both reach into Pi internals that carry no compatibility promise. If a Pi release moves them, the click simply stops doing anything rather than breaking the editor.
 
@@ -727,7 +757,7 @@ Both need the fixed editor, and both reach into Pi internals that carry no compa
 
 - **Incompatible with** `pi-powerline-footer`, `@tifan/pi-fixed-editor`, and `pi-sticky-input`. These packages patch the same Pi TUI internals; only one rendering owner can be active at a time.
 - **Alternate screen**: Uses the terminal's alternate screen buffer. Native scrollback history is not accessible while the fixed editor is active.
-- **Pi version fragility**: Patches internal TUI methods (`doRender`, `render`, `terminal.write`, `terminal.rows`) that may change across Pi versions. If the TUI layout is unsupported, Zentui falls back to normal rendering with a console warning.
+- **Pi version fragility**: Patches internal TUI methods (`doRender`, `render`, `terminal.write`, `terminal.rows`) that may change across Pi versions. If the TUI layout is unsupported, Starline falls back to normal rendering with a console warning.
 - If your terminal is stuck after a crash, run `reset` or restart the terminal.
 
 ## Requirements
@@ -763,7 +793,7 @@ PI_BIN=/path/to/pi npm run pi:dev
 
 ## Credits
 
-Forked from [pi-zentui](https://github.com/lmilojevicc/pi-zentui) by Luka.
+Forked from [pi-zentui](https://github.com/lmilojevicc/pi-zentui) by Luka, whose work is the foundation of this project.
 
 Inspired by:
 
