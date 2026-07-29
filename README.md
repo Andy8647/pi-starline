@@ -2,7 +2,7 @@
 
 A Starship-inspired statusline and Opencode-style TUI for [Pi](https://pi.dev).
 
-> Starline is a fork of [pi-zentui](https://github.com/lmilojevicc/pi-zentui) by Luka, renamed and released on its own. It diverged 33 commits past upstream and adds a pill footer style, a colour palette with `$ref` expansion, `model`/`thinking` footer segments, a git host icon, per-segment display options, configurable editor cursor styles, and mouse selection in the fixed editor.
+> Starline is a fork of [pi-zentui](https://github.com/lmilojevicc/pi-zentui) by Luka, renamed and released on its own. It has diverged well past upstream and adds a pill footer style, a colour palette with `$ref` expansion, `model`/`thinking` footer segments, a git host icon, per-segment display options, configurable editor cursor styles, and mouse selection in the fixed editor.
 
 ## Screenshots
 
@@ -127,6 +127,8 @@ pi install npm:pi-starline
 # From git
 pi install git:github.com/Andy8647/pi-starline
 ```
+
+Coming from pi-zentui? Run `mv ~/.pi/agent/zentui.json ~/.pi/agent/starline.json` to carry your config over — Starline does not read the old file automatically. Inside it, rename any `colorMode: "zentui"` value to `colorMode: "themed"`.
 
 ## Config
 
@@ -461,13 +463,13 @@ Notes:
 
 - **Colours need no extra configuration.** A segment's existing `colors.*` entry, which is a foreground in text mode, becomes the pill background here. Text colour is picked automatically for legibility unless you set `fg:` yourself.
 - `extensionStatus` is not one segment but however many other extensions have registered (balance, automode, mcp, …). Listing it expands to all of them; `extensionStatus:<key>` places one specific status, and it is not repeated by a later `extensionStatus`.
-- A status configured with `colorMode: "original"` keeps the colours its own extension chose, on a neutral background.
+- A status configured with `colorMode: "themed"` (the default) recolours the extension's status segment to match the rest of the bar. `colorMode: "original"` keeps the colours its own extension chose, on a neutral background.
 - `footerSegments` toggles still apply: a segment listed here but switched off there is skipped.
 - Unknown segment names are dropped rather than drawn as empty pills.
 - Where two neighbouring pills resolve to the same background, the solid arrow would be invisible (it is the left colour drawn on the right colour), so a thin divider is drawn in the text colour instead. Several segments share a default colour, so this comes up more often than it sounds.
 - In `icons.mode: "ascii"` the arrows and caps disappear; the background transitions still separate the segments.
 
-Give each status its own icon with `extensionStatuses.icons`, keyed by status key (statuses set to `colorMode: "original"` are left alone, since their text arrives pre-styled). Give each its own colour with `extensionStatuses.colors`, keyed the same way — otherwise they all take `colors.extensionStatus` and read as one block:
+Give each status its own icon with `extensionStatuses.icons`, keyed by status key (statuses set to `colorMode: "original"` are left alone, since their text arrives pre-styled — `colorMode: "themed"` statuses take the icon). Give each its own colour with `extensionStatuses.colors`, keyed the same way — otherwise they all take `colors.extensionStatus` and read as one block:
 
 ```json
 {
@@ -737,7 +739,7 @@ Drag-select in the transcript area works whenever the fixed editor is on.
 
 - `copyOnSelect: true` (default) — releasing the mouse copies the selection and clears the highlight. `copyNotice` controls the "copied to clipboard" toast.
 - `copyOnSelect: false` — the highlight stays after release and nothing is written to the clipboard. The editor's bottom border shows `N characters selected, ctrl+c to copy` until you act on it.
-- **Double click selects a word, triple click selects the line.** A word keeps `_-./` in it, so a path, a filename or a `src/foo.ts` reference comes out whole. A fourth click starts over as a plain click. Both follow the same `copyOnSelect` rule as a drag, and both work in the input box too. Pi has no mouse selection of its own; because starline turns on mouse reporting to do this, the terminal's own double click no longer reaches the screen — in most terminals holding shift while dragging bypasses reporting and gives you the native selection back.
+- **Double click selects a word, triple click selects the line.** A word keeps `_-./` in it, so a path, a filename or a `src/foo.ts` reference comes out whole. A fourth click starts over as a plain click. Both follow the same `copyOnSelect` rule as a drag, and both work in the input box too. Pi has no mouse selection of its own; because Starline turns on mouse reporting to do this, the terminal's own double click no longer reaches the screen — in most terminals holding shift while dragging bypasses reporting and gives you the native selection back.
 - `ctrl+c` copies the current selection under either setting. With no selection it falls through to Pi's normal ctrl+c, so interrupting still works.
 - Right-clicking inside a selection copies it outright; right-clicking anywhere else falls through to the terminal's native context menu as before.
 - Any other keystroke dismisses the highlight, so it never lingers over text that has scrolled on.
@@ -749,7 +751,7 @@ Inside the input box:
 - Clicking in your text moves the caret there. `editorClickCursor` (default on) turns it off.
 - Dragging selects the text, following the same `copyOnSelect` rule as the transcript. The rail, the borders and the metadata row are never part of a selection — neither highlighted nor copied — and a drag off the bottom stops at the last line of your input.
 - Dragging backwards selects the same range as dragging forwards: the cell you pressed on and the cell you released on are both in.
-- **Backspace or delete removes the selected text**, as one undoable step — `ctrl+z` puts it back. Pi's editor has no selection of its own, so this splices the range straight out of its buffer; if the editor is not the shape starline expects, the key falls through to Pi and deletes a character as usual. Typing replaces the selection the same way — the text goes, then your character lands where it was. A paste does not: that goes through Pi's own paste path, threshold and all.
+- **Backspace or delete removes the selected text**, as one undoable step — `ctrl+z` puts it back. Pi's editor has no selection of its own, so this splices the range straight out of its buffer; if the editor is not the shape Starline expects, the key falls through to Pi and deletes a character as usual. Typing replaces the selection the same way — the text goes, then your character lands where it was. A paste does not: that goes through Pi's own paste path, threshold and all.
 
 Both need the fixed editor, and both reach into Pi internals that carry no compatibility promise. If a Pi release moves them, the click simply stops doing anything rather than breaking the editor.
 
