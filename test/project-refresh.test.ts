@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	createProjectRefreshScheduler,
 	startProjectRefreshInterval,
-} from "../extensions/zentui/project-refresh";
+} from "../extensions/starline/project-refresh";
 
 async function flushPromises(): Promise<void> {
 	await Promise.resolve();

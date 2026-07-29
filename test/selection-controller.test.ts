@@ -3,11 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const copyToClipboard = vi.fn(async (_text: string) => {});
 vi.mock("@earendil-works/pi-coding-agent", () => ({ copyToClipboard }));
 
-const { SelectionState } = await import("../extensions/zentui/fixed-editor/selection");
+const { SelectionState } = await import("../extensions/starline/fixed-editor/selection");
 const { overlayHintOnBorder, SelectionController } = await import(
-	"../extensions/zentui/fixed-editor/selection-controller"
+	"../extensions/starline/fixed-editor/selection-controller"
 );
-const { installPasteCollapse } = await import("../extensions/zentui/fixed-editor/paste-collapse");
+const { installPasteCollapse } = await import("../extensions/starline/fixed-editor/paste-collapse");
 
 type Config = { copyOnSelect: boolean; copyNotice: boolean; editorClickCursor?: boolean };
 

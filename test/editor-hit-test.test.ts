@@ -5,12 +5,12 @@ import {
 	findEditorBox,
 	hitTestEditorBox,
 	isEditorRule,
-} from "../extensions/zentui/fixed-editor/editor-hit-test";
+} from "../extensions/starline/fixed-editor/editor-hit-test";
 import {
 	positionEditorTextCursor,
 	resolveEditorInternals,
 	supportsEditorTextCursor,
-} from "../extensions/zentui/fixed-editor/editor-text-cursor";
+} from "../extensions/starline/fixed-editor/editor-text-cursor";
 
 const RULE = "─".repeat(40);
 const RAIL = "│ ";

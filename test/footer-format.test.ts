@@ -4,7 +4,7 @@ import {
 	parseFooterFormat,
 	renderFormatSplit,
 	stripOrphanSeparators,
-} from "../extensions/zentui/footer-format";
+} from "../extensions/starline/footer-format";
 
 describe("parseFooterFormat", () => {
 	it("returns empty array for empty string", () => {

@@ -1,8 +1,8 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../extensions/zentui/config", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("../extensions/zentui/config")>();
+vi.mock("../extensions/starline/config", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../extensions/starline/config")>();
 	return {
 		...actual,
 		ensureConfigExists: () => {},
@@ -14,22 +14,22 @@ vi.mock("../extensions/zentui/config", async (importOriginal) => {
 	};
 });
 
-vi.mock("../extensions/zentui/git", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("../extensions/zentui/git")>();
+vi.mock("../extensions/starline/git", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../extensions/starline/git")>();
 	return { ...actual, readGitStatus: async () => actual.emptyGitStatus() };
 });
 
-vi.mock("../extensions/zentui/runtime", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("../extensions/zentui/runtime")>();
+vi.mock("../extensions/starline/runtime", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../extensions/starline/runtime")>();
 	return { ...actual, readRuntimeInfo: async () => undefined };
 });
 
-vi.mock("../extensions/zentui/package-version", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("../extensions/zentui/package-version")>();
+vi.mock("../extensions/starline/package-version", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../extensions/starline/package-version")>();
 	return { ...actual, readPackageVersionResult: async () => undefined };
 });
 
-import zentui from "../extensions/zentui/index";
+import zentui from "../extensions/starline/index";
 
 type Handler = (event: unknown, ctx: unknown) => unknown | Promise<unknown>;
 type Footer = { render(width: number): string[]; dispose?: () => void };

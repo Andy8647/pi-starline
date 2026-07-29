@@ -9,7 +9,7 @@ import {
 	themeColorToFgSgr,
 	toBackgroundSgr,
 	toForegroundSgr,
-} from "../extensions/zentui/style";
+} from "../extensions/starline/style";
 
 /**
  * Mimics Pi's `Theme`: `fg()` wraps with the resolved sequence and closes with

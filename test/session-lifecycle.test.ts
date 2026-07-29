@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { defaultConfig } from "../extensions/zentui/config";
-import { disposeFixedEditor, installFixedEditorProbe } from "../extensions/zentui/fixed-editor";
-import { SessionLifecycle } from "../extensions/zentui/session-lifecycle";
+import { defaultConfig } from "../extensions/starline/config";
+import { disposeFixedEditor, installFixedEditorProbe } from "../extensions/starline/fixed-editor";
+import { SessionLifecycle } from "../extensions/starline/session-lifecycle";
 
 afterEach(() => {
 	disposeFixedEditor();

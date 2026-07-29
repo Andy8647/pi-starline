@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { defaultConfig, FOOTER_FORMAT_VARIABLES, mergeConfig } from "../extensions/zentui/config";
-import { thinkingThemeKey } from "../extensions/zentui/footer";
-import { parseFooterFormat } from "../extensions/zentui/footer-format";
+import { defaultConfig, FOOTER_FORMAT_VARIABLES, mergeConfig } from "../extensions/starline/config";
+import { thinkingThemeKey } from "../extensions/starline/footer";
+import { parseFooterFormat } from "../extensions/starline/footer-format";
 
 describe("thinkingThemeKey", () => {
 	it("maps each level to its theme colour key", () => {

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { defaultConfig, mergeConfig } from "../extensions/zentui/config";
+import { defaultConfig, mergeConfig } from "../extensions/starline/config";
 import {
 	applyEditorCursorStyle,
 	applyEditorCursorStyleToLines,
 	parseEditorCursorStyle,
-} from "../extensions/zentui/editor-cursor";
+} from "../extensions/starline/editor-cursor";
 
 // What Pi's editor emits: the zero-width cursor marker, then a reverse-video
 // run around the grapheme under the cursor.

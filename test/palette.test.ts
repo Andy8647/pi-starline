@@ -5,7 +5,7 @@ import {
 	expandPaletteRefs,
 	mergeConfig,
 	normalizePalette,
-} from "../extensions/zentui/config";
+} from "../extensions/starline/config";
 
 const tokyoNightStorm = {
 	bg: "#24283b",

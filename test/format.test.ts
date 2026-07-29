@@ -18,13 +18,13 @@ import {
 	formatPackageVersionSegment,
 	getUsageTotals,
 	invalidateUsageTotalsCache,
-} from "../extensions/zentui/format";
+} from "../extensions/starline/format";
 import {
 	ASCII_DEFAULT_ICONS,
 	NERD_DEFAULT_ICONS,
 	OS_PLATFORM_ICONS_ASCII,
 	OS_PLATFORM_ICONS_NERD,
-} from "../extensions/zentui/icons";
+} from "../extensions/starline/icons";
 
 const cacheHitIcon = "󰆼";
 

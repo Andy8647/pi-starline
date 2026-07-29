@@ -7,7 +7,7 @@ import {
 	emptyGitStatus,
 	parseGitNumstat,
 	parseGitStatusPorcelain,
-} from "../extensions/zentui/git";
+} from "../extensions/starline/git";
 
 describe("parseGitStatusPorcelain", () => {
 	it("returns empty status for empty output", () => {

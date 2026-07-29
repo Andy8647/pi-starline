@@ -1,21 +1,21 @@
 import { stripVTControlCharacters } from "node:util";
 import { describe, expect, it } from "vitest";
-import type { ExtensionStatusSegment } from "../extensions/zentui/extension-status";
+import type { ExtensionStatusSegment } from "../extensions/starline/extension-status";
 import {
 	backgroundSgrToRgb,
 	collectPillInputs,
 	contrastTextSgr,
 	type PillInput,
 	renderPillBar,
-} from "../extensions/zentui/pill";
+} from "../extensions/starline/pill";
 import {
 	DEFAULT_PILL_CONFIG,
 	isKnownPillSegment,
 	normalizePillConfig,
 	type PillConfig,
 	parseFooterStyle,
-} from "../extensions/zentui/pill-config";
-import type { ThemeLike } from "../extensions/zentui/style";
+} from "../extensions/starline/pill-config";
+import type { ThemeLike } from "../extensions/starline/style";
 
 const MAUVE_FG = "\x1b[38;2;203;166;247m";
 const MAUVE_BG = "\x1b[48;2;203;166;247m";

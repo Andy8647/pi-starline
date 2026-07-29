@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultConfig, mergeConfig } from "../extensions/zentui/config";
+import { defaultConfig, mergeConfig } from "../extensions/starline/config";
 
 describe("user message colours", () => {
 	it("are unset by default, preserving upstream rendering", () => {

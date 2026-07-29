@@ -6,7 +6,7 @@ import {
 	__test__,
 	PACKAGE_VERSION_ECOSYSTEMS,
 	readPackageVersion,
-} from "../extensions/zentui/package-version";
+} from "../extensions/starline/package-version";
 
 function makeProject(files: Record<string, string>): string {
 	const cwd = mkdtempSync(join(tmpdir(), "zentui-package-version-"));

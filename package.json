@@ -26,7 +26,7 @@
 		"lint": "biome check .",
 		"typecheck": "tsc --noEmit",
 		"test": "vitest run",
-		"pi:dev": "${PI_BIN:-/opt/homebrew/bin/pi} --no-extensions -e ./extensions/zentui/index.ts",
+		"pi:dev": "${PI_BIN:-/opt/homebrew/bin/pi} --no-extensions -e ./extensions/starline/index.ts",
 		"pi:install-local": "${PI_BIN:-/opt/homebrew/bin/pi} install ./ -l",
 		"fmt": "biome format --write .",
 		"fmt:check": "biome format --check .",

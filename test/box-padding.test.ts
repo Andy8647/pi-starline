@@ -1,7 +1,7 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
-import { defaultConfig, mergeConfig, type PolishedTuiConfig } from "../extensions/zentui/config";
-import { PolishedEditor, WrappedPolishedEditor } from "../extensions/zentui/ui";
+import { defaultConfig, mergeConfig, type PolishedTuiConfig } from "../extensions/starline/config";
+import { PolishedEditor, WrappedPolishedEditor } from "../extensions/starline/ui";
 
 describe("box padding config", () => {
 	it("defaults to one blank row, which is upstream's look", () => {

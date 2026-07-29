@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { emptyGitStatus } from "../extensions/zentui/git";
-import { createInitialState, syncState } from "../extensions/zentui/state";
+import { emptyGitStatus } from "../extensions/starline/git";
+import { createInitialState, syncState } from "../extensions/starline/state";
 
 function makeCtx(model: unknown) {
 	return {

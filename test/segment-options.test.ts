@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { defaultConfig, FOOTER_FORMAT_VARIABLES, mergeConfig } from "../extensions/zentui/config";
+import { defaultConfig, FOOTER_FORMAT_VARIABLES, mergeConfig } from "../extensions/starline/config";
 import {
 	buildCacheHitLabel,
 	buildContextDisplayLabel,
 	buildTokenLabel,
 	formatBareContextPercent,
-} from "../extensions/zentui/format";
-import { PILL_SEGMENT_VARIABLES } from "../extensions/zentui/pill-config";
+} from "../extensions/starline/format";
+import { PILL_SEGMENT_VARIABLES } from "../extensions/starline/pill-config";
 
 const totals = {
 	input: 12_000,

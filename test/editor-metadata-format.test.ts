@@ -1,11 +1,11 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
-import { defaultConfig } from "../extensions/zentui/config";
+import { defaultConfig } from "../extensions/starline/config";
 import {
 	type EditorMetadataValues,
 	renderEditorMetadataFormat,
 	sanitizeEditorMetadataText,
-} from "../extensions/zentui/editor-metadata-format";
+} from "../extensions/starline/editor-metadata-format";
 
 function makeTheme(): Theme {
 	return {

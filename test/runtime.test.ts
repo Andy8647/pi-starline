@@ -7,7 +7,7 @@ import {
 	detectRuntime,
 	readRuntimeInfo,
 	runtimeMetadata,
-} from "../extensions/zentui/runtime";
+} from "../extensions/starline/runtime";
 
 function starshipRuntimeModules(): string[] {
 	const toml = readFileSync("test/fixtures/starship-nerd-font-symbols.toml", "utf8");

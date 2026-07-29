@@ -4,8 +4,8 @@ import {
 	calculateLiveContextTokens,
 	LiveContextController,
 	liveContextFromMessage,
-} from "../extensions/zentui/live-context";
-import { SessionLifecycle } from "../extensions/zentui/session-lifecycle";
+} from "../extensions/starline/live-context";
+import { SessionLifecycle } from "../extensions/starline/session-lifecycle";
 
 function usage(patch: Partial<Usage> = {}): Usage {
 	return {

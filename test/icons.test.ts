@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultConfig } from "../extensions/zentui/config";
+import { defaultConfig } from "../extensions/starline/config";
 import {
 	ASCII_DEFAULT_ICONS,
 	ICON_GLYPH_KEYS,
@@ -8,8 +8,8 @@ import {
 	resolveConfiguredIcons,
 	resolveOsIcon,
 	resolveRuntimeSymbol,
-} from "../extensions/zentui/icons";
-import { runtimeMetadata } from "../extensions/zentui/runtime";
+} from "../extensions/starline/icons";
+import { runtimeMetadata } from "../extensions/starline/runtime";
 
 describe("icon tables", () => {
 	it("keeps nerd defaults byte-identical to historical defaultConfig icons", () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { emptyGitStatus } from "../extensions/zentui/git";
-import { applyProjectRefreshToState } from "../extensions/zentui/project-state";
-import { createInitialState } from "../extensions/zentui/state";
+import { emptyGitStatus } from "../extensions/starline/git";
+import { applyProjectRefreshToState } from "../extensions/starline/project-state";
+import { createInitialState } from "../extensions/starline/state";
 
 describe("applyProjectRefreshToState", () => {
 	it("keeps last-good git and runtime on transient errors", () => {

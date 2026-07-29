@@ -1,24 +1,24 @@
 import { CURSOR_MARKER } from "@earendil-works/pi-tui";
 import { describe, expect, it, vi } from "vitest";
-import { capEditorLines, renderCluster } from "../extensions/zentui/fixed-editor/cluster";
-import { TerminalSplitCompositor } from "../extensions/zentui/fixed-editor/compositor";
+import { capEditorLines, renderCluster } from "../extensions/starline/fixed-editor/cluster";
+import { TerminalSplitCompositor } from "../extensions/starline/fixed-editor/compositor";
 import {
 	clampScrollOffset,
 	parseKeyboardScroll,
 	parseMouseEvent,
 	parseMouseScroll,
-} from "../extensions/zentui/fixed-editor/input";
+} from "../extensions/starline/fixed-editor/input";
 import {
 	findEditorContainerIndex,
 	inspectPiTui,
 	type PiRenderableCapability,
-} from "../extensions/zentui/fixed-editor/pi-compat";
+} from "../extensions/starline/fixed-editor/pi-compat";
 import {
 	highlightSelection,
 	lineRangeAt,
 	SelectionState,
 	wordRangeAt,
-} from "../extensions/zentui/fixed-editor/selection";
+} from "../extensions/starline/fixed-editor/selection";
 import {
 	DISABLE_MOUSE,
 	ENABLE_ALT_SCROLL,
@@ -26,7 +26,7 @@ import {
 	emergencyTerminalReset,
 	RESET_SCROLL_REGION,
 	SHOW_CURSOR,
-} from "../extensions/zentui/fixed-editor/terminal-modes";
+} from "../extensions/starline/fixed-editor/terminal-modes";
 
 function makeValidPiFixture() {
 	let rawRows = 24;

@@ -11,7 +11,7 @@ import { defineConfig } from "vitest/config";
  * depends on how they happen to have zentui set up. Pi resolves the directory
  * from PI_CODING_AGENT_DIR before falling back to ~/.pi/agent.
  */
-process.env.PI_CODING_AGENT_DIR ??= mkdtempSync(join(tmpdir(), "zentui-test-agent-"));
+process.env.PI_CODING_AGENT_DIR ??= mkdtempSync(join(tmpdir(), "starline-test-agent-"));
 
 export default defineConfig({
 	test: {

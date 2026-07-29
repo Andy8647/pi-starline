@@ -13,20 +13,20 @@ import {
 	type ExtensionStatusPlacement,
 	type PolishedTuiConfig,
 	type SeparatorStyle,
-} from "../extensions/zentui/config";
-import { installFooter } from "../extensions/zentui/footer";
-import { emptyGitStatus } from "../extensions/zentui/git";
-import zentui from "../extensions/zentui/index";
-import { ZENTUI_PROTOTYPE_PATCH_REGISTRY } from "../extensions/zentui/prototype-patch-registry";
+} from "../extensions/starline/config";
+import { installFooter } from "../extensions/starline/footer";
+import { emptyGitStatus } from "../extensions/starline/git";
+import zentui from "../extensions/starline/index";
+import { ZENTUI_PROTOTYPE_PATCH_REGISTRY } from "../extensions/starline/prototype-patch-registry";
 import {
 	installSelectorBorderStyle,
 	patchSelectorBorderStyle,
-} from "../extensions/zentui/selector-border";
-import { SessionLifecycle } from "../extensions/zentui/session-lifecycle";
-import { registerZentuiSettingsCommand } from "../extensions/zentui/settings-command";
-import { createInitialState } from "../extensions/zentui/state";
-import { PolishedEditor, WrappedPolishedEditor } from "../extensions/zentui/ui";
-import { installUserMessageStyle } from "../extensions/zentui/user-message";
+} from "../extensions/starline/selector-border";
+import { SessionLifecycle } from "../extensions/starline/session-lifecycle";
+import { registerZentuiSettingsCommand } from "../extensions/starline/settings-command";
+import { createInitialState } from "../extensions/starline/state";
+import { PolishedEditor, WrappedPolishedEditor } from "../extensions/starline/ui";
+import { installUserMessageStyle } from "../extensions/starline/user-message";
 
 type Handler = (event: unknown, ctx: unknown) => unknown | Promise<unknown>;
 type FooterFactory = (...args: unknown[]) => {
@@ -285,9 +285,9 @@ describe("Pi docs compliance", () => {
 	it("uses the current @earendil-works Pi packages instead of the old @mariozechner scope", () => {
 		const files = [
 			"package.json",
-			"extensions/zentui/config.ts",
-			"extensions/zentui/index.ts",
-			"extensions/zentui/ui.ts",
+			"extensions/starline/config.ts",
+			"extensions/starline/index.ts",
+			"extensions/starline/ui.ts",
 		];
 		const content = files.map((file) => readFileSync(join(process.cwd(), file), "utf8")).join("\n");
 

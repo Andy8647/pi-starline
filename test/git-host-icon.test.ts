@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { defaultConfig, getExtensionStatusIcon, mergeConfig } from "../extensions/zentui/config";
-import { gitHostIconGlyph } from "../extensions/zentui/footer";
-import { emptyGitStatus, parseGitRemoteHost } from "../extensions/zentui/git";
+import { defaultConfig, getExtensionStatusIcon, mergeConfig } from "../extensions/starline/config";
+import { gitHostIconGlyph } from "../extensions/starline/footer";
+import { emptyGitStatus, parseGitRemoteHost } from "../extensions/starline/git";
 import {
 	ASCII_DEFAULT_ICONS,
 	ICON_GLYPH_KEYS,
 	NERD_DEFAULT_ICONS,
-} from "../extensions/zentui/icons";
-import { applyProjectRefreshToState } from "../extensions/zentui/project-state";
-import { createInitialState } from "../extensions/zentui/state";
+} from "../extensions/starline/icons";
+import { applyProjectRefreshToState } from "../extensions/starline/project-state";
+import { createInitialState } from "../extensions/starline/state";
 
 describe("parseGitRemoteHost", () => {
 	it("reads scp-style SSH remotes", () => {

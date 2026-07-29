@@ -30,14 +30,14 @@ import {
 	savePathDisplayPatch,
 	saveSeparatorPatch,
 	saveUiFeaturesPatch,
-} from "../extensions/zentui/config";
+} from "../extensions/starline/config";
 import {
 	colorize,
 	renderChromeBorder,
 	renderStyle,
 	renderStyleForSource,
 	renderTerminalStyle,
-} from "../extensions/zentui/style";
+} from "../extensions/starline/style";
 
 function configTempFiles(dir: string, filename = "zentui.json"): string[] {
 	return readdirSync(dir).filter(

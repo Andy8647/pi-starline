@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { defaultConfig, mergeConfig } from "../extensions/zentui/config";
+import { defaultConfig, mergeConfig } from "../extensions/starline/config";
 import {
 	installPasteCollapse,
 	pasteExpandHintText,
 	shouldCollapse,
 	supportsPasteCollapse,
-} from "../extensions/zentui/fixed-editor/paste-collapse";
+} from "../extensions/starline/fixed-editor/paste-collapse";
 
 const lines = (count: number) => Array.from({ length: count }, (_, i) => `line ${i}`).join("\n");
 
