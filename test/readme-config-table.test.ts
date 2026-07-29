@@ -4,18 +4,21 @@ import { describe, expect, it } from "vitest";
 import { defaultConfig } from "../extensions/starline/config";
 
 const readme = readFileSync(join(process.cwd(), "README.md"), "utf8");
+// The config reference lives in its own document; the README links to it and
+// keeps only a short taste of the format.
+const configDoc = readFileSync(join(process.cwd(), "docs/configuration.md"), "utf8");
 
 const TABLE_HEADER = "| Key | Type | Default | What it does |";
 const TABLE_END_MARKER = "User config lives at";
 
-const tableStart = readme.indexOf(TABLE_HEADER);
-const tableEnd = readme.indexOf(TABLE_END_MARKER, tableStart);
+const tableStart = configDoc.indexOf(TABLE_HEADER);
+const tableEnd = configDoc.indexOf(TABLE_END_MARKER, tableStart);
 if (tableStart === -1 || tableEnd === -1) {
-	throw new Error("Could not locate the README config table: header or end marker missing");
+	throw new Error("Could not locate the config table in docs/configuration.md");
 }
 // Scoped to just the top-level config table, not the many other `| \`key\` |`
 // tables further down (pill footer sub-keys, extension-status JSON, etc).
-const configTable = readme.slice(tableStart, tableEnd);
+const configTable = configDoc.slice(tableStart, tableEnd);
 
 const ROW_PATTERN = /^\|\s*`([^`]+)`\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|/;
 
@@ -40,7 +43,11 @@ function formatExpectedDefaultCell(value: string | number | boolean): string {
 	return `\`${inner}\``;
 }
 
-describe("README config reference", () => {
+describe("config reference", () => {
+	it("is linked from the README, so splitting it out does not hide it", () => {
+		expect(readme).toContain("docs/configuration.md");
+	});
+
 	it("has a row for every top-level config key", () => {
 		const missing = Object.keys(defaultConfig).filter((key) => !rows.has(key));
 
