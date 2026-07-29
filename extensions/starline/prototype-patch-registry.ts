@@ -1,9 +1,13 @@
 export const STARLINE_PROTOTYPE_PATCH_REGISTRY = Symbol.for("pi-starline.prototype-patch-registry");
 
 /**
- * The key this package used before it was renamed from pi-zentui. Read, never
- * written: if both packages are loaded they must share one registry, or each
- * patches a prototype the other has already patched.
+ * The key this package used before it was renamed from pi-zentui. Read AND
+ * written, alongside the new key: package load order is not controlled by
+ * either side, so whichever of pi-starline/pi-zentui creates the registry
+ * first must expose it under both keys. Otherwise a pi-starline-first load
+ * (the common order, since it sorts first alphabetically) would leave a
+ * later-loading pi-zentui unable to find it, and each package would patch a
+ * prototype the other has already patched.
  */
 const LEGACY_PROTOTYPE_PATCH_REGISTRY = Symbol.for("pi-zentui.prototype-patch-registry");
 
@@ -43,7 +47,14 @@ function registryFor(target: PatchTarget): PatchRegistry {
 		target[STARLINE_PROTOTYPE_PATCH_REGISTRY] ?? target[LEGACY_PROTOTYPE_PATCH_REGISTRY];
 	if (existing instanceof Map) return existing as PatchRegistry;
 	const registry: PatchRegistry = new Map();
+	// One Map, exposed under both keys, so whichever package looks second
+	// (in either load order) adopts this same registry instead of creating
+	// its own and double-patching.
 	Object.defineProperty(target, STARLINE_PROTOTYPE_PATCH_REGISTRY, {
+		value: registry,
+		configurable: true,
+	});
+	Object.defineProperty(target, LEGACY_PROTOTYPE_PATCH_REGISTRY, {
 		value: registry,
 		configurable: true,
 	});

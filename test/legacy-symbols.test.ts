@@ -53,6 +53,17 @@ describe("editor factory marking", () => {
 		expect(isStarlineEditorFactory(undefined)).toBe(false);
 		expect(isStarlineEditorFactory(() => undefined)).toBe(false);
 	});
+
+	it("also marks a factory under the legacy key, for a pi-zentui reader loading second", () => {
+		const base = () => undefined;
+		const factory = markEditorFactory(() => undefined, base);
+		const legacyShaped = factory as unknown as Record<PropertyKey, unknown>;
+
+		// A reader that only knows the pre-rename keys (i.e. pi-zentui, loaded
+		// after pi-starline) must still recognise this factory as its own.
+		expect(legacyShaped[LEGACY_EDITOR_FACTORY]).toBe(true);
+		expect(legacyShaped[LEGACY_EDITOR_BASE_FACTORY]).toBe(base);
+	});
 });
 
 describe("prototype patch registry", () => {
@@ -87,6 +98,27 @@ describe("prototype patch registry", () => {
 		// Adopted, not shadowed: one registry, so neither package double-patches.
 		expect(existing.size).toBe(1);
 		expect(target[STARLINE_PROTOTYPE_PATCH_REGISTRY]).toBeUndefined();
+		cleanup();
+	});
+
+	it("also stores the registry under the legacy key, so a pi-zentui reader loading second finds and shares it", () => {
+		const target = { render: () => "original" };
+
+		const cleanup = installPrototypePatch(
+			target,
+			"render",
+			"user-message-render",
+			({ predecessor, receiver, args }) => Reflect.apply(predecessor, receiver, args),
+		);
+
+		const starlineMap = (target as unknown as Record<PropertyKey, unknown>)[
+			STARLINE_PROTOTYPE_PATCH_REGISTRY
+		];
+		const legacyMap = (target as unknown as Record<PropertyKey, unknown>)[LEGACY_REGISTRY];
+
+		expect(legacyMap).toBeInstanceOf(Map);
+		// Same Map under both keys, not two independently maintained registries.
+		expect(legacyMap).toBe(starlineMap);
 		cleanup();
 	});
 });

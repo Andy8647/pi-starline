@@ -2,9 +2,14 @@
  * Marks the editor factory Starline installed, so a re-entrant install
  * recognises its own work instead of wrapping it a second time.
  *
- * New marks are written under `pi-starline.*`. The `pi-zentui.*` keys this
- * package used before the rename are still read, so a session running both
- * packages sees one editor factory rather than two stacked ones.
+ * Marks are written under BOTH `pi-starline.*` and the pre-rename
+ * `pi-zentui.*` keys, and both are read back. Package load order is not
+ * controlled by either side: pi-zentui loading first only needs the legacy
+ * keys read, but pi-starline loading first (the alphabetically-first, and
+ * therefore common, order) needs a pi-zentui reader loading second to still
+ * find the mark under the legacy key it looks for. Writing only the new key
+ * would leave that direction unprotected and a second, stacked editor
+ * factory would get built.
  */
 
 const EDITOR_FACTORY = Symbol.for("pi-starline.editor-factory");
@@ -23,7 +28,11 @@ function asMarked(factory: unknown): Marked | undefined {
 export function markEditorFactory<T extends object>(factory: T, baseFactory?: object): T {
 	const marked = factory as unknown as Marked;
 	marked[EDITOR_FACTORY] = true;
-	if (baseFactory) marked[EDITOR_BASE_FACTORY] = baseFactory;
+	marked[LEGACY_EDITOR_FACTORY] = true;
+	if (baseFactory) {
+		marked[EDITOR_BASE_FACTORY] = baseFactory;
+		marked[LEGACY_EDITOR_BASE_FACTORY] = baseFactory;
+	}
 	return factory;
 }
 
