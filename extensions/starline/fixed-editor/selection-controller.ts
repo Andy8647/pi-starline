@@ -57,6 +57,11 @@ export type SelectionHost = {
 	pauseMouseReporting(): void;
 	/** Show the "copied to clipboard" notice. */
 	showCopyNotice(): void;
+	/**
+	 * Scroll the transcript by `delta` lines, positive being back through
+	 * history. Returns how much was actually applied, which is 0 at either end.
+	 */
+	scrollTranscriptBy(delta: number): number;
 };
 
 export type MouseEvent = { button: string; action: string; col: number; row: number };
@@ -69,6 +74,17 @@ const DELETE_KEYS = new Set(["\x7f", "\b", "\x1b[3~"]);
 
 /** How close together two presses on one cell count as a double or triple click. */
 const MULTI_CLICK_MS = 400;
+
+/**
+ * Auto-scroll while a drag sits on the top or bottom row of the transcript.
+ *
+ * A terminal clamps the rows it reports to the screen, so dragging past the
+ * edge looks exactly like dragging along it — and a trackpad held still at the
+ * edge reports nothing at all. Hence a repeating timer rather than a response
+ * to movement.
+ */
+const AUTO_SCROLL_MS = 60;
+const AUTO_SCROLL_STEP = 1;
 
 /**
  * Whether this input is somebody typing text, as opposed to a key that means
@@ -104,6 +120,13 @@ export class SelectionController {
 	} | null = null;
 	/** Set by a double or triple click, so the release that follows leaves it alone. */
 	private multiClick = false;
+	/**
+	 * Live end of a transcript drag, in absolute transcript coordinates. Scrolling
+	 * moves the text under the pointer, and this is what gets moved with it.
+	 */
+	private lastDragPoint: { line: number; col: number } | null = null;
+	private autoScrollTimer: ReturnType<typeof setInterval> | null = null;
+	private autoScrollDelta = 0;
 
 	constructor(host: SelectionHost) {
 		this.host = host;
@@ -276,9 +299,11 @@ export class SelectionController {
 	}
 
 	private clear(): void {
+		this.stopAutoScroll();
 		this.selection.clear();
 		this.editorSelection.clear();
 		this.pressPoint = null;
+		this.lastDragPoint = null;
 		this.dragged = false;
 		this.editorBox = null;
 	}
@@ -288,6 +313,76 @@ export class SelectionController {
 		const had = this.selection.active || this.editorSelection.active;
 		this.clear();
 		return had;
+	}
+
+	/** Whether a transcript drag is in progress, so scrolling should keep it. */
+	isDragging(): boolean {
+		return this.area === "transcript" && this.selection.isDragging;
+	}
+
+	/**
+	 * Follow the text after the transcript scrolled under an active drag by
+	 * `applied` lines. The anchor is already an absolute transcript line and does
+	 * not move; the live end does, because the pointer stayed on the same screen
+	 * row while different text came to sit under it.
+	 */
+	shiftDragEnd(applied: number): void {
+		if (!this.isDragging()) return;
+		const point = this.lastDragPoint;
+		if (!point) return;
+		const line = Math.max(0, point.line - applied);
+		this.lastDragPoint = { line, col: point.col };
+		if (this.pressPoint && (this.pressPoint.line !== line || this.pressPoint.col !== point.col)) {
+			this.dragged = true;
+		}
+		this.selection.extend(line, point.col);
+		this.host.requestRender();
+	}
+
+	/** Stop the edge timer. Safe to call at any time. */
+	private stopAutoScroll(): void {
+		if (!this.autoScrollTimer) return;
+		clearInterval(this.autoScrollTimer);
+		this.autoScrollTimer = null;
+		this.autoScrollDelta = 0;
+	}
+
+	/** Release the edge timer. Call when the compositor goes away. */
+	dispose(): void {
+		this.stopAutoScroll();
+	}
+
+	/**
+	 * Keep scrolling while the drag sits on an edge row, and stop as soon as it
+	 * moves off one or the transcript runs out.
+	 */
+	private updateAutoScroll(row: number, scrollableRows: number): void {
+		const delta = row <= 1 ? AUTO_SCROLL_STEP : row >= scrollableRows ? -AUTO_SCROLL_STEP : 0;
+		if (delta === 0) {
+			this.stopAutoScroll();
+			return;
+		}
+		this.autoScrollDelta = delta;
+		this.autoScrollStep();
+		if (this.autoScrollTimer || !this.isDragging()) return;
+		this.autoScrollTimer = setInterval(() => this.autoScrollStep(), AUTO_SCROLL_MS);
+		// Never let the timer be the reason the process stays up.
+		const timer = this.autoScrollTimer as { unref?: () => void };
+		timer.unref?.();
+	}
+
+	private autoScrollStep(): void {
+		if (!this.isDragging()) {
+			this.stopAutoScroll();
+			return;
+		}
+		const applied = this.host.scrollTranscriptBy(this.autoScrollDelta);
+		if (applied === 0) {
+			// Either end of the transcript: nothing more to reveal.
+			this.stopAutoScroll();
+			return;
+		}
+		this.shiftDragEnd(applied);
 	}
 
 	/**
@@ -336,14 +431,19 @@ export class SelectionController {
 
 		// Below the transcript is the cluster: the editor box and the footer.
 		const scrollableRows = this.host.getVisibleScrollableRows();
-		if (event.row > scrollableRows) {
+		// A drag that wanders down into the cluster is still a transcript drag:
+		// it pins to the bottom row and scrolls, rather than handing the pointer
+		// to the editor box halfway through a selection.
+		const escapingDrag = this.isDragging() && event.action !== "press";
+		if (event.row > scrollableRows && !escapingDrag) {
 			this.handleEditorMouse(event, scrollableRows);
 			return;
 		}
 
 		if (this.area === "editor") this.clear();
 		this.area = "transcript";
-		const line = this.host.getVisibleRootStart() + event.row - 1;
+		const row = Math.min(Math.max(event.row, 1), Math.max(1, scrollableRows));
+		const line = this.host.getVisibleRootStart() + row - 1;
 		// Rows above a short transcript map before its first line; nothing to select.
 		if (line < 0) return;
 		const col = Math.max(0, event.col - 1);
@@ -354,6 +454,7 @@ export class SelectionController {
 			this.multiClick = false;
 			this.selection.start(line, col);
 			this.pressPoint = { line, col };
+			this.lastDragPoint = { line, col };
 			this.dragged = false;
 			this.host.requestRender();
 			return;
@@ -369,12 +470,15 @@ export class SelectionController {
 			if (this.pressPoint && (this.pressPoint.line !== line || this.pressPoint.col !== col)) {
 				this.dragged = true;
 			}
+			this.lastDragPoint = { line, col };
 			this.selection.extend(line, col);
 			this.host.requestRender();
+			this.updateAutoScroll(row, scrollableRows);
 			return;
 		}
 
 		if (event.action === "release" && this.selection.isDragging) {
+			this.stopAutoScroll();
 			this.finishDrag(line, col);
 		}
 	}

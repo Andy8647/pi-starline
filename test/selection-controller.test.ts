@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const copyToClipboard = vi.fn(async (_text: string) => {});
 vi.mock("@earendil-works/pi-coding-agent", () => ({ copyToClipboard }));
@@ -9,7 +9,11 @@ const { overlayHintOnBorder, SelectionController } = await import(
 );
 const { installPasteCollapse } = await import("../extensions/starline/fixed-editor/paste-collapse");
 
-type Config = { copyOnSelect: boolean; copyNotice: boolean; editorClickCursor?: boolean };
+type Config = {
+	copyOnSelect: boolean;
+	copyNotice: boolean;
+	editorClickCursor?: boolean;
+};
 
 const TRANSCRIPT = ["first line here", "second line here", "third line here"];
 
@@ -35,6 +39,7 @@ function makeHarness(config: Config, lines: string[] = TRANSCRIPT) {
 		showCopyNotice: () => {
 			calls.notice++;
 		},
+		scrollTranscriptBy: () => 0,
 	});
 	return { controller, selection, calls };
 }
@@ -223,6 +228,7 @@ describe("deleting an editor selection", () => {
 			requestRender: () => {},
 			pauseMouseReporting: () => {},
 			showCopyNotice: () => {},
+			scrollTranscriptBy: () => 0,
 		});
 		return { controller, editor, text: () => editor.state.lines.join("\n") };
 	}
@@ -586,6 +592,7 @@ describe("selecting inside the editor box", () => {
 			showCopyNotice: () => {
 				calls.notice++;
 			},
+			scrollTranscriptBy: () => 0,
 		});
 		return { controller, calls };
 	}
@@ -693,5 +700,230 @@ describe("selecting inside the editor box", () => {
 		dragInEditor(controller, [2, 3], [2, 8]);
 		expect(controller.handleKey("a")).toBe(false);
 		expect(controller.hintText()).toBe("");
+	});
+});
+
+describe("scrolling while a selection is in progress", () => {
+	/** Ten transcript lines, of which five are on screen at a time. */
+	const LINES = Array.from({ length: 10 }, (_, index) => `line ${index} text`);
+	const SCROLLABLE = 5;
+
+	function makeScrollHarness(options: { visibleStart?: number } = {}) {
+		const selection = new SelectionState();
+		let visibleStart = options.visibleStart ?? 5;
+		const scrollTranscriptBy = vi.fn((delta: number) => {
+			// The view can go back as far as line 0 and no further.
+			const next = Math.max(0, Math.min(visibleStart - delta, LINES.length - SCROLLABLE));
+			const applied = visibleStart - next;
+			visibleStart = next;
+			return applied;
+		});
+		const controller = new SelectionController({
+			selection,
+			getRootLines: () => LINES,
+			getVisibleRootStart: () => visibleStart,
+			getVisibleScrollableRows: () => SCROLLABLE,
+			getConfig: () => ({
+				copyOnSelect: false,
+				copyNotice: false,
+				editorClickCursor: true,
+			}),
+			getClusterLines: () => [],
+			getEditorPaddingY: () => 1,
+			getEditorTextColumn: () => 2,
+			getEditorComponent: () => undefined,
+			requestRender: () => {},
+			pauseMouseReporting: () => {},
+			showCopyNotice: () => {},
+			scrollTranscriptBy,
+		});
+		return { controller, selection, scrollTranscriptBy, getVisibleStart: () => visibleStart };
+	}
+
+	it("knows a transcript drag is live, so the wheel can keep it", () => {
+		const { controller } = makeScrollHarness();
+		expect(controller.isDragging()).toBe(false);
+		controller.handleMouse({ button: "left", action: "press", row: 3, col: 1 });
+		expect(controller.isDragging()).toBe(true);
+		controller.handleMouse({ button: "left", action: "release", row: 3, col: 1 });
+		expect(controller.isDragging()).toBe(false);
+	});
+
+	// The anchor is an absolute transcript line, so scrolling under a drag is
+	// exactly how a selection reaches text that is off screen.
+	it("follows the text when the wheel scrolls under a drag", () => {
+		const { controller, selection } = makeScrollHarness();
+		// Press on screen row 3 => absolute line 7.
+		controller.handleMouse({ button: "left", action: "press", row: 3, col: 1 });
+		controller.handleMouse({ button: "left", action: "drag", row: 3, col: 6 });
+		expect(selection.span?.end.line).toBe(7);
+
+		// Two lines back through history: the same screen row now shows line 5.
+		controller.shiftDragEnd(2);
+
+		expect(selection.isDragging).toBe(true);
+		expect(selection.span?.start.line).toBe(5);
+		expect(selection.span?.end.line).toBe(7);
+	});
+
+	it("ignores a shift when nothing is being dragged", () => {
+		const { controller, selection } = makeScrollHarness();
+		controller.shiftDragEnd(2);
+		expect(selection.active).toBe(false);
+	});
+
+	it("counts a wheel-only drag as a real selection, not a click", () => {
+		const { controller, selection } = makeScrollHarness();
+		controller.handleMouse({ button: "left", action: "press", row: 3, col: 1 });
+		controller.shiftDragEnd(2);
+		controller.handleMouse({ button: "left", action: "release", row: 3, col: 1 });
+		// A click would have cleared it; a selection stays up for ctrl+c.
+		expect(selection.active).toBe(true);
+	});
+});
+
+describe("dragging to the edge of the transcript", () => {
+	const LINES = Array.from({ length: 10 }, (_, index) => `line ${index} text`);
+	const SCROLLABLE = 5;
+
+	function makeEdgeHarness() {
+		const selection = new SelectionState();
+		let visibleStart = 5;
+		const scrollTranscriptBy = vi.fn((delta: number) => {
+			const next = Math.max(0, Math.min(visibleStart - delta, LINES.length - SCROLLABLE));
+			const applied = visibleStart - next;
+			visibleStart = next;
+			return applied;
+		});
+		const controller = new SelectionController({
+			selection,
+			getRootLines: () => LINES,
+			getVisibleRootStart: () => visibleStart,
+			getVisibleScrollableRows: () => SCROLLABLE,
+			getConfig: () => ({
+				copyOnSelect: false,
+				copyNotice: false,
+				editorClickCursor: true,
+			}),
+			getClusterLines: () => [],
+			getEditorPaddingY: () => 1,
+			getEditorTextColumn: () => 2,
+			getEditorComponent: () => undefined,
+			requestRender: () => {},
+			pauseMouseReporting: () => {},
+			showCopyNotice: () => {},
+			scrollTranscriptBy,
+		});
+		return { controller, selection, scrollTranscriptBy, getVisibleStart: () => visibleStart };
+	}
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	// A terminal clamps the rows it reports to the screen, so dragging past the
+	// top edge looks identical to dragging along it.
+	it("scrolls back when the drag reaches the top row", () => {
+		const { controller, scrollTranscriptBy, getVisibleStart } = makeEdgeHarness();
+		controller.handleMouse({ button: "left", action: "press", row: 4, col: 1 });
+		controller.handleMouse({ button: "left", action: "drag", row: 1, col: 1 });
+
+		expect(scrollTranscriptBy).toHaveBeenCalledWith(1);
+		expect(getVisibleStart()).toBe(4);
+	});
+
+	it("keeps scrolling while the pointer is held there, reporting nothing", () => {
+		const { controller, getVisibleStart } = makeEdgeHarness();
+		controller.handleMouse({ button: "left", action: "press", row: 4, col: 1 });
+		controller.handleMouse({ button: "left", action: "drag", row: 1, col: 1 });
+		expect(getVisibleStart()).toBe(4);
+
+		vi.advanceTimersByTime(200);
+
+		expect(getVisibleStart()).toBeLessThan(4);
+	});
+
+	it("selects the text it scrolls past", () => {
+		const { controller, selection } = makeEdgeHarness();
+		// Press on screen row 4 => absolute line 8.
+		controller.handleMouse({ button: "left", action: "press", row: 4, col: 1 });
+		controller.handleMouse({ button: "left", action: "drag", row: 1, col: 1 });
+
+		// Long enough for the timer to walk the view all the way to the top.
+		vi.advanceTimersByTime(1000);
+
+		expect(selection.span?.start.line).toBe(0);
+		expect(selection.span?.end.line).toBe(8);
+	});
+
+	it("stops at the end of the transcript rather than spinning", () => {
+		const { controller, scrollTranscriptBy } = makeEdgeHarness();
+		controller.handleMouse({ button: "left", action: "press", row: 4, col: 1 });
+		controller.handleMouse({ button: "left", action: "drag", row: 1, col: 1 });
+		vi.advanceTimersByTime(1000);
+		const callsAtTop = scrollTranscriptBy.mock.calls.length;
+
+		vi.advanceTimersByTime(1000);
+
+		expect(scrollTranscriptBy.mock.calls.length).toBe(callsAtTop);
+	});
+
+	it("stops when the drag moves back off the edge", () => {
+		const { controller, scrollTranscriptBy } = makeEdgeHarness();
+		controller.handleMouse({ button: "left", action: "press", row: 4, col: 1 });
+		controller.handleMouse({ button: "left", action: "drag", row: 1, col: 1 });
+		controller.handleMouse({ button: "left", action: "drag", row: 3, col: 1 });
+		const calls = scrollTranscriptBy.mock.calls.length;
+
+		vi.advanceTimersByTime(500);
+
+		expect(scrollTranscriptBy.mock.calls.length).toBe(calls);
+	});
+
+	it("stops on release", () => {
+		const { controller, scrollTranscriptBy } = makeEdgeHarness();
+		controller.handleMouse({ button: "left", action: "press", row: 4, col: 1 });
+		controller.handleMouse({ button: "left", action: "drag", row: 1, col: 1 });
+		controller.handleMouse({ button: "left", action: "release", row: 1, col: 1 });
+		const calls = scrollTranscriptBy.mock.calls.length;
+
+		vi.advanceTimersByTime(500);
+
+		expect(scrollTranscriptBy.mock.calls.length).toBe(calls);
+	});
+
+	// Dragging down into the pinned cluster is how you select towards the newest
+	// message; handing the pointer to the editor box mid-selection is not.
+	it("treats a drag into the cluster as the bottom edge", () => {
+		const { controller, selection, scrollTranscriptBy } = makeEdgeHarness();
+		controller.handleMouse({ button: "left", action: "press", row: 2, col: 1 });
+		controller.handleMouse({ button: "left", action: "drag", row: SCROLLABLE + 3, col: 1 });
+
+		expect(selection.isDragging).toBe(true);
+		expect(scrollTranscriptBy).toHaveBeenCalledWith(-1);
+	});
+
+	it("still gives the editor box a press that starts there", () => {
+		const { controller, selection, scrollTranscriptBy } = makeEdgeHarness();
+		controller.handleMouse({ button: "left", action: "press", row: SCROLLABLE + 3, col: 3 });
+
+		expect(selection.active).toBe(false);
+		expect(scrollTranscriptBy).not.toHaveBeenCalled();
+	});
+
+	it("releases the timer on dispose", () => {
+		const { controller, scrollTranscriptBy } = makeEdgeHarness();
+		controller.handleMouse({ button: "left", action: "press", row: 4, col: 1 });
+		controller.handleMouse({ button: "left", action: "drag", row: 1, col: 1 });
+		controller.dispose();
+		const calls = scrollTranscriptBy.mock.calls.length;
+
+		vi.advanceTimersByTime(500);
+
+		expect(scrollTranscriptBy.mock.calls.length).toBe(calls);
 	});
 });

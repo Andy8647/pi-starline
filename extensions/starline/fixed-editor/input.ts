@@ -39,6 +39,30 @@ export function parseMouseScroll(data: string): MouseScrollInput | undefined {
 export function parseMouseEvent(data: string): MouseEvent | undefined {
 	const match = SGR_MOUSE_RE.exec(data);
 	if (!match) return undefined;
+	return mouseEventFromMatch(match);
+}
+
+/**
+ * Parse *every* SGR mouse event in one chunk, in order.
+ *
+ * Pi hands its input listeners the raw stdin chunk without splitting it into
+ * sequences (see `TUI.handleInput`), and a terminal readily coalesces a burst
+ * of motion, wheel and release reports into a single read. Taking only the
+ * first match drops the rest, which is how a wheel event arriving mid-drag —
+ * behind a motion report in the same chunk — used to vanish.
+ */
+export function parseMouseEvents(data: string): MouseEvent[] {
+	const events: MouseEvent[] = [];
+	const pattern = new RegExp(SGR_MOUSE_RE.source, "g");
+	let match = pattern.exec(data);
+	while (match) {
+		events.push(mouseEventFromMatch(match));
+		match = pattern.exec(data);
+	}
+	return events;
+}
+
+function mouseEventFromMatch(match: RegExpExecArray): MouseEvent {
 	const code = Number(match[1]);
 	const col = Number(match[2]);
 	const row = Number(match[3]);

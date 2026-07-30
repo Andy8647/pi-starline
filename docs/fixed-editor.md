@@ -41,6 +41,12 @@ Mouse wheel scrolling is enabled by default when the fixed editor is on. Disable
 }
 ```
 
+A wheel notch goes to whatever the pointer is over:
+
+- **Over the transcript** — scrolls the transcript, as it always did.
+- **Over the input box** — scrolls the input box, when your message is longer than the box can show. Pi sizes that box at 30% of the terminal height (five lines at minimum) and re-derives its scroll position from the caret on every frame, so scrolling it moves the caret along with the text — the same thing holding the arrow keys would do. Once the box is scrollable the wheel stays with it, including at its top and bottom, rather than sliding on to the transcript mid-gesture.
+- **Over a one-line input box** — scrolls the transcript. With nothing to scroll in the box there is no point holding the notch.
+
 **Warning**: Mouse scroll enables SGR mouse reporting, which disables native terminal text selection, URL click-through, and tmux/Herdr scrollback for the Pi session. Toggle off if you need those features.
 
 ## Selection and copying
@@ -60,6 +66,8 @@ Drag-select in the transcript area works whenever the fixed editor is on.
 - `copyOnSelect: true` (default) — releasing the mouse copies the selection and clears the highlight. `copyNotice` controls the "copied to clipboard" toast.
 - `copyOnSelect: false` — the highlight stays after release and nothing is written to the clipboard. The editor's bottom border shows `N characters selected, ctrl+c to copy` until you act on it.
 - **Double click selects a word, triple click selects the line.** A word keeps `_-./` in it, so a path, a filename or a `src/foo.ts` reference comes out whole. A fourth click starts over as a plain click. Both follow the same `copyOnSelect` rule as a drag, and both work in the input box too. Pi has no mouse selection of its own; because Starline turns on mouse reporting to do this, the terminal's own double click no longer reaches the screen — in most terminals holding shift while dragging bypasses reporting and gives you the native selection back.
+- **A selection can run past the edge of the screen.** Dragging to the top or bottom row scrolls the transcript and keeps selecting, and it keeps going while you hold the pointer there — a trackpad reports nothing while your finger is still, so the scrolling is on a timer rather than on movement. Dragging down into the pinned editor counts as the bottom edge; the input box does not steal the pointer halfway through a selection.
+- **The wheel works during a drag too.** The selection's anchor is an absolute transcript line, so scrolling under it extends the selection instead of dropping it. Only an idle highlight is cleared by the wheel.
 - `ctrl+c` copies the current selection under either setting. With no selection it falls through to Pi's normal ctrl+c, so interrupting still works.
 - Right-clicking inside a selection copies it outright; right-clicking anywhere else falls through to the terminal's native context menu as before.
 - Any other keystroke dismisses the highlight, so it never lingers over text that has scrolled on.

@@ -6,6 +6,7 @@ import {
 	clampScrollOffset,
 	parseKeyboardScroll,
 	parseMouseEvent,
+	parseMouseEvents,
 	parseMouseScroll,
 } from "../extensions/starline/fixed-editor/input";
 import {
@@ -598,6 +599,30 @@ describe("input", () => {
 		});
 	});
 
+	// Pi hands its input listeners the raw stdin chunk, and a terminal readily
+	// coalesces a burst of reports into one read. Parsing only the first drops
+	// the rest — which is how a wheel notch arriving mid-drag used to vanish.
+	describe("parseMouseEvents", () => {
+		it("parses every event in a coalesced chunk, in order", () => {
+			const events = parseMouseEvents("\x1b[<32;10;5M\x1b[<32;11;5M\x1b[<64;11;5M\x1b[<0;11;5m");
+			expect(events).toEqual([
+				{ button: "left", action: "drag", col: 10, row: 5 },
+				{ button: "left", action: "drag", col: 11, row: 5 },
+				{ button: "wheel-up", action: "press", col: 11, row: 5 },
+				{ button: "left", action: "release", col: 11, row: 5 },
+			]);
+		});
+
+		it("agrees with the single-event parser on a lone sequence", () => {
+			expect(parseMouseEvents("\x1b[<64;1;1M")).toEqual([parseMouseEvent("\x1b[<64;1;1M")]);
+		});
+
+		it("returns nothing for input that carries no mouse report", () => {
+			expect(parseMouseEvents("\x1b[A")).toEqual([]);
+			expect(parseMouseEvents("hello")).toEqual([]);
+		});
+	});
+
 	describe("clampScrollOffset", () => {
 		it("clamps within range", () => {
 			expect(clampScrollOffset(5, 10)).toBe(5);
@@ -1121,5 +1146,103 @@ describe("selection", () => {
 			expect(result).toContain("https://example.com");
 			expect(result).not.toContain("\x1b[32m");
 		});
+	});
+});
+
+describe("where a wheel notch goes", () => {
+	const CONFIG = {
+		enabled: true,
+		mouseScroll: true,
+		copyNotice: false,
+		copyOnSelect: false,
+		hardwareCursor: false,
+		editorClickCursor: true,
+		editorPaddingY: 1,
+		editorTextColumn: 2,
+	};
+
+	/**
+	 * Give the fixture's editor a Pi-shaped text buffer. `lineCount` above the
+	 * visible window is what makes it scrollable at all.
+	 */
+	function makeScrollableEditor(lineCount: number) {
+		const lines = Array.from({ length: lineCount }, (_, index) => `input ${index}`);
+		return {
+			getText: () => lines.join("\n"),
+			setText() {},
+			handleInput() {},
+			state: { lines, cursorLine: 0, cursorCol: 0 },
+			scrollOffset: 0,
+			lastWidth: 40,
+			buildVisualLineMap: () =>
+				lines.map((line, logicalLine) => ({ logicalLine, startCol: 0, length: line.length })),
+		};
+	}
+
+	function setUp(lineCount: number) {
+		const fixture = makeValidPiFixture();
+		const editor = makeScrollableEditor(lineCount);
+		(fixture.cluster[2] as { children?: unknown[] }).children = [editor];
+		fixture.tui.focusedComponent = editor;
+		const capabilities = inspectPiTui(fixture.tui);
+		if (!capabilities) throw new Error("expected valid fixture");
+		const compositor = new TerminalSplitCompositor(capabilities, () => CONFIG);
+		expect(compositor.install()).toBe(true);
+		const render = fixture.tui.render as (width: number) => string[];
+		// One frame, so the compositor knows where the transcript ends.
+		const before = render(80);
+		return { fixture, editor, compositor, render, before };
+	}
+
+	/**
+	 * A row inside the pinned cluster. `terminal.rows` is patched to report the
+	 * scrollable region, so one past it is the first row the cluster owns.
+	 */
+	const clusterRow = (fixture: ReturnType<typeof makeValidPiFixture>) => fixture.terminal.rows + 1;
+
+	it("scrolls the transcript when the pointer is over it", () => {
+		const { fixture, render, before, compositor } = setUp(2);
+		fixture.getInputListener()?.("\x1b[<64;1;1M");
+		expect(render(80)).not.toEqual(before);
+		compositor.dispose();
+	});
+
+	// The editor's own scroll offset is what Pi renders from, so this is the only
+	// thing that moves the text inside the box.
+	it("scrolls the editor when the pointer is over a box with more text than it shows", () => {
+		const { fixture, editor, render, before, compositor } = setUp(40);
+		fixture.getInputListener()?.(`\x1b[<65;1;${clusterRow(fixture)}M`);
+		expect(editor.scrollOffset).toBeGreaterThan(0);
+		// And the transcript stayed where it was.
+		expect(render(80)).toEqual(before);
+		compositor.dispose();
+	});
+
+	it("hands the notch back to the transcript when the input box has nothing to scroll", () => {
+		const { fixture, editor, render, before, compositor } = setUp(2);
+		fixture.getInputListener()?.(`\x1b[<64;1;${clusterRow(fixture)}M`);
+		expect(editor.scrollOffset).toBe(0);
+		expect(render(80)).not.toEqual(before);
+		compositor.dispose();
+	});
+
+	it("scrolls the editor back up again", () => {
+		const { fixture, editor, compositor } = setUp(40);
+		const row = clusterRow(fixture);
+		fixture.getInputListener()?.(`\x1b[<65;1;${row}M`);
+		const scrolled = editor.scrollOffset;
+		fixture.getInputListener()?.(`\x1b[<64;1;${row}M`);
+		expect(editor.scrollOffset).toBeLessThan(scrolled);
+		compositor.dispose();
+	});
+
+	// A drag and the wheel arriving in one chunk is the ordinary case for a fast
+	// trackpad, and the wheel used to be dropped along with everything after the
+	// first report.
+	it("acts on a wheel notch that shares a chunk with a drag", () => {
+		const { fixture, render, before, compositor } = setUp(2);
+		fixture.getInputListener()?.("\x1b[<32;5;3M\x1b[<64;5;3M");
+		expect(render(80)).not.toEqual(before);
+		compositor.dispose();
 	});
 });

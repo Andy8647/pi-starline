@@ -14,8 +14,9 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 import { isBlankRow, renderCluster } from "./cluster";
+import { scrollEditorBy } from "./editor-scroll";
 import { resolveEditorInternals } from "./editor-text-cursor";
-import { clampScrollOffset, parseKeyboardScroll, parseMouseEvent } from "./input";
+import { clampScrollOffset, parseKeyboardScroll, parseMouseEvents } from "./input";
 import type {
 	PiFixedEditorCapabilities,
 	PiMethodCapability,
@@ -43,6 +44,9 @@ import {
 	setScrollRegion,
 } from "./terminal-modes";
 import type { ClusterRender, CompositorConfig } from "./types";
+
+/** Visual lines one wheel notch moves, for the transcript and the editor alike. */
+const WHEEL_STEP = 3;
 
 function replaceMethod(
 	capability: PiMethodCapability,
@@ -149,6 +153,7 @@ export class TerminalSplitCompositor {
 			requestRender: () => this.capabilities.requestRender?.(),
 			pauseMouseReporting: () => this.pauseMouseReporting(),
 			showCopyNotice: () => this.onCopy?.(),
+			scrollTranscriptBy: (delta) => this.scrollBy(delta),
 		});
 	}
 
@@ -268,6 +273,7 @@ export class TerminalSplitCompositor {
 	}
 
 	private restorePatchedCapabilities(): void {
+		this.selectionController.dispose();
 		restoreMethod(this.capabilities.writeMethod);
 		restoreMethod(this.capabilities.doRenderMethod);
 		restoreMethod(this.capabilities.renderMethod);
@@ -407,9 +413,10 @@ export class TerminalSplitCompositor {
 
 		const mouseScroll = this.getConfig().mouseScroll;
 		if (mouseScroll) {
-			const mouseEv = parseMouseEvent(data);
-			if (mouseEv) {
-				this.handleMouseEvent(mouseEv);
+			// One stdin chunk can carry a burst of reports; all of them count.
+			const mouseEvents = parseMouseEvents(data);
+			if (mouseEvents.length > 0) {
+				for (const mouseEv of mouseEvents) this.handleMouseEvent(mouseEv);
 				return { consume: true };
 			}
 		}
@@ -447,19 +454,48 @@ export class TerminalSplitCompositor {
 	}
 
 	private handleMouseEvent(ev: { button: string; action: string; col: number; row: number }): void {
-		// Wheel scroll.
-		if (ev.button === "wheel-up" && ev.action === "press") {
-			this.selectionController.clearSelection();
-			this.scrollBy(3);
-			return;
-		}
-		if (ev.button === "wheel-down" && ev.action === "press") {
-			this.selectionController.clearSelection();
-			this.scrollBy(-3);
+		if (ev.button === "wheel-up" || ev.button === "wheel-down") {
+			this.handleWheel(ev, ev.button === "wheel-up" ? -1 : 1);
 			return;
 		}
 
 		this.selectionController.handleMouse(ev);
+	}
+
+	/**
+	 * A wheel notch, given to whatever the pointer is over.
+	 *
+	 * `sign` is +1 for a downward notch. The transcript's offset counts backwards
+	 * from the bottom, so it moves against the sign; the editor's counts forwards
+	 * from the top of its own text, so it moves with it.
+	 */
+	private handleWheel(
+		ev: { button: string; action: string; col: number; row: number },
+		sign: number,
+	): void {
+		// Below the transcript is the cluster. An input box with more text than it
+		// can show takes the wheel; anything else passes it on, so a wheel over a
+		// one-line editor still scrolls the transcript as before.
+		if (this.visibleScrollableRows > 0 && ev.row > this.visibleScrollableRows) {
+			const editor = resolveEditorInternals(this.capabilities.cluster.editor?.target);
+			if (scrollEditorBy(editor, sign * WHEEL_STEP, this.getRawRows())) {
+				this.cachedClusterRender = null;
+				this.capabilities.requestRender?.();
+				return;
+			}
+		}
+
+		// A drag in progress keeps its selection: the anchor is an absolute
+		// transcript line, so scrolling under it is exactly how you reach text
+		// off screen. Only an idle selection is dropped, as it always was.
+		if (this.selectionController.isDragging()) {
+			const applied = this.scrollBy(-sign * WHEEL_STEP);
+			if (applied !== 0) this.selectionController.shiftDragEnd(applied);
+			return;
+		}
+
+		this.selectionController.clearSelection();
+		this.scrollBy(-sign * WHEEL_STEP);
 	}
 
 	/** Temporarily disable mouse reporting so the terminal's native context menu works. */
@@ -477,11 +513,17 @@ export class TerminalSplitCompositor {
 		}
 	}
 
-	private scrollBy(delta: number): void {
+	/**
+	 * Scroll the transcript. Returns how much of `delta` was actually applied,
+	 * which a drag needs in order to follow the text it is selecting.
+	 */
+	private scrollBy(delta: number): number {
 		const next = clampScrollOffset(this.scrollOffset + delta, this.maxScrollOffset);
-		if (next === this.scrollOffset) return;
+		if (next === this.scrollOffset) return 0;
+		const applied = next - this.scrollOffset;
 		this.scrollOffset = next;
 		this.capabilities.requestRender?.();
+		return applied;
 	}
 
 	private paintCluster(cluster: ClusterRender, rawRows: number, width: number): string {
