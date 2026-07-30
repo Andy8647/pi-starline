@@ -133,7 +133,7 @@ function isFramedRow(
 		if (line === undefined) return false;
 		if (!isFrameEdgeCell(line, col)) return isFrameRuleRow(line);
 		const known = cache.get(above);
-		if (known !== undefined) return known !== null && known.framed;
+		if (known !== undefined) return known?.framed ?? false;
 	}
 	return false;
 }
