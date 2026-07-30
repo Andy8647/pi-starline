@@ -111,6 +111,8 @@ export type FixedEditorConfig = {
 	copyNotice: boolean;
 	/** Copy on mouse release. When false the highlight waits for ctrl+c. */
 	copyOnSelect: boolean;
+	/** Clicking a tool box's frame or its expand hint expands that one box. */
+	clickToExpandTools: boolean;
 };
 
 export type ExtensionStatusPlacement = "off" | "left" | "middle" | "right";
@@ -374,6 +376,7 @@ export const defaultConfig: PolishedTuiConfig = {
 		mouseScroll: true,
 		copyNotice: true,
 		copyOnSelect: true,
+		clickToExpandTools: true,
 	},
 };
 
@@ -793,6 +796,10 @@ function normalizeFixedEditorConfig(record: Record<string, unknown>): FixedEdito
 			typeof record.copyOnSelect === "boolean"
 				? record.copyOnSelect
 				: defaultConfig.fixedEditor.copyOnSelect,
+		clickToExpandTools:
+			typeof record.clickToExpandTools === "boolean"
+				? record.clickToExpandTools
+				: defaultConfig.fixedEditor.clickToExpandTools,
 	};
 }
 
@@ -1240,6 +1247,10 @@ export function saveFixedEditorPatch(
 			...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
 			...(patch.mouseScroll !== undefined ? { mouseScroll: patch.mouseScroll } : {}),
 			...(patch.copyNotice !== undefined ? { copyNotice: patch.copyNotice } : {}),
+			...(patch.copyOnSelect !== undefined ? { copyOnSelect: patch.copyOnSelect } : {}),
+			...(patch.clickToExpandTools !== undefined
+				? { clickToExpandTools: patch.clickToExpandTools }
+				: {}),
 		};
 	});
 }

@@ -32,7 +32,7 @@ Every option Starline has. For the guide to the pinned editor, see [Fixed editor
 | `gitCommit` | object | `{ "hashLength": 7, "onlyDetached": true, "showTag": true }` | Starship `git_commit`-style options for the `gitCommit` footer segment. |
 | `gitMetrics` | object | `{ "onlyNonzero": true, "ignoreSubmodules": false }` | Starship `git_metrics`-style options for the `gitMetrics` footer segment. |
 | `extensionStatuses` | object | see [Pill footer](#pill-footer) | Placement, colour, and icon for third-party extension statuses. |
-| `fixedEditor` | object | `{ "enabled": false, "mouseScroll": true, "copyNotice": true, "copyOnSelect": true }` | Pins the editor and footer at the bottom of the terminal, see [Fixed editor](fixed-editor.md). |
+| `fixedEditor` | object | `{ "enabled": false, "mouseScroll": true, "copyNotice": true, "copyOnSelect": true, "clickToExpandTools": true }` | Pins the editor and footer at the bottom of the terminal, see [Fixed editor](fixed-editor.md). |
 
 User config lives at `~/.pi/agent/starline.json`. The file is optional: missing or invalid known values fall back to Starline defaults, unknown keys are ignored at runtime, and `/starline` can patch color-source settings, UI feature toggles, built-in footer segment visibility, and active third-party status placements.
 
@@ -213,7 +213,8 @@ Default config values — copy this and change any value you want:
 		"enabled": false,
 		"mouseScroll": true,
 		"copyNotice": true,
-		"copyOnSelect": true
+		"copyOnSelect": true,
+		"clickToExpandTools": true
 	}
 }
 ```

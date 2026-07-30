@@ -83,6 +83,27 @@ Inside the input box:
 
 Both need the fixed editor, and both reach into Pi internals that carry no compatibility promise. If a Pi release moves them, the click simply stops doing anything rather than breaking the editor.
 
+## Click a tool box to expand it (default on)
+
+`ctrl+o` expands every tool box at once. With the fixed editor on, clicking one box expands only that one.
+
+```json
+{
+	"fixedEditor": {
+		"enabled": true,
+		"clickToExpandTools": true
+	}
+}
+```
+
+- **What is clickable**: the box's border — the top and bottom rules, and the verticals down either side — and the `... (24 earlier lines, ctrl+o to expand)` hint row. Clicking again collapses it. The verticals matter once a box is open: an expanded box is often taller than the screen, and the side of the frame is the one target that is on every row of it.
+- **What is not**: the output rows inside the box. Double click still selects a word there and triple click still selects the line, which is worth more on a path or an error message than a toggle would be.
+- Works for every box Pi builds — built-in tools, MCP tools, bash, skills, custom entries — because it drives the same per-component `setExpanded` that `ctrl+o` fans out to. Restyled boxes (`pi-toolbox` and the like) are included.
+- `ctrl+o` still sets every box at once, so it overrides whatever you expanded by hand. Boxes that arrive later start collapsed, as before.
+- Needs `mouseScroll` on: that is what turns mouse reporting on in the first place.
+
+To find the box under the pointer, Starline records how many lines each chat component contributed while Pi renders the frame. When a component's own output does not add up to what its children reported, its ranges are discarded rather than guessed at, and the click does nothing.
+
 ## Conflicts and limitations
 
 - **Incompatible with** `pi-powerline-footer`, `@tifan/pi-fixed-editor`, and `pi-sticky-input`. These packages patch the same Pi TUI internals; only one rendering owner can be active at a time.

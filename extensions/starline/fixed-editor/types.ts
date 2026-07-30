@@ -33,6 +33,8 @@ export type CompositorConfig = {
 	hardwareCursor: boolean;
 	/** Clicking in the editor text moves the caret there. */
 	editorClickCursor: boolean;
+	/** Clicking a tool box's frame or its expand hint toggles that one box. */
+	clickToExpandTools: boolean;
 	/** Blank rows inside the editor box; needed to find its text rows. */
 	editorPaddingY: number;
 	/** Visible column where editor text starts, past the rail or prompt. */

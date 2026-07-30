@@ -467,6 +467,14 @@ function buildItems(
 				currentValue: featureValue(config.fixedEditor.copyNotice),
 				values: featureStateValues,
 			});
+			items.push({
+				id: "fixedEditorClickToExpandTools",
+				label: "Click to expand tools",
+				description:
+					"Click a tool box's border or its expand hint to expand that one box. Needs mouse scroll.",
+				currentValue: featureValue(config.fixedEditor.clickToExpandTools),
+				values: featureStateValues,
+			});
 		}
 		return items;
 	}
@@ -819,6 +827,14 @@ export function registerStarlineSettingsCommand(pi: ExtensionAPI, deps: Settings
 									settingsList.updateValue(id, newValue);
 									deps.requestRender();
 									ctx.ui.notify(`Copy notice: ${newValue}`, "info");
+									tui.requestRender();
+									return;
+								}
+								if (id === "fixedEditorClickToExpandTools" && isFeatureState(newValue)) {
+									deps.setFixedEditor({ clickToExpandTools: newValue === "enabled" }, ctx);
+									settingsList.updateValue(id, newValue);
+									deps.requestRender();
+									ctx.ui.notify(`Click to expand tools: ${newValue}`, "info");
 									tui.requestRender();
 									return;
 								}

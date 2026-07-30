@@ -15,6 +15,7 @@ import { visibleWidth } from "@earendil-works/pi-tui";
 import { type EditorBoxGeometry, findEditorBox, hitTestEditorBox } from "./editor-hit-test";
 import { positionEditorTextCursor } from "./editor-text-cursor";
 import { deleteEditorVisualRange } from "./editor-text-edit";
+import { isToggleTarget } from "./expandable";
 import { pasteExpandHintText } from "./paste-collapse";
 import {
 	highlightSelection,
@@ -33,6 +34,8 @@ export type SelectionControllerConfig = {
 	copyNotice: boolean;
 	/** Clicking in the editor text moves the cursor there. */
 	editorClickCursor: boolean;
+	/** Clicking a tool box's frame or its expand hint toggles that one box. */
+	clickToExpandTools: boolean;
 };
 
 export type SelectionHost = {
@@ -62,6 +65,8 @@ export type SelectionHost = {
 	 * history. Returns how much was actually applied, which is 0 at either end.
 	 */
 	scrollTranscriptBy(delta: number): number;
+	/** Expand or collapse whatever component owns this transcript line. */
+	toggleExpandableAt(line: number): boolean;
 };
 
 export type MouseEvent = { button: string; action: string; col: number; row: number };
@@ -385,6 +390,22 @@ export class SelectionController {
 		this.shiftDragEnd(applied);
 	}
 
+	/** Whether a click here means "toggle the box that owns this cell". */
+	private isToggleTargetPoint(line: number, col: number): boolean {
+		if (!this.host.getConfig().clickToExpandTools) return false;
+		const raw = this.host.getRootLines()[line];
+		return raw !== undefined && isToggleTarget(raw, col);
+	}
+
+	/**
+	 * A plain click on a tool box's frame or its expand hint toggles that box.
+	 * Returns false for anything else, so the click stays the no-op it was.
+	 */
+	private tryToggleExpandable(line: number, col: number): boolean {
+		if (!this.isToggleTargetPoint(line, col)) return false;
+		return this.host.toggleExpandableAt(line);
+	}
+
 	/**
 	 * Handle a key. Returns true when the key was consumed.
 	 *
@@ -450,7 +471,10 @@ export class SelectionController {
 
 		if (event.action === "press") {
 			const count = this.clickCount("transcript", line, col);
-			if (count > 1 && this.selectAtClick("transcript", line, col, count)) return;
+			// A second click on a toggle row is another toggle, not a word select:
+			// clicking a box shut right after opening it has to work.
+			const toggleTarget = this.isToggleTargetPoint(line, col);
+			if (count > 1 && !toggleTarget && this.selectAtClick("transcript", line, col, count)) return;
 			this.multiClick = false;
 			this.selection.start(line, col);
 			this.pressPoint = { line, col };
@@ -587,9 +611,12 @@ export class SelectionController {
 		this.selection.extend(line, col);
 		this.selection.setDragging(false);
 
-		// A press with no movement is a click, not an empty selection.
+		// A press with no movement is a click, not an empty selection. The frame
+		// and the expand hint of a tool box make it a toggle; everywhere else it
+		// stays the no-op it has always been.
 		if (!this.dragged) {
 			this.clear();
+			if (this.tryToggleExpandable(line, col)) return;
 			this.host.requestRender();
 			return;
 		}

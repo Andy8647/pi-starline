@@ -16,6 +16,7 @@ import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { isBlankRow, renderCluster } from "./cluster";
 import { scrollEditorBy } from "./editor-scroll";
 import { resolveEditorInternals } from "./editor-text-cursor";
+import { toggleExpanded } from "./expandable";
 import { clampScrollOffset, parseKeyboardScroll, parseMouseEvents } from "./input";
 import type {
 	PiFixedEditorCapabilities,
@@ -43,6 +44,7 @@ import {
 	SYNC_END,
 	setScrollRegion,
 } from "./terminal-modes";
+import { TranscriptIndex } from "./transcript-index";
 import type { ClusterRender, CompositorConfig } from "./types";
 
 /** Visual lines one wheel notch moves, for the transcript and the editor alike. */
@@ -125,6 +127,9 @@ export class TerminalSplitCompositor {
 	private mouseResumeTimer: ReturnType<typeof setTimeout> | null = null;
 	private cursorVisible = true;
 
+	/** Line ranges of the components behind the transcript, for click-to-expand. */
+	private readonly transcriptIndex: TranscriptIndex;
+
 	private readonly onCopy: (() => void) | null;
 	private readonly onDismissNotice: (() => void) | null;
 
@@ -140,6 +145,15 @@ export class TerminalSplitCompositor {
 		this.getConfig = getConfig;
 		this.onCopy = onCopy ?? null;
 		this.onDismissNotice = onDismissNotice ?? null;
+		this.transcriptIndex = new TranscriptIndex(
+			[
+				capabilities.cluster.status,
+				capabilities.cluster.aboveWidget,
+				capabilities.cluster.editor,
+				capabilities.cluster.belowWidget,
+				capabilities.cluster.footer,
+			].map((component) => component?.target),
+		);
 		this.selectionController = new SelectionController({
 			selection: this.selection,
 			getRootLines: () => this.rootLines,
@@ -154,6 +168,7 @@ export class TerminalSplitCompositor {
 			pauseMouseReporting: () => this.pauseMouseReporting(),
 			showCopyNotice: () => this.onCopy?.(),
 			scrollTranscriptBy: (delta) => this.scrollBy(delta),
+			toggleExpandableAt: (line) => this.toggleExpandableAt(line),
 		});
 	}
 
@@ -274,6 +289,8 @@ export class TerminalSplitCompositor {
 
 	private restorePatchedCapabilities(): void {
 		this.selectionController.dispose();
+		const rootChildren = this.rootChildren();
+		if (rootChildren) this.transcriptIndex.restore(rootChildren);
 		restoreMethod(this.capabilities.writeMethod);
 		restoreMethod(this.capabilities.doRenderMethod);
 		restoreMethod(this.capabilities.renderMethod);
@@ -365,7 +382,7 @@ export class TerminalSplitCompositor {
 		const cluster = this.getClusterRender(Math.max(1, width), rawRows);
 		const scrollableRows = Math.max(1, rawRows - cluster.lines.length);
 
-		const lines = this.callOriginalRender(Math.max(1, width));
+		const lines = this.renderIndexedRoot(Math.max(1, width));
 
 		// Pi's root render ends with rows of its own that carry nothing. Counting
 		// them as content pins the transcript to the top of the region and leaves
@@ -405,6 +422,48 @@ export class TerminalSplitCompositor {
 
 		// Apply selection highlight to visible lines.
 		return visible.map((line, i) => highlightSelection(line, origin + i, this.selection));
+	}
+
+	/**
+	 * Pi's root render, with the per-component line ranges recorded alongside it.
+	 *
+	 * The index is only as good as the pass that built it, so a throw leaves the
+	 * previous frame's ranges standing rather than a half-built set.
+	 */
+	private renderIndexedRoot(width: number): string[] {
+		const rootChildren = this.rootChildren();
+		if (!rootChildren) return this.callOriginalRender(width);
+		this.transcriptIndex.beginPass(rootChildren);
+		try {
+			const lines = this.callOriginalRender(width);
+			this.transcriptIndex.endPass();
+			return lines;
+		} catch (error) {
+			this.transcriptIndex.abortPass();
+			throw error;
+		}
+	}
+
+	private rootChildren(): unknown[] | null {
+		const children = Reflect.get(this.capabilities.tui, "children");
+		return Array.isArray(children) ? children : null;
+	}
+
+	/**
+	 * Expand or collapse the component covering this transcript line. Returns
+	 * false when the line belongs to nothing expandable, so the click can go on
+	 * to behave as it always did.
+	 */
+	private toggleExpandableAt(line: number): boolean {
+		if (!this.getConfig().clickToExpandTools) return false;
+		const node = this.transcriptIndex.hitTest(line);
+		if (!node) return false;
+		if (!toggleExpanded(node)) return false;
+		// The cluster is unaffected, but its cache is keyed on width and rows —
+		// neither of which changed — so drop it rather than let it go stale.
+		this.cachedClusterRender = null;
+		this.capabilities.requestRender?.();
+		return true;
 	}
 
 	private handleInput(data: string): { consume?: boolean; data?: string } | undefined {

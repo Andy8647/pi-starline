@@ -270,6 +270,7 @@ describe("Pi fixed-editor compatibility", () => {
 			copyOnSelect: true,
 			hardwareCursor: false,
 			editorClickCursor: true,
+			clickToExpandTools: true,
 			editorPaddingY: 1,
 			editorTextColumn: 2,
 		}));
@@ -320,6 +321,7 @@ describe("Pi fixed-editor compatibility", () => {
 			copyOnSelect: true,
 			hardwareCursor: false,
 			editorClickCursor: true,
+			clickToExpandTools: true,
 			editorPaddingY: 1,
 			editorTextColumn: 2,
 		}));
@@ -344,6 +346,7 @@ describe("Pi fixed-editor compatibility", () => {
 			copyOnSelect: true,
 			hardwareCursor: false,
 			editorClickCursor: true,
+			clickToExpandTools: true,
 			editorPaddingY: 1,
 			editorTextColumn: 2,
 		}));
@@ -382,6 +385,7 @@ describe("Pi fixed-editor compatibility", () => {
 			copyOnSelect: true,
 			hardwareCursor: true,
 			editorClickCursor: true,
+			clickToExpandTools: true,
 			editorPaddingY: 1,
 			editorTextColumn: 2,
 		}));
@@ -408,6 +412,7 @@ describe("Pi fixed-editor compatibility", () => {
 			copyOnSelect: true,
 			hardwareCursor: false,
 			editorClickCursor: true,
+			clickToExpandTools: true,
 			editorPaddingY: 1,
 			editorTextColumn: 2,
 		}));
@@ -437,6 +442,7 @@ describe("Pi fixed-editor compatibility", () => {
 				copyOnSelect: true,
 				hardwareCursor: false,
 				editorClickCursor: true,
+				clickToExpandTools: true,
 				editorPaddingY: 1,
 				editorTextColumn: 2,
 			}));
@@ -492,6 +498,7 @@ describe("Pi fixed-editor compatibility", () => {
 				copyOnSelect: true,
 				hardwareCursor: false,
 				editorClickCursor: true,
+				clickToExpandTools: true,
 				editorPaddingY: 1,
 				editorTextColumn: 2,
 			}));
@@ -1157,6 +1164,7 @@ describe("where a wheel notch goes", () => {
 		copyOnSelect: false,
 		hardwareCursor: false,
 		editorClickCursor: true,
+		clickToExpandTools: true,
 		editorPaddingY: 1,
 		editorTextColumn: 2,
 	};
@@ -1244,5 +1252,155 @@ describe("where a wheel notch goes", () => {
 		fixture.getInputListener()?.("\x1b[<32;5;3M\x1b[<64;5;3M");
 		expect(render(80)).not.toEqual(before);
 		compositor.dispose();
+	});
+});
+
+// The click has to reach the one component that drew the row under the pointer,
+// which means the compositor's line index has to agree with what Pi composed.
+describe("clicking a tool box in the transcript", () => {
+	const CONFIG = {
+		enabled: true,
+		mouseScroll: true,
+		copyNotice: false,
+		copyOnSelect: false,
+		hardwareCursor: false,
+		editorClickCursor: true,
+		clickToExpandTools: true,
+		editorPaddingY: 1,
+		editorTextColumn: 2,
+	};
+
+	/** A tool box: a frame, some output, and Pi's own expansion hook. */
+	function makeBox(label: string) {
+		const box = {
+			expanded: false,
+			setExpanded: vi.fn((expanded: boolean) => {
+				box.expanded = expanded;
+			}),
+			render: (width: number) => [
+				`╭${"─".repeat(Math.max(2, width - 2))}╮`,
+				`│ ${label} output`,
+				`│ ... (7 more lines, ctrl+o to expand)`,
+				`╰${"─".repeat(Math.max(2, width - 2))}╯`,
+			],
+		};
+		return box;
+	}
+
+	/**
+	 * A fixture whose root render is composed from its children the way
+	 * `Container.render` composes Pi's, with a chat container in front of the
+	 * pinned cluster.
+	 */
+	function setUp() {
+		const fixture = makeValidPiFixture();
+		const first = makeBox("first");
+		const second = makeBox("second");
+		const chat = {
+			children: [first, second],
+			render: (width: number) => chat.children.flatMap((child) => child.render(width)),
+		};
+		fixture.tui.children = [chat, ...fixture.cluster] as typeof fixture.tui.children;
+		fixture.rootRender.mockImplementation((width: number) =>
+			(fixture.tui.children as { render: (w: number) => string[] }[]).flatMap((child) =>
+				child.render(width),
+			),
+		);
+		const capabilities = inspectPiTui(fixture.tui);
+		if (!capabilities) throw new Error("expected valid fixture");
+		const compositor = new TerminalSplitCompositor(capabilities, () => CONFIG);
+		expect(compositor.install()).toBe(true);
+		const render = fixture.tui.render as (width: number) => string[];
+		render(80);
+		return { fixture, chat, first, second, compositor, render };
+	}
+
+	/**
+	 * Click a transcript row. The transcript is padded above when it is shorter
+	 * than the region, so the first box's top rule sits `padding + 1` rows down.
+	 */
+	function clickRow(fixture: ReturnType<typeof makeValidPiFixture>, boxRow: number) {
+		// Eight box rows against a taller region: the padding is the difference.
+		const padding = fixture.terminal.rows - 8;
+		const row = padding + boxRow;
+		fixture.getInputListener()?.(`\x1b[<0;3;${row}M`);
+		fixture.getInputListener()?.(`\x1b[<0;3;${row}m`);
+	}
+
+	it("expands the box whose frame was clicked, and only that one", () => {
+		const { fixture, first, second, compositor } = setUp();
+		clickRow(fixture, 1);
+		expect(first.setExpanded).toHaveBeenCalledWith(true);
+		expect(second.setExpanded).not.toHaveBeenCalled();
+		compositor.dispose();
+	});
+
+	it("collapses it again on a second click", () => {
+		const { fixture, first, compositor } = setUp();
+		clickRow(fixture, 1);
+		clickRow(fixture, 1);
+		expect(first.setExpanded).toHaveBeenLastCalledWith(false);
+		compositor.dispose();
+	});
+
+	it("reaches the second box, so the offsets are not off by a frame", () => {
+		const { fixture, first, second, compositor } = setUp();
+		// Rows 1-4 are the first box; the second box's top rule is row 5.
+		clickRow(fixture, 5);
+		expect(second.setExpanded).toHaveBeenCalledWith(true);
+		expect(first.setExpanded).not.toHaveBeenCalled();
+		compositor.dispose();
+	});
+
+	it("expands from the hint row too", () => {
+		const { fixture, first, compositor } = setUp();
+		clickRow(fixture, 3);
+		expect(first.setExpanded).toHaveBeenCalledWith(true);
+		compositor.dispose();
+	});
+
+	it("leaves a click on the output alone", () => {
+		const { fixture, first, compositor } = setUp();
+		clickRow(fixture, 2);
+		expect(first.setExpanded).not.toHaveBeenCalled();
+		compositor.dispose();
+	});
+
+	it("does nothing when the feature is off", () => {
+		const fixture = makeValidPiFixture();
+		const box = makeBox("only");
+		const chat = { children: [box], render: (width: number) => box.render(width) };
+		fixture.tui.children = [chat, ...fixture.cluster] as typeof fixture.tui.children;
+		fixture.rootRender.mockImplementation((width: number) =>
+			(fixture.tui.children as { render: (w: number) => string[] }[]).flatMap((child) =>
+				child.render(width),
+			),
+		);
+		const capabilities = inspectPiTui(fixture.tui);
+		if (!capabilities) throw new Error("expected valid fixture");
+		const compositor = new TerminalSplitCompositor(capabilities, () => ({
+			...CONFIG,
+			clickToExpandTools: false,
+		}));
+		expect(compositor.install()).toBe(true);
+		(fixture.tui.render as (width: number) => string[])(80);
+
+		const padding = fixture.terminal.rows - 4;
+		fixture.getInputListener()?.(`\x1b[<0;3;${padding + 1}M`);
+		fixture.getInputListener()?.(`\x1b[<0;3;${padding + 1}m`);
+
+		expect(box.setExpanded).not.toHaveBeenCalled();
+		compositor.dispose();
+	});
+
+	it("puts every render back on dispose", () => {
+		const { first, chat, compositor } = setUp();
+		const wrappedBox = first.render;
+		const wrappedChat = chat.render;
+		compositor.dispose();
+		expect(first.render).not.toBe(wrappedBox);
+		expect(chat.render).not.toBe(wrappedChat);
+		// And what is left is the component's own render, still working.
+		expect(first.render(80)).toHaveLength(4);
 	});
 });

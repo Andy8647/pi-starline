@@ -158,7 +158,7 @@ Settings live in `~/.pi/agent/starline.json`. The file is optional — anything 
 
 ## Fixed editor (experimental, opt-in)
 
-Pins the editor and footer to the bottom of the terminal while the transcript scrolls above, and adds mouse selection: drag to select, double-click a word, triple-click a line, click to move the caret.
+Pins the editor and footer to the bottom of the terminal while the transcript scrolls above, and adds mouse handling Pi has none of: drag to select (the transcript scrolls when the drag reaches an edge), double-click a word, triple-click a line, click to move the caret, click a tool box's border to expand just that box, and a wheel that scrolls whichever of the transcript or the input box the pointer is over.
 
 ```text
 /starline fixed-editor enable

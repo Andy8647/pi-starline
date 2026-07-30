@@ -145,6 +145,7 @@ function installFromProbe(
 				mouseScroll: getConfig().fixedEditor?.mouseScroll ?? false,
 				copyNotice: getConfig().fixedEditor?.copyNotice ?? true,
 				copyOnSelect: getConfig().fixedEditor?.copyOnSelect ?? true,
+				clickToExpandTools: getConfig().fixedEditor?.clickToExpandTools ?? true,
 				hardwareCursor: getConfig().editorCursor === "terminal",
 				editorClickCursor: getConfig().editorClickCursor,
 				editorPaddingY: getConfig().editorPaddingY,

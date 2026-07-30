@@ -13,6 +13,7 @@ type Config = {
 	copyOnSelect: boolean;
 	copyNotice: boolean;
 	editorClickCursor?: boolean;
+	clickToExpandTools?: boolean;
 };
 
 const TRANSCRIPT = ["first line here", "second line here", "third line here"];
@@ -25,7 +26,7 @@ function makeHarness(config: Config, lines: string[] = TRANSCRIPT) {
 		getRootLines: () => lines,
 		getVisibleRootStart: () => 0,
 		getVisibleScrollableRows: () => lines.length,
-		getConfig: () => ({ editorClickCursor: true, ...config }),
+		getConfig: () => ({ editorClickCursor: true, clickToExpandTools: true, ...config }),
 		getClusterLines: () => [],
 		getEditorPaddingY: () => 1,
 		getEditorTextColumn: () => 2,
@@ -40,6 +41,7 @@ function makeHarness(config: Config, lines: string[] = TRANSCRIPT) {
 			calls.notice++;
 		},
 		scrollTranscriptBy: () => 0,
+		toggleExpandableAt: () => false,
 	});
 	return { controller, selection, calls };
 }
@@ -220,7 +222,7 @@ describe("deleting an editor selection", () => {
 			getRootLines: () => TRANSCRIPT,
 			getVisibleRootStart: () => 0,
 			getVisibleScrollableRows: () => SCROLLABLE,
-			getConfig: () => ({ editorClickCursor: true, ...config }),
+			getConfig: () => ({ editorClickCursor: true, clickToExpandTools: true, ...config }),
 			getClusterLines: () => CLUSTER,
 			getEditorPaddingY: () => 1,
 			getEditorTextColumn: () => 2,
@@ -229,6 +231,7 @@ describe("deleting an editor selection", () => {
 			pauseMouseReporting: () => {},
 			showCopyNotice: () => {},
 			scrollTranscriptBy: () => 0,
+			toggleExpandableAt: () => false,
 		});
 		return { controller, editor, text: () => editor.state.lines.join("\n") };
 	}
@@ -578,7 +581,7 @@ describe("selecting inside the editor box", () => {
 			getRootLines: () => TRANSCRIPT,
 			getVisibleRootStart: () => 0,
 			getVisibleScrollableRows: () => SCROLLABLE,
-			getConfig: () => ({ editorClickCursor: true, ...config }),
+			getConfig: () => ({ editorClickCursor: true, clickToExpandTools: true, ...config }),
 			getClusterLines: () => CLUSTER,
 			getEditorPaddingY: () => 1,
 			getEditorTextColumn: () => 2,
@@ -593,6 +596,7 @@ describe("selecting inside the editor box", () => {
 				calls.notice++;
 			},
 			scrollTranscriptBy: () => 0,
+			toggleExpandableAt: () => false,
 		});
 		return { controller, calls };
 	}
@@ -727,6 +731,7 @@ describe("scrolling while a selection is in progress", () => {
 				copyOnSelect: false,
 				copyNotice: false,
 				editorClickCursor: true,
+				clickToExpandTools: true,
 			}),
 			getClusterLines: () => [],
 			getEditorPaddingY: () => 1,
@@ -736,6 +741,7 @@ describe("scrolling while a selection is in progress", () => {
 			pauseMouseReporting: () => {},
 			showCopyNotice: () => {},
 			scrollTranscriptBy,
+			toggleExpandableAt: () => false,
 		});
 		return { controller, selection, scrollTranscriptBy, getVisibleStart: () => visibleStart };
 	}
@@ -804,6 +810,7 @@ describe("dragging to the edge of the transcript", () => {
 				copyOnSelect: false,
 				copyNotice: false,
 				editorClickCursor: true,
+				clickToExpandTools: true,
 			}),
 			getClusterLines: () => [],
 			getEditorPaddingY: () => 1,
@@ -813,6 +820,7 @@ describe("dragging to the edge of the transcript", () => {
 			pauseMouseReporting: () => {},
 			showCopyNotice: () => {},
 			scrollTranscriptBy,
+			toggleExpandableAt: () => false,
 		});
 		return { controller, selection, scrollTranscriptBy, getVisibleStart: () => visibleStart };
 	}
@@ -925,5 +933,107 @@ describe("dragging to the edge of the transcript", () => {
 		vi.advanceTimersByTime(500);
 
 		expect(scrollTranscriptBy.mock.calls.length).toBe(calls);
+	});
+});
+
+describe("clicking a tool box to expand it", () => {
+	const RULE = "╭────────────────╮";
+	const HINT = "│ ... (24 earlier lines, ctrl+o to expand) │";
+	const LINES = ["chatter", RULE, "│ some output    │", HINT, "╰────────────────╯"];
+
+	function makeClickHarness(config: { clickToExpandTools?: boolean } = {}) {
+		const selection = new SelectionState();
+		const toggleExpandableAt = vi.fn((_line: number) => true);
+		const controller = new SelectionController({
+			selection,
+			getRootLines: () => LINES,
+			getVisibleRootStart: () => 0,
+			getVisibleScrollableRows: () => LINES.length,
+			getConfig: () => ({
+				copyOnSelect: true,
+				copyNotice: false,
+				editorClickCursor: true,
+				clickToExpandTools: config.clickToExpandTools ?? true,
+			}),
+			getClusterLines: () => [],
+			getEditorPaddingY: () => 1,
+			getEditorTextColumn: () => 2,
+			getEditorComponent: () => undefined,
+			requestRender: () => {},
+			pauseMouseReporting: () => {},
+			showCopyNotice: () => {},
+			scrollTranscriptBy: () => 0,
+			toggleExpandableAt,
+		});
+		return { controller, selection, toggleExpandableAt };
+	}
+
+	/** Click screen row `row` (1-based) without moving. */
+	function click(controller: InstanceType<typeof SelectionController>, row: number) {
+		controller.handleMouse({ button: "left", action: "press", row, col: 4 });
+		controller.handleMouse({ button: "left", action: "release", row, col: 4 });
+	}
+
+	it("toggles the box when the click lands on its frame", () => {
+		const { controller, toggleExpandableAt } = makeClickHarness();
+		click(controller, 2);
+		expect(toggleExpandableAt).toHaveBeenCalledWith(1);
+	});
+
+	it("toggles the box when the click lands on the expand hint", () => {
+		const { controller, toggleExpandableAt } = makeClickHarness();
+		click(controller, 4);
+		expect(toggleExpandableAt).toHaveBeenCalledWith(3);
+	});
+
+	// Body rows are worth more as text: double click for a word, triple for the line.
+	it("leaves a click on the output alone", () => {
+		const { controller, toggleExpandableAt } = makeClickHarness();
+		click(controller, 3);
+		expect(toggleExpandableAt).not.toHaveBeenCalled();
+	});
+
+	it("leaves ordinary transcript rows alone", () => {
+		const { controller, toggleExpandableAt } = makeClickHarness();
+		click(controller, 1);
+		expect(toggleExpandableAt).not.toHaveBeenCalled();
+	});
+
+	it("does nothing when the feature is off", () => {
+		const { controller, toggleExpandableAt } = makeClickHarness({ clickToExpandTools: false });
+		click(controller, 2);
+		expect(toggleExpandableAt).not.toHaveBeenCalled();
+	});
+
+	// A drag that happens to end on a border is a selection, not a click.
+	it("does not toggle at the end of a drag", () => {
+		const { controller, toggleExpandableAt } = makeClickHarness();
+		controller.handleMouse({ button: "left", action: "press", row: 3, col: 4 });
+		controller.handleMouse({ button: "left", action: "drag", row: 2, col: 4 });
+		controller.handleMouse({ button: "left", action: "release", row: 2, col: 4 });
+		expect(toggleExpandableAt).not.toHaveBeenCalled();
+	});
+
+	// The rules of an expanded box are easily off screen, so its side has to work.
+	it("toggles from a click on the box's vertical border", () => {
+		const { controller, toggleExpandableAt } = makeClickHarness();
+		controller.handleMouse({ button: "left", action: "press", row: 3, col: 1 });
+		controller.handleMouse({ button: "left", action: "release", row: 3, col: 1 });
+		expect(toggleExpandableAt).toHaveBeenCalledWith(2);
+	});
+
+	// Clicking a box shut right after opening it lands on the same cell inside the
+	// double-click window; a word select there would make the control one-way.
+	it("toggles again on a second click, rather than selecting the border", () => {
+		const { controller, toggleExpandableAt } = makeClickHarness();
+		click(controller, 2);
+		click(controller, 2);
+		expect(toggleExpandableAt).toHaveBeenCalledTimes(2);
+	});
+
+	it("copies nothing when a click toggles", () => {
+		const { controller } = makeClickHarness();
+		click(controller, 2);
+		expect(copyToClipboard).not.toHaveBeenCalled();
 	});
 });
