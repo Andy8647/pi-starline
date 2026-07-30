@@ -68,11 +68,13 @@ describe("deleteEditorVisualRange", () => {
 		expect(text(editor)).toBe("abcdefghijklqrst");
 	});
 
-	it("takes the scroll offset into account", () => {
+	// Rows are absolute — indices into the editor's whole text, which is how a
+	// selection stores them so that scrolling the box cannot move it.
+	it("counts rows through the whole text, not from the top of the box", () => {
 		const editor = makeEditor(["one", "two", "three"], 20);
 		editor.scrollOffset = 1;
 		deleteEditorVisualRange(editor, { visualRow: 0, visualCol: 0 }, { visualRow: 0, visualCol: 3 });
-		expect(text(editor)).toBe("one\n\nthree");
+		expect(text(editor)).toBe("\ntwo\nthree");
 	});
 
 	it("works whichever way round the two points come", () => {

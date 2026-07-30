@@ -1,5 +1,7 @@
 /**
- * Move Pi's editor cursor to a point the user clicked.
+ * Map between the editor's rendered rows and its own text: resolve a row and
+ * column to a point in the buffer, read a row's text back out, and move the
+ * cursor to a point the user clicked.
  *
  * Pi's editor lays its text out onto visual lines and keeps that mapping to
  * itself, and offers a way to read the cursor but not to move it. So this
@@ -74,13 +76,25 @@ export function resolveEditorInternals(root: unknown): unknown {
 	return undefined;
 }
 
+/** The editor's visual line map, or null when it cannot be read. */
+function visualLineMap(editor: EditorInternals, fallbackWidth: number): VisualLine[] | null {
+	const width = Math.max(1, editor.lastWidth ?? fallbackWidth);
+	const visualLines = editor.buildVisualLineMap?.(width);
+	return Array.isArray(visualLines) ? visualLines : null;
+}
+
 /**
- * Resolve a visual row/column of the rendered editor to a point in its text.
+ * Resolve an absolute visual row/column of the editor to a point in its text.
+ *
+ * Absolute means an index into the editor's whole visual line map, not into the
+ * rows currently on screen. Selection works in these coordinates so that
+ * scrolling the box does not move the text a selection is anchored to.
+ *
  * Returns null when the point is out of range or the editor cannot be read.
  */
-export function resolveEditorTextPoint(
+export function resolveEditorTextPointAt(
 	value: unknown,
-	visualRow: number,
+	absoluteRow: number,
 	visualCol: number,
 	fallbackWidth = 80,
 ): EditorTextPoint | null {
@@ -88,13 +102,8 @@ export function resolveEditorTextPoint(
 	if (!editor?.state?.lines) return null;
 
 	try {
-		const width = Math.max(1, editor.lastWidth ?? fallbackWidth);
-		const visualLines = editor.buildVisualLineMap?.(width);
-		if (!Array.isArray(visualLines)) return null;
-
-		// Visual rows are relative to what is on screen; the map is absolute.
-		const row = visualRow + (editor.scrollOffset ?? 0);
-		const visual = visualLines[row];
+		const visualLines = visualLineMap(editor, fallbackWidth);
+		const visual = visualLines?.[absoluteRow];
 		if (!visual) return null;
 
 		const text = editor.state.lines[visual.logicalLine] ?? "";
@@ -106,6 +115,73 @@ export function resolveEditorTextPoint(
 	} catch {
 		return null;
 	}
+}
+
+/**
+ * Resolve a visual row/column of the *rendered* editor to a point in its text —
+ * a row as counted from the top of the box, which is what a click gives.
+ * Returns null when the point is out of range or the editor cannot be read.
+ */
+export function resolveEditorTextPoint(
+	value: unknown,
+	visualRow: number,
+	visualCol: number,
+	fallbackWidth = 80,
+): EditorTextPoint | null {
+	const editor = asEditorInternals(value);
+	if (!editor) return null;
+	return resolveEditorTextPointAt(
+		value,
+		visualRow + (editor.scrollOffset ?? 0),
+		visualCol,
+		fallbackWidth,
+	);
+}
+
+/**
+ * Plain text of one absolute visual row of the editor, or null when the row is
+ * out of range or the editor cannot be read.
+ *
+ * This is the editor's own buffer, not the rendered row: it carries no cursor
+ * highlight and no frame, and it is there whether the row is on screen or
+ * scrolled out of the box — which is what lets a selection reach past what the
+ * box shows.
+ */
+export function editorVisualRowText(
+	value: unknown,
+	absoluteRow: number,
+	fallbackWidth = 80,
+): string | null {
+	const editor = asEditorInternals(value);
+	if (!editor?.state?.lines) return null;
+
+	try {
+		const visualLines = visualLineMap(editor, fallbackWidth);
+		const visual = visualLines?.[absoluteRow];
+		if (!visual) return null;
+		const text = editor.state.lines[visual.logicalLine] ?? "";
+		return text.slice(visual.startCol, visual.startCol + visual.length);
+	} catch {
+		return null;
+	}
+}
+
+/** How many visual rows the editor's text lays out to, or 0 when unreadable. */
+export function editorVisualRowCount(value: unknown, fallbackWidth = 80): number {
+	const editor = asEditorInternals(value);
+	if (!editor) return 0;
+	try {
+		return visualLineMap(editor, fallbackWidth)?.length ?? 0;
+	} catch {
+		return 0;
+	}
+}
+
+/** The editor's current scroll position, in visual rows from the top. */
+export function editorScrollOffset(value: unknown): number {
+	const editor = asEditorInternals(value);
+	const offset = editor?.scrollOffset;
+	return typeof offset === "number" && Number.isFinite(offset) ? Math.max(0, offset) : 0;
 }
 
 /**

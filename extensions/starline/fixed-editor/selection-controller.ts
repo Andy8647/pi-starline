@@ -13,7 +13,12 @@ import { copyToClipboard } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
 
 import { type EditorBoxGeometry, findEditorBox, hitTestEditorBox } from "./editor-hit-test";
-import { positionEditorTextCursor } from "./editor-text-cursor";
+import { scrollEditorWindow } from "./editor-scroll";
+import {
+	editorScrollOffset,
+	editorVisualRowText,
+	positionEditorTextCursor,
+} from "./editor-text-cursor";
 import { deleteEditorVisualRange } from "./editor-text-edit";
 import { isToggleTarget } from "./expandable";
 import { pasteExpandHintText } from "./paste-collapse";
@@ -103,9 +108,12 @@ function isTypedText(data: string): boolean {
 export class SelectionController {
 	private readonly host: SelectionHost;
 	/**
-	 * Selection inside the editor box, over rendered cluster lines rather than
-	 * transcript lines. Kept separate from the transcript selection so the two
-	 * never overlap; starting one drops the other.
+	 * Selection inside the editor box, in the editor's own coordinates: absolute
+	 * visual rows — indices into its whole text, not into the rows on screen —
+	 * paired with screen columns, which the box's chrome fixes in place. Anchoring
+	 * to the text rather than to the rows is what lets the box scroll under a
+	 * drag. Kept separate from the transcript selection so the two never overlap;
+	 * starting one drops the other.
 	 */
 	private readonly editorSelection = new SelectionState();
 	/** Which area the live selection belongs to. */
@@ -132,6 +140,9 @@ export class SelectionController {
 	private lastDragPoint: { line: number; col: number } | null = null;
 	private autoScrollTimer: ReturnType<typeof setInterval> | null = null;
 	private autoScrollDelta = 0;
+	private autoScrollArea: "transcript" | "editor" = "transcript";
+	/** Column of the live editor drag, for the rows the edge timer brings in. */
+	private lastEditorDragCol: number | null = null;
 
 	constructor(host: SelectionHost) {
 		this.host = host;
@@ -149,13 +160,50 @@ export class SelectionController {
 	private selectedText(): string {
 		if (this.area === "editor") {
 			if (!this.editorSelection.active) return "";
-			return this.editorSelection.getSelectedText(
-				this.host.getClusterLines(),
-				this.editorTextColumn(),
-			);
+			const span = this.editorSelection.span;
+			if (!span) return "";
+			// Rows are absolute, so this reaches text the box has scrolled past.
+			const rows: string[] = [];
+			for (let row = span.start.line; row <= span.end.line; row++) {
+				rows[row] = this.editorRowText(row) ?? "";
+			}
+			return this.editorSelection.getSelectedText(rows, this.editorTextColumn());
 		}
 		if (!this.selection.active) return "";
 		return this.selection.getSelectedText(this.host.getRootLines());
+	}
+
+	/** The editor's scroll position, which maps its rows onto the box's. */
+	private editorScrollOffset(): number {
+		return editorScrollOffset(this.host.getEditorComponent());
+	}
+
+	/**
+	 * One row of the editor as text, padded out to where the box puts it so that
+	 * screen columns line up with it.
+	 *
+	 * Straight from the editor's buffer, which is the only place a row that has
+	 * scrolled out of the box still exists. When the editor cannot be read at all
+	 * this falls back to the rendered row, which is as far as a selection could
+	 * reach before and keeps a Pi that has moved its internals working.
+	 */
+	private editorRowText(absoluteRow: number): string | undefined {
+		const pad = " ".repeat(this.editorTextColumn());
+		const text = editorVisualRowText(this.host.getEditorComponent(), absoluteRow);
+		if (text !== null) return pad + text;
+		const box = this.editorBox;
+		if (!box) return undefined;
+		const clusterRow = absoluteRow - this.editorScrollOffset() + box.firstTextRow;
+		return this.host.getClusterLines()[clusterRow];
+	}
+
+	/**
+	 * The absolute editor row a cluster row shows, or null when that cluster row
+	 * is not part of the editor's text.
+	 */
+	private editorRowAt(clusterRow: number, box: EditorBoxGeometry): number | null {
+		if (clusterRow < box.firstTextRow || clusterRow > box.lastTextRow) return null;
+		return clusterRow - box.firstTextRow + this.editorScrollOffset();
 	}
 
 	private get activeSelection(): SelectionState {
@@ -171,15 +219,23 @@ export class SelectionController {
 	}
 
 	/**
-	 * Paint the editor-box selection onto cluster lines. Only ever highlights
-	 * inside the box, because that is the only place the selection can reach.
+	 * Paint the editor-box selection onto cluster lines.
+	 *
+	 * The selection is in editor rows and the cluster is in screen rows, so each
+	 * line is looked up by the editor row it is currently showing. Rows outside
+	 * the box are left alone: the frame and the footer are not text, and a
+	 * selection that runs past what the box shows must not spill onto them.
 	 */
 	highlightCluster(lines: string[]): string[] {
 		if (!this.editorSelection.active) return lines;
 		const minCol = this.editorTextColumn();
-		return lines.map((line, index) =>
-			highlightSelection(line, index, this.editorSelection, minCol),
-		);
+		const box = this.editorBox;
+		if (!box) return lines;
+		return lines.map((line, index) => {
+			const row = this.editorRowAt(index, box);
+			if (row === null) return line;
+			return highlightSelection(line, row, this.editorSelection, minCol);
+		});
 	}
 
 	/**
@@ -221,12 +277,12 @@ export class SelectionController {
 		const box = this.editorBox;
 		if (!span || !box) return false;
 
-		const start = hitTestEditorBox(box, span.start.line, Math.max(span.start.col, box.textColumn));
-		// The exclusive end can sit one past the last cell of a row, which is
-		// still a valid text position — hit-testing only rejects columns left of
-		// the text, and rows are already clamped to the box.
-		const end = hitTestEditorBox(box, span.end.line, Math.max(span.end.col, box.textColumn));
-		if (!start || !end) return false;
+		// Rows are already the editor's own; only the columns need the chrome
+		// taken off them. The exclusive end can sit one past the last cell of a
+		// row, which is still a valid text position.
+		const textCol = (col: number) => Math.max(0, Math.max(col, box.textColumn) - box.textColumn);
+		const start = { visualRow: span.start.line, visualCol: textCol(span.start.col) };
+		const end = { visualRow: span.end.line, visualCol: textCol(span.end.col) };
 
 		if (!deleteEditorVisualRange(this.host.getEditorComponent(), start, end)) return false;
 
@@ -265,8 +321,7 @@ export class SelectionController {
 		col: number,
 		count: number,
 	): boolean {
-		const raw =
-			area === "editor" ? this.host.getClusterLines()[line] : this.host.getRootLines()[line];
+		const raw = area === "editor" ? this.editorRowText(line) : this.host.getRootLines()[line];
 		if (raw === undefined) return false;
 		const minCol = area === "editor" ? this.editorTextColumn() : 0;
 		const plain = stripAnsiForText(raw);
@@ -305,6 +360,7 @@ export class SelectionController {
 
 	private clear(): void {
 		this.stopAutoScroll();
+		this.lastEditorDragCol = null;
 		this.selection.clear();
 		this.editorSelection.clear();
 		this.pressPoint = null;
@@ -358,27 +414,38 @@ export class SelectionController {
 	}
 
 	/**
-	 * Keep scrolling while the drag sits on an edge row, and stop as soon as it
-	 * moves off one or the transcript runs out.
+	 * Start, keep or stop the edge timer for whichever area is being dragged in.
+	 * A delta of 0 means the pointer is off the edge, so the scrolling stops.
 	 */
-	private updateAutoScroll(row: number, scrollableRows: number): void {
-		const delta = row <= 1 ? AUTO_SCROLL_STEP : row >= scrollableRows ? -AUTO_SCROLL_STEP : 0;
+	private updateAutoScroll(area: "transcript" | "editor", delta: number): void {
 		if (delta === 0) {
 			this.stopAutoScroll();
 			return;
 		}
+		this.autoScrollArea = area;
 		this.autoScrollDelta = delta;
 		this.autoScrollStep();
-		if (this.autoScrollTimer || !this.isDragging()) return;
+		if (this.autoScrollTimer || !this.autoScrollStillDragging()) return;
 		this.autoScrollTimer = setInterval(() => this.autoScrollStep(), AUTO_SCROLL_MS);
 		// Never let the timer be the reason the process stays up.
 		const timer = this.autoScrollTimer as { unref?: () => void };
 		timer.unref?.();
 	}
 
+	/** Whether the drag the timer was started for is still going. */
+	private autoScrollStillDragging(): boolean {
+		return this.autoScrollArea === "editor"
+			? this.area === "editor" && this.editorSelection.isDragging
+			: this.isDragging();
+	}
+
 	private autoScrollStep(): void {
-		if (!this.isDragging()) {
+		if (!this.autoScrollStillDragging()) {
 			this.stopAutoScroll();
+			return;
+		}
+		if (this.autoScrollArea === "editor") {
+			this.editorAutoScrollStep();
 			return;
 		}
 		const applied = this.host.scrollTranscriptBy(this.autoScrollDelta);
@@ -388,6 +455,43 @@ export class SelectionController {
 			return;
 		}
 		this.shiftDragEnd(applied);
+	}
+
+	/**
+	 * One notch of scrolling inside the box, extending the selection to the row
+	 * that comes into view at the edge.
+	 *
+	 * The box's own height is the window to scroll by — Pi derives the same number
+	 * from the terminal height, but the geometry is here and cannot disagree with
+	 * what was rendered. Nothing has to be shifted afterwards: the selection is in
+	 * the editor's coordinates, so the anchor stays exactly where it was.
+	 */
+	private editorAutoScrollStep(): void {
+		const box = this.editorBox;
+		if (!box) {
+			this.stopAutoScroll();
+			return;
+		}
+		const visibleLines = box.lastTextRow - box.firstTextRow + 1;
+		const before = this.editorScrollOffset();
+		if (!scrollEditorWindow(this.host.getEditorComponent(), this.autoScrollDelta, visibleLines)) {
+			this.stopAutoScroll();
+			return;
+		}
+		const after = this.editorScrollOffset();
+		if (after === before) {
+			// Either end of the text: nothing more to reveal.
+			this.stopAutoScroll();
+			return;
+		}
+		const edgeRow = this.autoScrollDelta < 0 ? box.firstTextRow : box.lastTextRow;
+		const row = this.editorRowAt(edgeRow, box);
+		if (row !== null) {
+			const col = this.lastEditorDragCol ?? box.textColumn;
+			this.dragged = true;
+			this.editorSelection.extend(row, col);
+		}
+		this.host.requestRender();
 	}
 
 	/** Whether a click here means "toggle the box that owns this cell". */
@@ -456,7 +560,10 @@ export class SelectionController {
 		// it pins to the bottom row and scrolls, rather than handing the pointer
 		// to the editor box halfway through a selection.
 		const escapingDrag = this.isDragging() && event.action !== "press";
-		if (event.row > scrollableRows && !escapingDrag) {
+		// The mirror of that: a drag inside the box keeps the pointer even when it
+		// wanders up over the transcript, where it counts as the box's top edge.
+		const editorDrag = this.area === "editor" && this.editorSelection.isDragging;
+		if ((event.row > scrollableRows && !escapingDrag) || (editorDrag && event.action !== "press")) {
 			this.handleEditorMouse(event, scrollableRows);
 			return;
 		}
@@ -497,7 +604,10 @@ export class SelectionController {
 			this.lastDragPoint = { line, col };
 			this.selection.extend(line, col);
 			this.host.requestRender();
-			this.updateAutoScroll(row, scrollableRows);
+			this.updateAutoScroll(
+				"transcript",
+				row <= 1 ? AUTO_SCROLL_STEP : row >= scrollableRows ? -AUTO_SCROLL_STEP : 0,
+			);
 			return;
 		}
 
@@ -533,12 +643,13 @@ export class SelectionController {
 			this.area = "editor";
 			this.editorBox = box;
 
-			const count = this.clickCount("editor", clusterRow, clusterCol);
-			if (count > 1 && this.selectAtClick("editor", clusterRow, clusterCol, count)) return;
+			const pressRow = point.visualRow + this.editorScrollOffset();
+			const count = this.clickCount("editor", pressRow, clusterCol);
+			if (count > 1 && this.selectAtClick("editor", pressRow, clusterCol, count)) return;
 			this.multiClick = false;
 
-			this.editorSelection.start(clusterRow, clusterCol);
-			this.pressPoint = { line: clusterRow, col: clusterCol };
+			this.editorSelection.start(pressRow, clusterCol);
+			this.pressPoint = { line: pressRow, col: clusterCol };
 			this.dragged = false;
 			this.host.requestRender();
 			return;
@@ -554,20 +665,45 @@ export class SelectionController {
 		// never onto a row that is not editor text.
 		const box = this.editorBox;
 		const col = Math.max(box.textColumn, clusterCol);
-		const row = Math.min(Math.max(clusterRow, box.firstTextRow), box.lastTextRow);
+		const clampedRow = Math.min(Math.max(clusterRow, box.firstTextRow), box.lastTextRow);
+		const row = this.editorRowAt(clampedRow, box) ?? 0;
 
 		if (event.action === "drag" && this.editorSelection.isDragging) {
 			if (this.pressPoint && (this.pressPoint.line !== row || this.pressPoint.col !== col)) {
 				this.dragged = true;
 			}
+			this.lastEditorDragCol = col;
 			this.editorSelection.extend(row, col);
 			this.host.requestRender();
+			this.updateEditorAutoScroll(clusterRow, box);
 			return;
 		}
 
 		if (event.action === "release" && this.editorSelection.isDragging) {
+			this.stopAutoScroll();
 			this.finishEditorDrag(row, col, clusterRow, clusterCol);
 		}
+	}
+
+	/**
+	 * Keep scrolling the box while a drag is held past the rows it shows, so a
+	 * selection can run through a draft taller than the box.
+	 *
+	 * Past, not on: the box has chrome above and below it, so a pointer that has
+	 * left the text is something we can actually see — unlike the transcript,
+	 * where the terminal clamps its reports at the screen edge and sitting on the
+	 * edge row is the only signal there is. Dragging along the first or last row
+	 * of the box therefore selects, as it would anywhere else, and it takes the
+	 * frame, the footer or the transcript above to start pulling.
+	 */
+	private updateEditorAutoScroll(clusterRow: number, box: EditorBoxGeometry): void {
+		const delta =
+			clusterRow < box.firstTextRow
+				? -AUTO_SCROLL_STEP
+				: clusterRow > box.lastTextRow
+					? AUTO_SCROLL_STEP
+					: 0;
+		this.updateAutoScroll("editor", delta);
 	}
 
 	private finishEditorDrag(row: number, col: number, clusterRow: number, clusterCol: number): void {

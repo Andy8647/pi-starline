@@ -17,7 +17,7 @@
 import {
 	type EditorInternals,
 	type EditorTextPoint,
-	resolveEditorTextPoint,
+	resolveEditorTextPointAt,
 } from "./editor-text-cursor";
 
 function asEditorInternals(value: unknown): EditorInternals | null {
@@ -33,10 +33,11 @@ function comparePoints(a: EditorTextPoint, b: EditorTextPoint): number {
 }
 
 /**
- * Delete the text between two points of the rendered editor, given as visual
- * row/column pairs — the same coordinates a click is hit-tested into. `end` is
- * exclusive. Returns false without touching anything when the range cannot be
- * resolved or comes out empty.
+ * Delete the text between two points of the editor, given as absolute visual
+ * row/column pairs — rows counted through the editor's whole text rather than
+ * from the top of the box, which is how a selection stores them so that
+ * scrolling cannot move it. `end` is exclusive. Returns false without touching
+ * anything when the range cannot be resolved or comes out empty.
  */
 export function deleteEditorVisualRange(
 	value: unknown,
@@ -49,8 +50,8 @@ export function deleteEditorVisualRange(
 	if (!editor?.state || !lines) return false;
 
 	try {
-		const a = resolveEditorTextPoint(editor, start.visualRow, start.visualCol, fallbackWidth);
-		const b = resolveEditorTextPoint(editor, end.visualRow, end.visualCol, fallbackWidth);
+		const a = resolveEditorTextPointAt(editor, start.visualRow, start.visualCol, fallbackWidth);
+		const b = resolveEditorTextPointAt(editor, end.visualRow, end.visualCol, fallbackWidth);
 		if (!a || !b) return false;
 
 		const [from, to] = comparePoints(a, b) <= 0 ? [a, b] : [b, a];

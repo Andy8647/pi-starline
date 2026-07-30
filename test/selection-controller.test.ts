@@ -1037,3 +1037,244 @@ describe("clicking a tool box to expand it", () => {
 		expect(copyToClipboard).not.toHaveBeenCalled();
 	});
 });
+
+/**
+ * Selecting a draft that is longer than the box shows.
+ *
+ * The box is a window onto the draft, so the interesting cases are the ones
+ * where the selection and the window disagree: a box already scrolled, and a
+ * drag that pulls it further. The selection lives in the editor's own rows, so
+ * these assert the text that comes out — the only thing that proves the
+ * coordinates survived the scrolling.
+ */
+describe("selecting a draft that scrolls", () => {
+	const RULE = "─".repeat(40);
+	const SCROLLABLE = 5;
+	/** Cluster row `r` (0-based) is screen row SCROLLABLE + r + 1. */
+	const clusterScreenRow = (clusterRow: number) => SCROLLABLE + clusterRow + 1;
+	/** Six lines of draft in a box that shows three of them. */
+	const DRAFT = ["alpha one", "bravo two", "charlie three", "delta four", "echo five", "foxtrot"];
+	const WINDOW = 3;
+
+	function makeHarness(options: { scrollOffset?: number; copyOnSelect?: boolean } = {}) {
+		const editor = {
+			state: { lines: [...DRAFT], cursorLine: 0, cursorCol: 0 },
+			lastWidth: 38,
+			scrollOffset: options.scrollOffset ?? 0,
+			preferredVisualCol: null as number | null,
+			snappedFromCursorCol: null as number | null,
+			pushUndoSnapshot: vi.fn(),
+			setCursorCol: (col: number) => {
+				editor.state.cursorCol = col;
+			},
+			onChange: vi.fn(),
+			buildVisualLineMap: () =>
+				editor.state.lines.map((line, logicalLine) => ({
+					logicalLine,
+					startCol: 0,
+					length: line.length,
+				})),
+		};
+		// The box, rendered from whatever the editor is currently showing.
+		const cluster = () => {
+			const window = editor.state.lines.slice(editor.scrollOffset, editor.scrollOffset + WINDOW);
+			return [RULE, "│ ", ...window.map((line) => `│ ${line}`), "│ ", "│ meta", RULE, "footer"];
+		};
+		const selection = new SelectionState();
+		const controller = new SelectionController({
+			selection,
+			getRootLines: () => TRANSCRIPT,
+			getVisibleRootStart: () => 0,
+			getVisibleScrollableRows: () => SCROLLABLE,
+			getConfig: () => ({
+				copyOnSelect: options.copyOnSelect ?? true,
+				copyNotice: false,
+				editorClickCursor: true,
+				clickToExpandTools: true,
+			}),
+			getClusterLines: cluster,
+			getEditorPaddingY: () => 1,
+			getEditorTextColumn: () => 2,
+			getEditorComponent: () => editor,
+			requestRender: () => {},
+			pauseMouseReporting: () => {},
+			showCopyNotice: () => {},
+			scrollTranscriptBy: () => 0,
+			toggleExpandableAt: () => false,
+		});
+		return { controller, editor, cluster, selection };
+	}
+
+	/**
+	 * Cluster rows of the box: 0 is its top rule, 1 blank padding, 2-4 the text,
+	 * 5 padding, 6 the metadata row, 7 the bottom rule, 8 the footer.
+	 */
+	const textRow = (indexInWindow: number) => clusterScreenRow(2 + indexInWindow);
+	/** The box's top rule — the nearest row above its text. */
+	const aboveBox = clusterScreenRow(0);
+	/** The blank row under its text, the nearest row below. */
+	const belowBox = clusterScreenRow(5);
+
+	const press = (c: InstanceType<typeof SelectionController>, row: number, col: number) =>
+		c.handleMouse({ button: "left", action: "press", row, col });
+	const dragTo = (c: InstanceType<typeof SelectionController>, row: number, col: number) =>
+		c.handleMouse({ button: "left", action: "drag", row, col });
+	const releaseAt = (c: InstanceType<typeof SelectionController>, row: number, col: number) =>
+		c.handleMouse({ button: "left", action: "release", row, col });
+
+	beforeEach(() => {
+		copyToClipboard.mockClear();
+		vi.useFakeTimers();
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	// A box scrolled into the middle of the draft: its first row on screen is the
+	// third row of the text, and a selection has to know the difference.
+	it("copies the row that is on screen, not the one of the same number", () => {
+		const { controller } = makeHarness({ scrollOffset: 2 });
+		press(controller, textRow(0), 3);
+		dragTo(controller, textRow(0), 40);
+		releaseAt(controller, textRow(0), 40);
+
+		expect(copyToClipboard).toHaveBeenCalledWith("charlie three");
+	});
+
+	it("highlights the row it is on, not the row it would be on unscrolled", () => {
+		const { controller, cluster } = makeHarness({ scrollOffset: 2, copyOnSelect: false });
+		press(controller, textRow(1), 3);
+		dragTo(controller, textRow(1), 12);
+
+		const painted = controller.highlightCluster(cluster());
+		expect(painted[3]).toContain("\x1b[48;5;240m");
+		expect(painted[2]).not.toContain("\x1b[48;5;240m");
+	});
+
+	it("keeps the highlight off the frame and the footer", () => {
+		const { controller, cluster } = makeHarness({ scrollOffset: 2, copyOnSelect: false });
+		press(controller, textRow(0), 3);
+		dragTo(controller, textRow(2), 12);
+
+		const painted = controller.highlightCluster(cluster());
+		expect(painted[0]).toBe(RULE);
+		expect(painted[7]).toBe(RULE);
+		expect(painted[8]).toBe("footer");
+	});
+
+	// A drag along the last row of the box is still just a selection: the box has
+	// chrome below it, so there is a real "past the text" to wait for.
+	it("does not scroll while the drag is still on a text row", () => {
+		const { controller, editor } = makeHarness();
+		press(controller, textRow(0), 3);
+		dragTo(controller, textRow(2), 3);
+
+		expect(editor.scrollOffset).toBe(0);
+	});
+
+	// The point of the coordinate change: a drag held past the text pulls the
+	// draft up under it and keeps selecting.
+	it("scrolls the box when the drag is held past its text", () => {
+		const { controller, editor } = makeHarness();
+		press(controller, textRow(0), 3);
+		dragTo(controller, belowBox, 3);
+
+		expect(editor.scrollOffset).toBeGreaterThan(0);
+	});
+
+	it("selects the rows the scrolling brings in", () => {
+		const { controller, editor } = makeHarness();
+		press(controller, textRow(0), 3);
+		dragTo(controller, belowBox, 40);
+		vi.advanceTimersByTime(500);
+		releaseAt(controller, belowBox, 40);
+
+		expect(editor.scrollOffset).toBe(DRAFT.length - WINDOW);
+		expect(copyToClipboard).toHaveBeenCalledWith(DRAFT.join("\n"));
+	});
+
+	it("scrolls back up when the drag is held above its text", () => {
+		const { controller, editor } = makeHarness({ scrollOffset: 3 });
+		press(controller, textRow(2), 3);
+		dragTo(controller, aboveBox, 3);
+		vi.advanceTimersByTime(500);
+
+		expect(editor.scrollOffset).toBe(0);
+	});
+
+	it("stops at the end of the draft rather than spinning", () => {
+		const { controller, editor } = makeHarness();
+		press(controller, textRow(0), 3);
+		dragTo(controller, belowBox, 3);
+		vi.advanceTimersByTime(2000);
+
+		expect(editor.scrollOffset).toBe(DRAFT.length - WINDOW);
+	});
+
+	it("stops when the drag comes back inside the text", () => {
+		const { controller, editor } = makeHarness();
+		press(controller, textRow(0), 3);
+		dragTo(controller, belowBox, 3);
+		dragTo(controller, textRow(1), 3);
+		const settled = editor.scrollOffset;
+		vi.advanceTimersByTime(500);
+
+		expect(editor.scrollOffset).toBe(settled);
+	});
+
+	it("stops on release", () => {
+		const { controller, editor } = makeHarness();
+		press(controller, textRow(0), 3);
+		dragTo(controller, belowBox, 3);
+		releaseAt(controller, belowBox, 3);
+		const settled = editor.scrollOffset;
+		vi.advanceTimersByTime(500);
+
+		expect(editor.scrollOffset).toBe(settled);
+	});
+
+	it("stops on dispose", () => {
+		const { controller, editor } = makeHarness();
+		press(controller, textRow(0), 3);
+		dragTo(controller, belowBox, 3);
+		controller.dispose();
+		const settled = editor.scrollOffset;
+		vi.advanceTimersByTime(500);
+
+		expect(editor.scrollOffset).toBe(settled);
+	});
+
+	// A drag that wanders up over the transcript is still the box's drag: it
+	// counts as the top edge instead of throwing the selection away.
+	it("treats a drag up over the transcript as the box's top edge", () => {
+		const { controller, editor, selection } = makeHarness({ scrollOffset: 3 });
+		press(controller, textRow(2), 3);
+		dragTo(controller, 2, 3);
+
+		// The transcript selection is untouched; the box scrolled instead.
+		expect(selection.active).toBe(false);
+		expect(editor.scrollOffset).toBeLessThan(3);
+	});
+
+	it("deletes a selection that runs past what the box shows", () => {
+		const { controller, editor } = makeHarness({ copyOnSelect: false });
+		press(controller, textRow(0), 3);
+		dragTo(controller, belowBox, 40);
+		vi.advanceTimersByTime(500);
+		releaseAt(controller, belowBox, 40);
+		expect(controller.handleKey("\x7f")).toBe(true);
+
+		expect(editor.state.lines).toEqual([""]);
+	});
+
+	it("counts the characters it would copy, scrolled rows included", () => {
+		const { controller } = makeHarness({ copyOnSelect: false });
+		press(controller, textRow(0), 3);
+		dragTo(controller, belowBox, 40);
+		vi.advanceTimersByTime(500);
+		releaseAt(controller, belowBox, 40);
+
+		expect(controller.hintText()).toContain(`${DRAFT.join("\n").length} characters selected`);
+	});
+});

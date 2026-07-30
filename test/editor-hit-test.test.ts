@@ -7,8 +7,12 @@ import {
 	isEditorRule,
 } from "../extensions/starline/fixed-editor/editor-hit-test";
 import {
+	editorScrollOffset,
+	editorVisualRowCount,
+	editorVisualRowText,
 	positionEditorTextCursor,
 	resolveEditorInternals,
+	resolveEditorTextPointAt,
 	supportsEditorTextCursor,
 } from "../extensions/starline/fixed-editor/editor-text-cursor";
 
@@ -269,5 +273,106 @@ describe("resolveEditorInternals", () => {
 		const b: Record<string, unknown> = { children: [a] };
 		a.children = [b];
 		expect(resolveEditorInternals(a)).toBeUndefined();
+	});
+});
+
+/**
+ * Reading the editor by absolute visual row.
+ *
+ * Absolute means an index into the editor's whole text rather than into the rows
+ * on screen. Selection works in these coordinates so that scrolling the box
+ * cannot move the text a drag is anchored to — and so that a selection can reach
+ * rows the box is not currently showing.
+ */
+describe("reading the editor by absolute row", () => {
+	/** A draft that wraps: three logical lines over four visual rows. */
+	function makeEditor(scrollOffset = 0) {
+		return {
+			state: { lines: ["hello world", "second", "third"], cursorLine: 0, cursorCol: 0 },
+			scrollOffset,
+			lastWidth: 6,
+			buildVisualLineMap: () => [
+				{ logicalLine: 0, startCol: 0, length: 6 },
+				{ logicalLine: 0, startCol: 6, length: 5 },
+				{ logicalLine: 1, startCol: 0, length: 6 },
+				{ logicalLine: 2, startCol: 0, length: 5 },
+			],
+		};
+	}
+
+	describe("editorVisualRowText", () => {
+		it("reads a row of a wrapped line as its own row", () => {
+			const editor = makeEditor();
+			expect(editorVisualRowText(editor, 0)).toBe("hello ");
+			expect(editorVisualRowText(editor, 1)).toBe("world");
+			expect(editorVisualRowText(editor, 2)).toBe("second");
+		});
+
+		// The scroll position is exactly what absolute coordinates ignore.
+		it("reads the same row whatever the box is showing", () => {
+			expect(editorVisualRowText(makeEditor(2), 0)).toBe("hello ");
+		});
+
+		it("is null past the end of the text", () => {
+			expect(editorVisualRowText(makeEditor(), 4)).toBeNull();
+			expect(editorVisualRowText(makeEditor(), -1)).toBeNull();
+		});
+
+		it("is null for anything that is not a Pi editor", () => {
+			expect(editorVisualRowText(undefined, 0)).toBeNull();
+			expect(editorVisualRowText({}, 0)).toBeNull();
+		});
+
+		it("is null when the editor throws rather than taking the session down", () => {
+			const editor = {
+				state: { lines: ["a"] },
+				buildVisualLineMap: () => {
+					throw new Error("nope");
+				},
+			};
+			expect(editorVisualRowText(editor, 0)).toBeNull();
+		});
+	});
+
+	describe("editorVisualRowCount", () => {
+		it("counts visual rows, not logical lines", () => {
+			expect(editorVisualRowCount(makeEditor())).toBe(4);
+		});
+
+		it("is zero for an editor it cannot read", () => {
+			expect(editorVisualRowCount(undefined)).toBe(0);
+			expect(editorVisualRowCount({})).toBe(0);
+		});
+	});
+
+	describe("editorScrollOffset", () => {
+		it("reads the offset", () => {
+			expect(editorScrollOffset(makeEditor(2))).toBe(2);
+		});
+
+		it("falls back to the top for anything unreadable or nonsense", () => {
+			expect(editorScrollOffset(undefined)).toBe(0);
+			expect(editorScrollOffset({})).toBe(0);
+			const editor = makeEditor();
+			(editor as { scrollOffset: unknown }).scrollOffset = Number.NaN;
+			expect(editorScrollOffset(editor)).toBe(0);
+		});
+	});
+
+	describe("resolveEditorTextPointAt", () => {
+		it("resolves a row of a wrapped line to a point in the text", () => {
+			const editor = makeEditor();
+			expect(resolveEditorTextPointAt(editor, 1, 2)).toEqual({ line: 0, index: 8 });
+		});
+
+		// The relative resolver behind click-to-caret adds the offset; this one
+		// must not, or a scrolled box would delete and select the wrong rows.
+		it("ignores the scroll position", () => {
+			expect(resolveEditorTextPointAt(makeEditor(2), 0, 3)).toEqual({ line: 0, index: 3 });
+		});
+
+		it("is null past the end of the text", () => {
+			expect(resolveEditorTextPointAt(makeEditor(), 9, 0)).toBeNull();
+		});
 	});
 });

@@ -62,15 +62,23 @@ function cursorVisualRow(visualLines: VisualLine[], line: number, col: number): 
  * on to the transcript at the boundary would make the box feel like it slipped.
  */
 export function scrollEditorBy(value: unknown, delta: number, terminalRows: number): boolean {
+	return scrollEditorWindow(value, delta, editorVisibleLines(terminalRows));
+}
+
+/**
+ * The same, for a caller that already knows how many rows the box shows — the
+ * box's own geometry, rather than Pi's formula for it.
+ */
+export function scrollEditorWindow(value: unknown, delta: number, visibleLines: number): boolean {
 	const editor = asScrollableEditor(value);
 	if (!editor) return false;
+	if (visibleLines < 1) return false;
 
 	try {
 		const width = Math.max(1, editor.lastWidth ?? 80);
 		const visualLines = editor.buildVisualLineMap(width);
 		if (!Array.isArray(visualLines) || visualLines.length === 0) return false;
 
-		const visibleLines = editorVisibleLines(terminalRows);
 		const maxOffset = visualLines.length - visibleLines;
 		// The whole input fits: there is no scrolling to be done here.
 		if (maxOffset <= 0) return false;

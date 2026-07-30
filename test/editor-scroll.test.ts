@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
 	editorVisibleLines,
 	scrollEditorBy,
+	scrollEditorWindow,
 } from "../extensions/starline/fixed-editor/editor-scroll";
 
 /** Rows whose 30% window is exactly 6 visual lines. */
@@ -106,5 +107,36 @@ describe("scrollEditorBy", () => {
 			},
 		};
 		expect(scrollEditorBy(editor, 3, ROWS)).toBe(false);
+	});
+});
+
+// A drag knows the box's height from its own geometry, which cannot disagree
+// with what was rendered the way a second guess at Pi's formula could.
+describe("scrollEditorWindow", () => {
+	it("scrolls by the window it is given rather than the terminal height", () => {
+		const editor = makeEditor(10);
+		expect(scrollEditorWindow(editor, 1, 3)).toBe(true);
+		expect(editor.scrollOffset).toBe(1);
+		// 10 rows in a window of 3: the last window starts at 7.
+		expect(scrollEditorWindow(editor, 99, 3)).toBe(true);
+		expect(editor.scrollOffset).toBe(7);
+	});
+
+	it("declines when the window already shows everything", () => {
+		const editor = makeEditor(3);
+		expect(scrollEditorWindow(editor, 1, 3)).toBe(false);
+		expect(editor.scrollOffset).toBe(0);
+	});
+
+	it("declines a window that could not show anything", () => {
+		expect(scrollEditorWindow(makeEditor(10), 1, 0)).toBe(false);
+	});
+
+	it("agrees with the wheel path for the same window", () => {
+		const wheel = makeEditor(12);
+		const dragged = makeEditor(12);
+		scrollEditorBy(wheel, 3, ROWS);
+		scrollEditorWindow(dragged, 3, editorVisibleLines(ROWS));
+		expect(dragged.scrollOffset).toBe(wheel.scrollOffset);
 	});
 });
