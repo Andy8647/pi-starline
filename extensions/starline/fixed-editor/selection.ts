@@ -9,6 +9,8 @@
 
 import { visibleWidth } from "@earendil-works/pi-tui";
 
+import { type ContentSpan, frameContentSpan, stripTrailingFrame } from "./frame";
+
 /** ANSI / OSC escape sequence patterns for stripping. */
 const ANSI_RE = /\u001b\[[0-9;?]*[ -/]*[@-~]/g;
 const OSC_RE = /\u001b\][^\u0007]*(?:\u0007|\u001b\\)/g;
@@ -119,6 +121,30 @@ function comparePoints(a: { line: number; col: number }, b: { line: number; col:
 	return a.line === b.line ? a.col - b.col : a.line - b.line;
 }
 
+/** Nothing on the line but frame, so there is nothing to select on it at all. */
+type Chrome = "chrome";
+
+/**
+ * Narrow a line's selected range to the part of it that is text.
+ *
+ * A frame is chrome: a selection running through a tool box, the input box or a
+ * previous message should neither light its borders up nor copy them out. The
+ * columns come from `frame.ts`, which only calls a line framed when the run it
+ * belongs to is capped by a rule — so a markdown table, whose pipes are its
+ * content, keeps every one of them.
+ */
+function narrowToSpan(
+	range: { startCol: number; endCol: number } | null,
+	span: ContentSpan | null,
+): { startCol: number; endCol: number } | Chrome | null {
+	if (!range) return null;
+	if (!span) return "chrome";
+	const startCol = Math.max(range.startCol, span.startCol);
+	const endCol = Math.min(range.endCol, span.endCol);
+	if (endCol <= startCol) return null;
+	return { startCol, endCol };
+}
+
 /** Track an in-progress drag selection over transcript lines. */
 export class SelectionState {
 	private anchor: { line: number; col: number } | null = null;
@@ -212,14 +238,21 @@ export class SelectionState {
 
 		const selected: string[] = [];
 		for (let i = b.start.line; i <= b.end.line; i++) {
+			const span = frameContentSpan(lines, i);
+			// A rule row is chrome all the way across: it leaves no line behind,
+			// rather than a line of box drawing.
+			if (!span) continue;
 			const plain = stripAnsi(extractOsc8Links(lines[i] ?? ""));
-			const range = this.getRangeForLine(i, minCol);
+			// The frame's left edge goes through the range, where it stops the
+			// selection the way the editor box's rail does.
+			const range = this.getRangeForLine(i, Math.max(minCol, span.startCol));
 			if (!range) {
 				selected.push("");
 				continue;
 			}
 			const { startCol, endCol } = range;
-			selected.push(sliceColumns(plain, startCol, endCol));
+			const text = sliceColumns(plain, startCol, endCol);
+			selected.push(span.framed ? stripTrailingFrame(text) : text);
 		}
 		return selected
 			.join("\n")
@@ -249,9 +282,14 @@ export function highlightSelection(
 	lineIndex: number,
 	selection: SelectionState,
 	minCol = 0,
+	span?: ContentSpan | null,
 ): string {
-	const range = selection.getRangeForLine(lineIndex, minCol);
-	if (!range) return line;
+	const raw = selection.getRangeForLine(lineIndex, minCol);
+	// The span belongs to the line being painted, which is not always the line
+	// the selection counts by: in the editor box the selection is in editor rows
+	// and the line is a row of the cluster. So the caller resolves it.
+	const range = span === undefined ? raw : narrowToSpan(raw, span);
+	if (!range || range === "chrome") return line;
 
 	const maxCol = visibleWidth(line);
 	const startCol = Math.max(0, Math.min(range.startCol, maxCol));

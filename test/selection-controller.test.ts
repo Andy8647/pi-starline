@@ -3,7 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const copyToClipboard = vi.fn(async (_text: string) => {});
 vi.mock("@earendil-works/pi-coding-agent", () => ({ copyToClipboard }));
 
-const { SelectionState } = await import("../extensions/starline/fixed-editor/selection");
+const { highlightSelection, SelectionState } = await import(
+	"../extensions/starline/fixed-editor/selection"
+);
+const { frameContentSpan } = await import("../extensions/starline/fixed-editor/frame");
 const { overlayHintOnBorder, SelectionController } = await import(
 	"../extensions/starline/fixed-editor/selection-controller"
 );
@@ -1276,5 +1279,101 @@ describe("selecting a draft that scrolls", () => {
 		releaseAt(controller, belowBox, 40);
 
 		expect(controller.hintText()).toContain(`${DRAFT.join("\n").length} characters selected`);
+	});
+});
+
+/**
+ * Selecting across a tool box.
+ *
+ * A frame is chrome, the same as the input box's rail: a selection running
+ * through a box should copy what is in it, not the box drawing around it.
+ */
+describe("a selection that runs through a tool box", () => {
+	const LINES = [
+		"assistant says something",
+		"╭────────────────────────╮",
+		"│ $ rg -n 'foo' src      │",
+		"│                        │",
+		"│ src/a.ts:12: foo()     │",
+		"╰────────────────────────╯",
+		"and carries on afterwards",
+	];
+
+	function makeBoxHarness(config: Config = { copyOnSelect: true, copyNotice: false }) {
+		const selection = new SelectionState();
+		const controller = new SelectionController({
+			selection,
+			getRootLines: () => LINES,
+			getVisibleRootStart: () => 0,
+			getVisibleScrollableRows: () => LINES.length,
+			getConfig: () => ({ editorClickCursor: true, clickToExpandTools: true, ...config }),
+			getClusterLines: () => [],
+			getEditorPaddingY: () => 1,
+			getEditorTextColumn: () => 2,
+			getEditorComponent: () => undefined,
+			requestRender: () => {},
+			pauseMouseReporting: () => {},
+			showCopyNotice: () => {},
+			scrollTranscriptBy: () => 0,
+			toggleExpandableAt: () => false,
+		});
+		return { controller, selection };
+	}
+
+	function dragOver(
+		controller: InstanceType<typeof SelectionController>,
+		from: number,
+		to: number,
+	) {
+		controller.handleMouse({ button: "left", action: "press", row: from, col: 1 });
+		controller.handleMouse({ button: "left", action: "drag", row: to, col: 40 });
+		controller.handleMouse({ button: "left", action: "release", row: to, col: 40 });
+	}
+
+	it("copies what is in the box without the box", () => {
+		const { controller } = makeBoxHarness();
+		dragOver(controller, 1, 7);
+
+		const copied = String(copyToClipboard.mock.calls[0]?.[0]);
+		expect(copied).not.toContain("│");
+		expect(copied).not.toContain("╭");
+		expect(copied).not.toContain("╰");
+		expect(copied).toContain("$ rg -n 'foo' src");
+		expect(copied).toContain("src/a.ts:12: foo()");
+	});
+
+	// The rules are chrome all the way across, so they leave nothing behind —
+	// while the blank row inside the box is a paragraph break and stays.
+	it("drops the rules but keeps the box's own blank row", () => {
+		const { controller } = makeBoxHarness();
+		dragOver(controller, 2, 5);
+
+		expect(String(copyToClipboard.mock.calls[0]?.[0])).toBe(
+			"$ rg -n 'foo' src\n\nsrc/a.ts:12: foo()",
+		);
+	});
+
+	it("keeps the text on either side of the box", () => {
+		const { controller } = makeBoxHarness();
+		dragOver(controller, 1, 7);
+
+		const copied = String(copyToClipboard.mock.calls[0]?.[0]);
+		expect(copied.startsWith("assistant says something")).toBe(true);
+		expect(copied.endsWith("and carries on afterwards")).toBe(true);
+	});
+
+	it("leaves the frame unhighlighted", () => {
+		const { controller, selection } = makeBoxHarness({ copyOnSelect: false, copyNotice: false });
+		dragOver(controller, 2, 5);
+
+		const painted = LINES.map((line, index) =>
+			highlightSelection(line, index, selection, 0, frameContentSpan(LINES, index)),
+		);
+		// The rules are untouched, and a row's own verticals stay outside the tint.
+		expect(painted[1]).toBe(LINES[1]);
+		expect(painted[5]).toBe(LINES[5]);
+		expect(painted[2].startsWith("│")).toBe(true);
+		expect(painted[2].endsWith("│")).toBe(true);
+		expect(painted[2]).toContain("\x1b[48;5;240m");
 	});
 });

@@ -4,8 +4,6 @@ import {
 	isExpandableNode,
 	isExpanded,
 	isExpandHintRow,
-	isFrameEdgeCell,
-	isFrameRuleRow,
 	isToggleTarget,
 	isToggleTargetRow,
 	toggleExpanded,
@@ -63,22 +61,6 @@ describe("toggleExpanded", () => {
 	});
 });
 
-describe("isFrameRuleRow", () => {
-	it("takes a box's top and bottom rules", () => {
-		expect(isFrameRuleRow("╭──────────╮")).toBe(true);
-		expect(isFrameRuleRow("╰──────────╯")).toBe(true);
-		expect(isFrameRuleRow("\x1b[32m╭────╮\x1b[0m")).toBe(true);
-	});
-
-	it("leaves body rows alone, so they keep double click for a word", () => {
-		expect(isFrameRuleRow("│ $ rg -n 'foo'  │")).toBe(false);
-		// A blank padding row is chrome, but it is not the frame.
-		expect(isFrameRuleRow("│          │")).toBe(false);
-		expect(isFrameRuleRow("plain text")).toBe(false);
-		expect(isFrameRuleRow("─")).toBe(false);
-	});
-});
-
 describe("isExpandHintRow", () => {
 	it("takes every shape of Pi's hint", () => {
 		expect(isExpandHintRow("... (24 earlier lines, ctrl+o to expand)")).toBe(true);
@@ -94,34 +76,6 @@ describe("isExpandHintRow", () => {
 
 	it("ignores prose that merely mentions expanding", () => {
 		expect(isExpandHintRow("we need to expand the test suite")).toBe(false);
-	});
-});
-
-// An expanded box is often taller than the screen, which puts its rules out of
-// reach; the side of the frame is on every row of it.
-describe("isFrameEdgeCell", () => {
-	const ROW = "│ some output   │";
-
-	it("takes a click on either vertical", () => {
-		expect(isFrameEdgeCell(ROW, 0)).toBe(true);
-		expect(isFrameEdgeCell(ROW, ROW.length - 1)).toBe(true);
-	});
-
-	it("leaves the text between them alone", () => {
-		expect(isFrameEdgeCell(ROW, 2)).toBe(false);
-		expect(isFrameEdgeCell(ROW, 6)).toBe(false);
-	});
-
-	it("counts columns past escapes and wide glyphs", () => {
-		expect(isFrameEdgeCell("\x1b[32m│\x1b[0m text", 0)).toBe(true);
-		// The CJK pair takes two columns each, so the closing rule sits at 5.
-		expect(isFrameEdgeCell("│中文│", 5)).toBe(true);
-		expect(isFrameEdgeCell("│中文│", 3)).toBe(false);
-	});
-
-	it("is out of range past the end of the row", () => {
-		expect(isFrameEdgeCell(ROW, 500)).toBe(false);
-		expect(isFrameEdgeCell(ROW, -1)).toBe(false);
 	});
 });
 

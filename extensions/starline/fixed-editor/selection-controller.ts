@@ -21,6 +21,7 @@ import {
 } from "./editor-text-cursor";
 import { deleteEditorVisualRange } from "./editor-text-edit";
 import { isToggleTarget } from "./expandable";
+import { frameContentSpan } from "./frame";
 import { pasteExpandHintText } from "./paste-collapse";
 import {
 	highlightSelection,
@@ -234,7 +235,14 @@ export class SelectionController {
 		return lines.map((line, index) => {
 			const row = this.editorRowAt(index, box);
 			if (row === null) return line;
-			return highlightSelection(line, row, this.editorSelection, minCol);
+			// The span is the cluster line's; the row is the editor's.
+			return highlightSelection(
+				line,
+				row,
+				this.editorSelection,
+				minCol,
+				frameContentSpan(lines, index),
+			);
 		});
 	}
 

@@ -17,6 +17,7 @@ import { isBlankRow, renderCluster } from "./cluster";
 import { scrollEditorBy } from "./editor-scroll";
 import { resolveEditorInternals } from "./editor-text-cursor";
 import { toggleExpanded } from "./expandable";
+import { frameContentSpan } from "./frame";
 import { clampScrollOffset, parseKeyboardScroll, parseMouseEvents } from "./input";
 import type {
 	PiFixedEditorCapabilities,
@@ -420,8 +421,12 @@ export class TerminalSplitCompositor {
 		this.visibleRootStart = origin;
 		this.visibleScrollableRows = scrollableRows;
 
-		// Apply selection highlight to visible lines.
-		return visible.map((line, i) => highlightSelection(line, origin + i, this.selection));
+		// Apply selection highlight to visible lines, minus any box chrome they
+		// carry: a frame is not text, so a selection neither lights it up nor
+		// copies it out.
+		return visible.map((line, i) =>
+			highlightSelection(line, origin + i, this.selection, 0, frameContentSpan(lines, origin + i)),
+		);
 	}
 
 	/**
