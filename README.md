@@ -140,6 +140,8 @@ pi install git:github.com/Andy8647/pi-starline
 
 Coming from pi-zentui? Run `mv ~/.pi/agent/zentui.json ~/.pi/agent/starline.json` to carry your config over — Starline does not read the old file automatically. Inside it, rename any `colorMode: "zentui"` value to `colorMode: "themed"`.
 
+What changed in each version: **[Releases](https://github.com/Andy8647/pi-starline/releases)**.
+
 ## Config
 
 Settings live in `~/.pi/agent/starline.json`. The file is optional — anything missing falls back to a default, and unknown keys are ignored at runtime.
