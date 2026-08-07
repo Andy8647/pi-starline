@@ -11,6 +11,7 @@ import {
 import type { PolishedTuiConfig } from "./config";
 import { applyEditorCursorStyleToLines } from "./editor-cursor";
 import { renderEditorMetadataFormat } from "./editor-metadata-format";
+import { pasteExpandHintText } from "./fixed-editor/paste-collapse";
 import {
 	EDITOR_ACCENT_FALLBACK,
 	EDITOR_BORDER_FALLBACK,
@@ -126,6 +127,23 @@ function getEditorChromeWidths(config: PolishedTuiConfig, uiTheme: Theme, reset:
 		rail,
 		railWidth: config.features.copyFriendly ? visibleWidth(prompt) : visibleWidth(rail),
 	};
+}
+
+/**
+ * The right side of the metadata row: vim mode, the paste-expand hint, or both.
+ *
+ * The hint used to live on the editor's bottom border, drawn there by the fixed
+ * editor's compositor. Pi 0.84 supersedes the fixed editor, so the hint needs a
+ * home that does not depend on it — and the border is not it, because
+ * `isHorizontalBorder` requires an unbroken rule to find the frame again. The
+ * metadata row is always rendered, even when `editorMetadataFormat` is blank,
+ * so the hint shows up whatever the user has done to that template.
+ */
+function composeRightStatus(vimStatus: string | undefined, uiTheme: Theme): string | undefined {
+	const hint = pasteExpandHintText();
+	if (!hint) return vimStatus;
+	const styled = safeThemeFg(uiTheme, "muted", hint);
+	return vimStatus ? `${vimStatus} ⋅ ${styled}` : styled;
 }
 
 function composeMetadataLine(left: string, right: string | undefined, width: number): string {
@@ -304,8 +322,9 @@ function renderPolishedFrame({
 		uiTheme,
 		config,
 	);
-	const copyFriendlyMeta = composeMetadataLine(meta, rightStatus, Math.max(0, width - 1));
-	const railedMeta = composeMetadataLine(meta, rightStatus, innerWidth);
+	const status = composeRightStatus(rightStatus, uiTheme);
+	const copyFriendlyMeta = composeMetadataLine(meta, status, Math.max(0, width - 1));
+	const railedMeta = composeMetadataLine(meta, status, innerWidth);
 
 	const top = renderStyleForSourceOrFallback(
 		uiTheme,

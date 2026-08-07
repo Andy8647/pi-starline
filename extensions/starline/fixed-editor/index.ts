@@ -117,8 +117,13 @@ class ProbeComponent implements Component {
 function warnUnsupported(ctx: ExtensionContext): void {
 	if (didWarnUnsupported || !ctx.hasUI) return;
 	didWarnUnsupported = true;
+	// This is what a Pi 0.84 user sees on every start, so it has to say what to
+	// do rather than what failed. Pi's own fullscreen mode replaces the fixed
+	// editor outright, and turning the setting off is what stops the message.
 	console.warn(
-		"[starline] Fixed editor: unsupported Pi TUI layout — falling back to normal rendering.",
+		"[starline] Fixed editor is off: it cannot reach this Pi's renderer. " +
+			'Pi 0.84 has its own — set tuiMode to "fullscreen" in /settings. ' +
+			"Run /starline fixed-editor disable to hide this message.",
 	);
 }
 

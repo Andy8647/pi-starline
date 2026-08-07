@@ -433,10 +433,16 @@ does not expose what this needs, nothing is patched and Pi's threshold stands.
 
 ### Paste again to expand
 
-While a collapsed paste is fresh, `paste again to expand` sits on the editor
-box's bottom border (sharing the line with the selection hint when both apply).
+While a collapsed paste is fresh, `paste again to expand` sits on the right of
+the editor's metadata row, beside the vim mode indicator when there is one.
 Pasting the same content again replaces the placeholder with the full text in
 place, rather than adding a second one.
+
+That row is drawn whether or not `editorMetadataFormat` has anything in it, so
+blanking the template does not take the hint with it. The hint used to sit on
+the editor's bottom border, drawn there by the
+[fixed editor](fixed-editor.md); it moved so that it no longer depends on a
+feature Pi 0.84 supersedes.
 
 This works for both kinds of collapse — the ones lowered by `pasteCollapseLines`
 and the ones Pi does itself above its own threshold — and needs no configuration.

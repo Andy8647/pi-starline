@@ -140,7 +140,7 @@ pi install git:github.com/Andy8647/pi-starline
 
 Coming from pi-zentui? Run `mv ~/.pi/agent/zentui.json ~/.pi/agent/starline.json` to carry your config over — Starline does not read the old file automatically. Inside it, rename any `colorMode: "zentui"` value to `colorMode: "themed"`.
 
-What changed in each version: **[Releases](https://github.com/Andy8647/pi-starline/releases)**.
+What changed in each version, and what you need to do about it: **[Changelog](https://github.com/Andy8647/pi-starline/blob/main/CHANGELOG.md)**.
 
 ## Config
 
@@ -159,6 +159,8 @@ Settings live in `~/.pi/agent/starline.json`. The file is optional — anything 
 **[Full configuration reference →](https://github.com/Andy8647/pi-starline/blob/main/docs/configuration.md)** — every option with its default: the pill footer, the colour palette and its `$name` references, footer format templates, per-segment display options, icon overrides, and editor styling.
 
 ## Fixed editor (experimental, opt-in)
+
+**On Pi 0.84 and later, set `tuiMode` to `"fullscreen"` in `/settings` instead.** Pi ships a sticky editor and footer, an independently scrolling transcript, mouse selection and draggable scrollbars of its own on those releases, and Starline's fixed editor cannot reach Pi's renderer there — it detects that and stays out of the way. Everything else in Starline works in both TUI modes. What follows applies to Pi 0.83 and earlier.
 
 Pins the editor and footer to the bottom of the terminal while the transcript scrolls above, and adds mouse handling Pi has none of: drag to select (the transcript scrolls when the drag reaches an edge), double-click a word, triple-click a line, click to move the caret, click a tool box's border to expand just that box, and a wheel that scrolls whichever of the transcript or the input box the pointer is over.
 

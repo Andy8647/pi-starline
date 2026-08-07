@@ -73,6 +73,16 @@ jobs:
           fi
           echo "Tag ${GITHUB_REF_NAME} matches package.json version ${VERSION}."
 
+      # The release job below posts this section as the release notes. Check it
+      # is there before publishing rather than after: a tag can be deleted and
+      # remade, a version on npm cannot, so a release nobody wrote notes for
+      # should fail while it is still cheap to fix.
+      - name: Check the changelog documents this version
+        if: github.event_name == 'push'
+        run: |
+          .github/scripts/changelog-section.sh "${GITHUB_REF_NAME}" > /dev/null
+          echo "CHANGELOG.md has a section for ${GITHUB_REF_NAME}."
+
       # No NODE_AUTH_TOKEN: the OIDC token minted by `id-token: write` is
       # exchanged for a short-lived credential, and npm attaches provenance
       # automatically. If this step fails with ENEEDAUTH, the trusted publisher
@@ -102,6 +112,19 @@ jobs:
       contents: write
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # The publish job already proved this section exists, so a failure here
+      # means the checkout and the tag disagree, not a forgotten changelog.
+      - name: Read the release notes out of the changelog
+        run: |
+          .github/scripts/changelog-section.sh "${GITHUB_REF_NAME}" > release-notes.md
+          {
+            echo
+            echo "**Full changelog**: https://github.com/${{ github.repository }}/blob/${GITHUB_REF_NAME}/CHANGELOG.md"
+          } >> release-notes.md
+
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -110,5 +133,5 @@ jobs:
           if gh release view "${GITHUB_REF_NAME}" --repo "$REPO" >/dev/null 2>&1; then
             echo "Release ${GITHUB_REF_NAME} already exists; skipping."
           else
-            gh release create "${GITHUB_REF_NAME}" --repo "$REPO" --generate-notes --title "${GITHUB_REF_NAME}"
+            gh release create "${GITHUB_REF_NAME}" --repo "$REPO" --notes-file release-notes.md --title "${GITHUB_REF_NAME}"
           fi
