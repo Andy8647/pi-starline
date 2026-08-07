@@ -2,6 +2,8 @@
 
 Experimental and opt-in. For the rest of Starline's settings, see [Configuration](configuration.md).
 
+**On Pi 0.84 and later, use Pi's own fullscreen mode instead.** Pi 0.84 ships a sticky editor and footer, an independently scrolling transcript, mouse selection and draggable scrollbars natively — set `tuiMode` to `"fullscreen"` in `/settings`. Starline's own version cannot reach Pi's renderer on those releases, detects that, and stays out of the way with a console warning rather than blanking the screen. Everything else in Starline — the statusline, the editor styling, the message styling — works in both TUI modes. What follows applies to Pi 0.83 and earlier.
+
 The fixed editor pins the Starline editor and footer at the bottom of the terminal while the transcript scrolls above. This enables composing follow-up messages while referencing earlier conversation history.
 
 ## How to enable

@@ -178,15 +178,6 @@ export class TerminalSplitCompositor {
 		if (this.disposed) return false;
 		const cluster = this.capabilities.cluster;
 		try {
-			for (const component of [
-				cluster.status,
-				cluster.aboveWidget,
-				cluster.editor,
-				cluster.belowWidget,
-				cluster.footer,
-			]) {
-				hideRenderable(component);
-			}
 			Object.defineProperty(this.capabilities.terminal, "rows", {
 				configurable: true,
 				get: () => this.getScrollableRows(),
@@ -204,6 +195,20 @@ export class TerminalSplitCompositor {
 				}
 			});
 			replaceMethod(this.capabilities.writeMethod, (data) => this.write(String(data)));
+
+			// Hiding the cluster comes last. These components are only ever drawn
+			// again by the patches above, so blanking them before those are in
+			// place turns any install failure into a dead screen rather than a
+			// fallback to Pi's own rendering.
+			for (const component of [
+				cluster.status,
+				cluster.aboveWidget,
+				cluster.editor,
+				cluster.belowWidget,
+				cluster.footer,
+			]) {
+				hideRenderable(component);
+			}
 
 			this.inputListener = (data) => this.handleInput(data);
 			const inputListenerDisposer = this.capabilities.addInputListener(this.inputListener);

@@ -59,6 +59,53 @@ function descriptorInChain(target: object, key: PropertyKey): PropertyDescriptor
 	return undefined;
 }
 
+/**
+ * Whether a patch installed the way the compositor installs one is actually
+ * visible to whoever calls the method afterwards.
+ *
+ * Descriptor checks alone are not enough. Pi 0.84 hands extensions a Proxy over
+ * the live renderer rather than the renderer itself, so it can swap
+ * `TuiMainScreen` for `TuiAltScreen` when the TUI mode changes. That Proxy
+ * forwards `get` and `set` but defines no `defineProperty` trap, which is the
+ * one the compositor patches through — so every check here passes while the
+ * patch lands on the Proxy's own empty target and never reaches Pi. The only
+ * reliable probe is to install a sentinel exactly as the compositor would, read
+ * it back, and put the original descriptor back.
+ */
+function patchRoundTrips(
+	target: Record<PropertyKey, unknown>,
+	key: PropertyKey,
+	descriptor: PropertyDescriptor | undefined,
+): boolean {
+	const sentinel = () => undefined;
+	try {
+		Object.defineProperty(target, key, {
+			...(descriptor ?? { configurable: true, enumerable: false, writable: true }),
+			value: sentinel,
+		});
+	} catch {
+		return false;
+	}
+	let landed: boolean;
+	try {
+		landed = Reflect.get(target, key) === sentinel;
+	} catch {
+		landed = false;
+	}
+	try {
+		if (descriptor) Object.defineProperty(target, key, descriptor);
+		else Reflect.deleteProperty(target, key);
+	} catch {
+		return false;
+	}
+	// A probe that cannot undo itself is worse than no fixed editor at all.
+	try {
+		return landed && Reflect.get(target, key) !== sentinel;
+	} catch {
+		return false;
+	}
+}
+
 function writableMethod(
 	target: Record<PropertyKey, unknown>,
 	key: PiMethodCapability["key"],
@@ -71,6 +118,7 @@ function writableMethod(
 	} else if (!Object.isExtensible(target)) {
 		return undefined;
 	}
+	if (!patchRoundTrips(target, key, descriptor)) return undefined;
 	return {
 		target,
 		key,
