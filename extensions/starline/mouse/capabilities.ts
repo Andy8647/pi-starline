@@ -17,7 +17,8 @@ export type MouseCapability =
 	| "getSelectionSourceLine"
 	| "getSelectionBounds"
 	| "getSelectionColumns"
-	| "flash";
+	| "flash"
+	| "hasOverlay";
 
 export type MouseFeature =
 	| "selectionPendingMode"
@@ -37,6 +38,7 @@ const CAPABILITIES: readonly MouseCapability[] = [
 	"getSelectionBounds",
 	"getSelectionColumns",
 	"flash",
+	"hasOverlay",
 ];
 
 /**
@@ -64,7 +66,11 @@ const REQUIREMENTS: Record<MouseFeature, readonly MouseCapability[]> = {
 	// `getSelectionSourceLine`, so the patch has a real line to hand
 	// `wordRangeAt` — without it there's nothing to compute a range over.
 	pathAwareWords: ["getWordSelection", "getSelectionSourceLine"],
-	clickToExpandTools: ["handleSelectionMouseEvent"],
+	// The press it acts on arrives through `handleSelectionMouseEvent`, and it
+	// asks `hasOverlay` the same question Pi's own press path asks before
+	// resolving a scroll view (`tui-alt-screen.js:684`) — without it, a click on
+	// a dialog would toggle whatever tool box happens to sit behind it.
+	clickToExpandTools: ["handleSelectionMouseEvent", "hasOverlay"],
 	editorWheelScroll: ["routeWheel"],
 	editorClickToCaret: ["handleSelectionMouseEvent"],
 	editorBufferCopy: ["copySelectionToClipboard"],

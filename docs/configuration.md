@@ -475,7 +475,7 @@ guessing would be silently pasting the wrong thing.
 - `wheelRouting` — routes the mouse wheel to scroll the transcript instead of leaving it to the terminal.
 - `copyNotice` — shows a "Copied to clipboard" flash for a copy **Starline** performs, such as `ctrl+c` in pending selection mode. Pi confirms its own copy-on-release with its own flash regardless of this setting.
 - `copyOnSelect` — copy on mouse release. When `false`, a highlight waits for `ctrl+c` instead (pending selection mode).
-- `clickToExpandTools` — clicking a tool box's frame or its expand hint expands that one box.
+- `clickToExpandTools` — clicking a tool box's `… ctrl+o to expand` hint row expands just that box, instead of `ctrl+o` expanding every box in the transcript. Click the `ctrl+o to collapse` hint to close it again. Only the hint row toggles; a press anywhere else in the box still starts a selection, and the row follows whatever key you have bound to `app.tools.expand`.
 - `pathAwareWords` — double/triple-click word selection stops at path separators (`/`, `.`) instead of only at whitespace.
 
 ## Editor cursor

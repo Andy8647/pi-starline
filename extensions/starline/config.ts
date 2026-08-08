@@ -111,7 +111,7 @@ export type MouseConfig = {
 	copyNotice: boolean;
 	/** Copy on mouse release. When false the highlight waits for ctrl+c. */
 	copyOnSelect: boolean;
-	/** Clicking a tool box's frame or its expand hint expands that one box. */
+	/** Clicking a tool box's `ctrl+o to expand` hint expands that one box. */
 	clickToExpandTools: boolean;
 	/** Double/triple-click word selection stops at path separators. */
 	pathAwareWords: boolean;

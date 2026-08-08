@@ -24,11 +24,15 @@ import { activeSelectionHintText, installMouse } from "../../extensions/starline
 type TuiAltScreenPrototype = {
 	copySelectionToClipboard: () => void;
 	handleViewportInput: (data: string) => { consume: boolean } | undefined;
+	handleSelectionMouseEvent: (event: unknown) => void;
+	getWordSelection: (point: unknown) => unknown;
 };
 const prototype = TuiAltScreen.prototype as unknown as TuiAltScreenPrototype;
 
 const originalCopy = prototype.copySelectionToClipboard;
 const originalViewportInput = prototype.handleViewportInput;
+const originalMouseEvent = prototype.handleSelectionMouseEvent;
+const originalWordSelection = prototype.getWordSelection;
 
 type RealReceiver = {
 	selectionAnchor: { row: number; col: number } | undefined;
@@ -71,6 +75,10 @@ describe("mouse patches against the real TuiAltScreen.prototype", () => {
 			dispose = undefined;
 			expect(prototype.copySelectionToClipboard).toBe(originalCopy);
 			expect(prototype.handleViewportInput).toBe(originalViewportInput);
+			// Every method `installMouse` may touch, not only the two this file
+			// exercises: the real prototype is shared with every other test file.
+			expect(prototype.handleSelectionMouseEvent).toBe(originalMouseEvent);
+			expect(prototype.getWordSelection).toBe(originalWordSelection);
 		}
 	});
 

@@ -108,6 +108,83 @@ export class ExpandableText implements Component {
 	}
 }
 
+/**
+ * `keyText("app.tools.expand")` as a default Pi prints it. Fixtures spell it
+ * out rather than reading the global keybinding registry, because a test that
+ * shares that global with every other test file is a test that depends on run
+ * order — the one place the real registry is read is
+ * `tool-box.test.ts`'s `expandKeyText` case, which sets and restores it.
+ */
+export const EXPAND_KEY_TEXT = "ctrl+o";
+
+const DIM_START = "\x1b[2m";
+const DIM_END = "\x1b[22m";
+
+/**
+ * The hint row Pi renders, ANSI and all.
+ *
+ * `keyHint("app.tools.expand", description)` is `theme.fg("dim", keyText) +
+ * theme.fg("muted", " " + description)` (`keybinding-hints.js`), and every
+ * caller wraps it in parentheses. The two shapes here are
+ * `bash-execution.js:140,143` verbatim — the one component that renders a hint
+ * in *both* states, which is what makes one rule cover both directions.
+ */
+export function expandHintLine(
+	keyText: string,
+	expanded: boolean,
+	hiddenLineCount = 3,
+	color: (text: string) => string = (text) => `${DIM_START}${text}${DIM_END}`,
+): string {
+	return expanded
+		? `${color("(")}${color(keyText)}${color(" to collapse")}${color(")")}`
+		: `${color(`... ${hiddenLineCount} more lines (`)}${color(keyText)}${color(" to expand")}${color(")")}`;
+}
+
+/**
+ * Pi's own expandable box, borderless — `BashExecutionComponent` in miniature.
+ * A `Container` subclass whose `setExpanded` rebuilds its children (that is
+ * what `bash-execution.js:48` and `tool-execution.js:161` both do, via
+ * `updateDisplay`), showing a preview plus a `to expand` hint when collapsed
+ * and the whole output plus a `to collapse` hint when expanded.
+ *
+ * It draws no box-drawing characters, because Pi's own boxes do not: the
+ * borders in a real session come from `pi-toolbox` patching
+ * `ToolExecutionComponent.prototype.render` (see `FramedToolComponent`).
+ */
+export class HintedToolComponent extends Container {
+	expanded = false;
+
+	constructor(
+		private readonly title: string,
+		private readonly output: readonly string[],
+		private readonly previewLines = 1,
+		private readonly keyText = EXPAND_KEY_TEXT,
+	) {
+		super();
+		this.rebuild();
+	}
+
+	setExpanded(expanded: boolean): void {
+		if (this.expanded === expanded) return;
+		this.expanded = expanded;
+		this.rebuild();
+	}
+
+	private rebuild(): void {
+		this.clear();
+		this.addChild(new Text(this.title, 0, 0));
+		const shown = this.expanded ? this.output : this.output.slice(0, this.previewLines);
+		for (const line of shown) this.addChild(new Text(line, 0, 0));
+		this.addChild(
+			new Text(
+				expandHintLine(this.keyText, this.expanded, this.output.length - this.previewLines),
+				0,
+				0,
+			),
+		);
+	}
+}
+
 /** A leaf whose render throws, for the "one bad component" case. */
 export class ThrowingComponent implements Component {
 	invalidate(): void {}

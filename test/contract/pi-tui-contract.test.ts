@@ -25,8 +25,10 @@ const PATCHED_METHODS = [
 	"getWordSelection",
 ];
 
-// Read, not patched — the selection itself stays Pi's.
-const READ_METHODS = ["getSelectionBounds", "getSelectionColumns", "flash"];
+// Read, not patched — the selection itself stays Pi's, and `hasOverlay` is
+// asked the same question Pi's own press path asks before it resolves a scroll
+// view, so click-to-expand does not reach through a dialog.
+const READ_METHODS = ["getSelectionBounds", "getSelectionColumns", "flash", "hasOverlay"];
 
 const EDITOR_METHODS = [
 	"getCursor",

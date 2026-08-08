@@ -5,7 +5,7 @@
  * what it would do to it. `installMouse` probes what the running Pi build
  * exposes, logs once if something is missing, and installs each feature gated
  * on exactly its own declared requirement (`capabilities.ts`). Today that is
- * two features:
+ * three features:
  *
  * `selectionPendingMode`, across two patches:
  * - `copySelectionToClipboard` — the method Pi calls itself on mouse
@@ -29,6 +29,15 @@
  *   here. Calls through when `wordRangeAt` declines (column past the end of
  *   the line) or when `mouse.pathAwareWords` is off.
  *
+ * `clickToExpandTools`, one patch:
+ * - `handleSelectionMouseEvent` — watched for a left-button press that landed
+ *   on a tool box's `ctrl+o to expand` hint row. On a hit it toggles that one
+ *   box and consumes the press, so the click does not also drop a selection
+ *   anchor into the box it just opened; every other press, including one
+ *   anywhere else inside the same box, calls through and starts a selection as
+ *   usual. `tool-box.ts` carries the reasoning for why the hint row is the
+ *   only target and why resolution goes through the component tree.
+ *
  * What Starline never does here is rewrite the text: the clipboard gets
  * exactly what Pi's own `copySelectionToClipboard` puts there. See
  * `installMouse` for why frame-free selection is not part of this.
@@ -39,9 +48,23 @@ import { installPrototypePatch } from "../prototype-patch-registry";
 import { disabledFeatureWarning, enabledFeatures, probeCapabilities } from "./capabilities";
 import { type BoxLike, scrollContentLinesFor } from "./hit-test";
 import { SelectionPendingState, selectionHintText } from "./selection-state";
+import { type ExpandTarget, expandKeyText, expandTargetAt } from "./tool-box";
 import { wordRangeAt } from "./word-select";
 
 const CTRL_C = "\x03";
+
+/**
+ * SGR mouse bits, as `parseSgrMouseEvent` decodes them
+ * (`tui-alt-screen.js:390`). `button & 3` is the button — 0 is left — bit 32
+ * marks a motion (drag) report and bit 64 a wheel notch. `release` is the
+ * `m`/`M` terminator.
+ */
+const BUTTON_MASK = 3;
+const LEFT_BUTTON = 0;
+const MOTION_BIT = 32;
+const WHEEL_BIT = 64;
+
+type MouseEventLike = { button: number; x: number; y: number; release?: boolean };
 
 type SelectionPoint = { scrollView?: unknown; row: number; col: number; boundary?: boolean };
 type SelectionBounds = { start: SelectionPoint; end: SelectionPoint };
@@ -61,6 +84,7 @@ type MouseCapablePrototype = {
 	flash(this: unknown, message: string, durationMs?: number): void;
 	getWordSelection(this: unknown, point: SelectionPoint): SelectionBounds | undefined;
 	getSelectionSourceLine(this: unknown, point: SelectionPoint): string;
+	hasOverlay(this: unknown): boolean;
 	previousScreen?: readonly string[];
 	// Not probed capabilities (see capabilities.ts): plain instance fields
 	// this module only ever reads.
@@ -285,6 +309,93 @@ function installPathAwareWords(
 }
 
 /**
+ * A left-button press: not a release, not a drag, not another button.
+ *
+ * Pi's own handler returns immediately unless `(button & 3) === 0`, treats
+ * `release` as the end of a drag and bit 32 as motion during one. Only the
+ * press opens a selection, so only the press is the one this feature may take
+ * instead.
+ *
+ * Bit 64 is excluded too, even though `handleInput` peels wheel reports off
+ * before this method is reached (`parseWheelEvent` claims anything with bit 64
+ * and a direction of 0 or 1): a notch of scroll that landed on a hint row
+ * would otherwise expand a box the pointer was only passing over, and that
+ * depends on a dispatch order in a file this package does not own.
+ *
+ * The shape is checked rather than assumed — this runs on whatever Pi passes,
+ * and a malformed event must fall through, never throw.
+ */
+function isLeftButtonPress(event: unknown): event is MouseEventLike {
+	if (typeof event !== "object" || event === null) return false;
+	const candidate = event as Partial<MouseEventLike>;
+	if (typeof candidate.button !== "number") return false;
+	if (typeof candidate.x !== "number" || typeof candidate.y !== "number") return false;
+	if (candidate.release) return false;
+	if ((candidate.button & (MOTION_BIT | WHEEL_BIT)) !== 0) return false;
+	return (candidate.button & BUTTON_MASK) === LEFT_BUTTON;
+}
+
+/**
+ * The box a press should toggle, or undefined for every press that should go
+ * on being a press.
+ *
+ * Everything is resolved here, inside the one call: the layout is read as it
+ * is right now, the component tree is built and dropped, and nothing is
+ * carried to the release. A tool that is still running re-renders between the
+ * two, so an answer kept that long would be about rows that have moved.
+ */
+function pressExpandTarget(
+	receiver: MouseCapablePrototype,
+	event: unknown,
+	deps: InstallMouseDeps,
+): ExpandTarget | undefined {
+	try {
+		if (!deps.getConfig().mouse.clickToExpandTools) return undefined;
+		if (!isLeftButtonPress(event)) return undefined;
+		// Pi resolves no scroll view while an overlay is up, so neither does this
+		// — a click on a dialog must not reach the transcript behind it.
+		if (receiver.hasOverlay()) return undefined;
+		return expandTargetAt(
+			{ root: receiver.currentLayout?.root, keyText: expandKeyText() },
+			event.x,
+			event.y,
+		);
+	} catch {
+		// Resolution is a best-effort read of Pi's internals. Anything it trips
+		// over means this press was an ordinary press.
+		return undefined;
+	}
+}
+
+/**
+ * Installs `clickToExpandTools` on `handleSelectionMouseEvent`.
+ *
+ * A thin wrapper: it either finds a hint row under the press and consumes it,
+ * or calls through to Pi untouched. Consuming is what keeps the click from
+ * also dropping a selection anchor into the box it just opened; every other
+ * press — including a press anywhere else inside the same box — still starts a
+ * selection, because copying text out of tool output is the common case and
+ * must not be stolen.
+ */
+function installClickToExpandTools(
+	prototype: MouseCapablePrototype,
+	deps: InstallMouseDeps,
+): () => void {
+	return installPrototypePatch(
+		prototype,
+		"handleSelectionMouseEvent",
+		"mouse-selection-event",
+		({ predecessor, receiver, args }) => {
+			const target = pressExpandTarget(receiver as MouseCapablePrototype, args[0], deps);
+			if (!target) return Reflect.apply(predecessor, receiver, args);
+			target.component.setExpanded(target.expanded);
+			deps.requestRender();
+			return undefined;
+		},
+	);
+}
+
+/**
  * Probes Pi, warns once about whatever this build cannot support, and
  * installs the mouse features that are available. Returns a disposer that
  * removes every patch this call installed.
@@ -319,6 +430,9 @@ export function installMouse(prototype: object, deps: InstallMouseDeps): () => v
 	}
 	if (enabled.has("pathAwareWords")) {
 		cleanups.push(installPathAwareWords(typedPrototype, deps));
+	}
+	if (enabled.has("clickToExpandTools")) {
+		cleanups.push(installClickToExpandTools(typedPrototype, deps));
 	}
 
 	if (cleanups.length === 0) return () => {};

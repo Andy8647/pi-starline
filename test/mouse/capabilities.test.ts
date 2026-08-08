@@ -21,6 +21,7 @@ const ALL = [
 	"getSelectionBounds",
 	"getSelectionColumns",
 	"flash",
+	"hasOverlay",
 ];
 
 describe("probeCapabilities", () => {
@@ -114,6 +115,16 @@ describe("enabledFeatures", () => {
 			"pathAwareWords",
 			"selectionPendingMode",
 		]);
+	});
+
+	it("disables click-to-expand when overlays cannot be detected", () => {
+		// Without `hasOverlay` the feature would resolve a tool box through an
+		// open dialog and toggle it on a click aimed at the dialog. It is a
+		// capability the feature *calls*, so it gates installation like any other.
+		const without = ALL.filter((name) => name !== "hasOverlay");
+		const features = enabledFeatures(probeCapabilities(prototypeWith(without)));
+		expect(features.has("clickToExpandTools")).toBe(false);
+		expect(features.has("selectionPendingMode")).toBe(true);
 	});
 
 	it("disables both click features when the mouse event handler is missing", () => {
