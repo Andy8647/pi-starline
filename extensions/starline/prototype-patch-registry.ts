@@ -19,7 +19,6 @@ type PrototypePatchAdapter =
 	| "mouse-wheel"
 	| "mouse-selection-event"
 	| "mouse-copy"
-	| "mouse-apply-selection"
 	| "mouse-word-selection";
 
 type PrototypeMethodName = string;

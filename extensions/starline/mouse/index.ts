@@ -3,42 +3,30 @@
  *
  * This is the first module that actually touches Pi rather than describing
  * what it would do to it. `installMouse` probes what the running Pi build
- * exposes, logs once if something is missing, and installs each feature
- * gated on exactly its own declared requirement (`capabilities.ts`) —
- * `frameFreeSelection`, `selectionPendingMode`, and highlighting all install
- * independently of one another, even though two of them share a method:
+ * exposes, logs once if something is missing, and installs each feature gated
+ * on exactly its own declared requirement (`capabilities.ts`). Today that is
+ * one feature, `selectionPendingMode`, across two patches:
  *
  * - `copySelectionToClipboard` — the method Pi calls itself on mouse
- *   release. `installCopying` wraps it whenever `frameFreeSelection` is
- *   enabled, rewriting the text it copies to be frame-free (see
- *   `performFrameFreeCopy`). When `selectionPendingMode` is *also* enabled,
- *   the same wrapper additionally arms a pending state instead of copying
- *   immediately when `copyOnSelect` is off, calling through for every other
- *   caller (including its own ctrl+c path below). Without pending mode,
- *   every release just copies immediately, frame-free.
- * - `handleViewportInput` — only patched when `selectionPendingMode` is
- *   enabled. Watched for a bare `ctrl+c` (`\x03`); with a selection pending
- *   it performs the real copy by calling back through
+ *   release. Wrapped to arm a pending state instead of copying immediately
+ *   when `copyOnSelect` is off, calling through for every other caller
+ *   (including its own ctrl+c path below).
+ * - `handleViewportInput` — watched for a bare `ctrl+c` (`\x03`); with a
+ *   selection pending it performs the real copy by calling back through
  *   `copySelectionToClipboard` (guarded so that call is recognised as the
  *   real thing and not re-armed), then clears the pending state. Anything
  *   else — including `ctrl+c` with nothing pending — calls through to Pi's
  *   own handler, which is what keeps `ctrl+c` interrupting.
- * - `applySelection` — patched independently whenever the capability itself
- *   is present, keeping a frame's border out of the highlight; see
- *   `installFrameFreeHighlight`.
+ *
+ * What Starline never does here is rewrite the text: the clipboard gets
+ * exactly what Pi's own `copySelectionToClipboard` puts there. See
+ * `installMouse` for why frame-free selection is not part of this.
  */
 import { sliceByColumn, stripTerminalSequences } from "@earendil-works/pi-tui";
 import type { PolishedTuiConfig } from "../config";
 import { installPrototypePatch } from "../prototype-patch-registry";
 import { disabledFeatureWarning, enabledFeatures, probeCapabilities } from "./capabilities";
-import {
-	frameEdgeColumns,
-	frameFinderFor,
-	frameRowsIn,
-	scrollContentOrigin,
-} from "./frame-detection";
 import { type BoxLike, scrollContentLinesFor } from "./hit-test";
-import { copyableLines } from "./selection-copy";
 import { SelectionPendingState, selectionHintText } from "./selection-state";
 
 const CTRL_C = "\x03";
@@ -58,18 +46,11 @@ type MouseCapablePrototype = {
 	): SelectionColumns;
 	copySelectionToClipboard(this: unknown): void;
 	handleViewportInput(this: unknown, data: string): { consume: boolean } | undefined;
-	applySelection(
-		this: unknown,
-		screen: readonly string[],
-		layout?: { root: BoxLike },
-	): readonly string[];
 	flash(this: unknown, message: string, durationMs?: number): void;
 	previousScreen?: readonly string[];
+	// Not probed capabilities (see capabilities.ts): plain instance fields
+	// this module only ever reads.
 	currentLayout?: { root: BoxLike };
-	// Not a probed capability (see capabilities.ts): a plain instance field
-	// this module only ever reads, the same way it already reads
-	// `previousScreen` and `currentLayout` without gating on them.
-	terminal?: { write(data: string): void };
 };
 
 export type InstallMouseDeps = {
@@ -104,9 +85,11 @@ export function activeSelectionHintText(): string | null {
  * from pi-tui's published entry point, so `scrollContentLinesFor` mirrors its
  * (trivial) tree walk in `hit-test.ts`.
  *
- * Frame rows are then found from the layout tree (`frameRowsIn`) and taken
- * out through `copyableLines`, so a tool box's border never rides along —
- * see `selection-copy.ts`.
+ * This is a *measurement*, not a copy: nothing here writes a clipboard. The
+ * pending hint needs to say how many characters ctrl+c would put there, and
+ * the only exact answer is the text Pi itself would build. Rows come back
+ * verbatim — no frame stripping, no rule-row dropping — so the count and the
+ * eventual clipboard cannot disagree.
  */
 function selectionText(receiver: MouseCapablePrototype, bounds: SelectionBounds): string {
 	const scrollView = bounds.start.scrollView;
@@ -124,44 +107,7 @@ function selectionText(receiver: MouseCapablePrototype, bounds: SelectionBounds)
 			).trimEnd(),
 		);
 	}
-	// Only the scroll-content path can be asked about frames. `origin`'s rows
-	// have to be a component's own render for `frameRowsIn` to walk it (see
-	// `component-tree.ts`), and `scrollContentLines` is exactly that — the
-	// transcript `Container` rendered at the content width. `previousScreen`
-	// is not: it is the composited screen, with overlays, flashes and the
-	// scrollbar painted into it, which no component's render will ever match.
-	// Nothing is lost by it — every framed component lives in the transcript.
-	const origin = scrollView
-		? scrollContentOrigin(receiver.currentLayout?.root, scrollView)
-		: undefined;
-	const framed = origin
-		? frameRowsIn(bounds.start.row, bounds.end.row, sourceLines, origin)
-		: new Set<number>();
-	return copyableLines(rows, framed).join("\n");
-}
-
-/**
- * Performs the real copy with frame-free text, writing the clipboard escape
- * exactly the way `copySelectionToClipboard` does (see the same source
- * reference as `selectionText` above) rather than calling predecessor for
- * it. That duplication is necessary, not incidental: predecessor's own
- * per-row loop always emits one line per row, so a frame's rule rows — which
- * `copyableLines` drops outright — cannot be produced by adjusting selection
- * columns alone. `receiver.flash` is called rather than predecessor's, so a
- * `copyNotice: false` shadow already in place (see `copyWithNotice`) is
- * still honoured.
- *
- * Returns false, doing nothing, when there is no text or the receiver does
- * not expose a terminal to write to — the caller falls back to predecessor's
- * own (unstripped) copy in that case, rather than silently dropping it.
- */
-function performFrameFreeCopy(receiver: MouseCapablePrototype, bounds: SelectionBounds): boolean {
-	const text = selectionText(receiver, bounds);
-	const terminal = receiver.terminal;
-	if (text.length === 0 || typeof terminal?.write !== "function") return false;
-	terminal.write(`\x1b]52;c;${Buffer.from(text).toString("base64")}\x07`);
-	receiver.flash("Copied!");
-	return true;
+	return rows.join("\n");
 }
 
 /**
@@ -193,35 +139,21 @@ function copyWithNotice(receiver: MouseCapablePrototype, showNotice: boolean): v
 }
 
 /**
- * Installs frame-free copying on `copySelectionToClipboard`, and — only when
- * `pendingModeEnabled` — layers `selectionPendingMode`'s arm-and-wait-for-ctrl+c
- * behaviour on top of it via a second patch on `handleViewportInput`.
+ * Installs `selectionPendingMode`: arm on release, copy on ctrl+c.
  *
- * This is one patch with an internally-gated branch rather than two
- * competing installs on the same method, because `installPrototypePatch`
- * only ever holds one registration per adapter key (see
- * `prototype-patch-registry.ts`) — a second `"mouse-copy"` install would
- * replace the first, not compose with it. `frameFreeSelection` and
- * `selectionPendingMode` are still independently gated at the call site in
- * `installMouse`: `pendingModeEnabled` is exactly `enabled.has("selectionPendingMode")`,
- * so this function's own body is the only place their behaviours combine.
- *
- * With `pendingModeEnabled: false` — `frameFreeSelection` on its own,
- * `selectionPendingMode` off (say `handleViewportInput` is missing) — every
- * release copies immediately, frame-free, the same as Pi's own default
- * behaviour except for the text: honouring `copyOnSelect: false` requires
- * `handleViewportInput` to ever be useful (a selection nobody can signal
- * ctrl+c for would just be stranded), so that setting is not read at all in
- * this mode.
+ * Two patches, both belonging to this one feature. The
+ * `copySelectionToClipboard` patch decides whether a release copies now or
+ * arms and waits; the `handleViewportInput` patch is what a waiting selection
+ * is eventually released by. Neither touches the *text* — the real copy is
+ * always predecessor's, so what lands on the clipboard is Pi's own bytes.
  */
-function installCopying(
+function installSelectionPendingMode(
 	prototype: MouseCapablePrototype,
 	deps: InstallMouseDeps,
-	pendingModeEnabled: boolean,
 ): () => void {
-	const state = pendingModeEnabled ? new SelectionPendingState() : undefined;
+	const state = new SelectionPendingState();
 	const previousState = activeState;
-	if (state) activeState = state;
+	activeState = state;
 
 	// Set while this module is driving `copySelectionToClipboard` itself (the
 	// ctrl+c path below), so the `mouse-copy` patch calls through instead of
@@ -234,23 +166,12 @@ function installCopying(
 		"mouse-copy",
 		({ predecessor, receiver, args }) => {
 			const typedReceiver = receiver as MouseCapablePrototype;
-			// Without pending mode there is nothing to arm-and-wait for, so every
-			// release takes the real-copy branch below regardless of config.
-			const copyOnSelect = !state || deps.getConfig().mouse.copyOnSelect;
-			if (copyOnSelect || performingRealCopy) {
+			if (deps.getConfig().mouse.copyOnSelect || performingRealCopy) {
 				// The real copy, whether Pi triggered it directly on release
-				// (`copyOnSelect: true`, or pending mode unavailable) or this
-				// module is driving it itself for ctrl+c below. Either way the
-				// text must be frame-free, which predecessor's own text-building
-				// does not know how to be — see `performFrameFreeCopy`. Falls back
-				// to predecessor verbatim when there is nothing to copy or no
-				// terminal to write it to, so an empty/collapsed selection still
-				// gets predecessor's own no-op.
-				const bounds = typedReceiver.getSelectionBounds();
-				if (bounds && performFrameFreeCopy(typedReceiver, bounds)) return undefined;
+				// (`copyOnSelect: true`) or this module is driving it itself for
+				// ctrl+c below. Predecessor writes the clipboard, unmodified.
 				return Reflect.apply(predecessor, receiver, args);
 			}
-			// state is guaranteed here: copyOnSelect is only false when state exists.
 			const bounds = typedReceiver.getSelectionBounds();
 			if (!bounds) {
 				// A collapsed or empty selection (e.g. a plain click after a prior
@@ -271,123 +192,45 @@ function installCopying(
 		},
 	);
 
-	const cleanupViewportInput = state
-		? installPrototypePatch(
-				prototype,
-				"handleViewportInput",
-				"mouse-viewport-input",
-				({ predecessor, receiver, args }) => {
-					const data = args[0];
-					if (data === CTRL_C && state.pending) {
-						const typedReceiver = receiver as MouseCapablePrototype;
-						// `state.pending` can be stale: Pi clears its own selection
-						// through paths this module never sees (e.g. starting a new
-						// drag overwrites `selectionAnchor`/`selectionFocus` directly,
-						// with no call to `copySelectionToClipboard`). Re-read the real
-						// bounds before deciding: a copy that would be a no-op must not
-						// consume ctrl+c, or an in-flight interrupt gets swallowed for
-						// nothing.
-						if (!typedReceiver.getSelectionBounds()) {
-							state.clear();
-							deps.requestRender();
-							return Reflect.apply(predecessor, receiver, args);
-						}
-						performingRealCopy = true;
-						try {
-							copyWithNotice(typedReceiver, deps.getConfig().mouse.copyNotice);
-						} finally {
-							performingRealCopy = false;
-						}
-						state.clear();
-						deps.requestRender();
-						return { consume: true };
-					}
+	const cleanupViewportInput = installPrototypePatch(
+		prototype,
+		"handleViewportInput",
+		"mouse-viewport-input",
+		({ predecessor, receiver, args }) => {
+			const data = args[0];
+			if (data === CTRL_C && state.pending) {
+				const typedReceiver = receiver as MouseCapablePrototype;
+				// `state.pending` can be stale: Pi clears its own selection
+				// through paths this module never sees (e.g. starting a new
+				// drag overwrites `selectionAnchor`/`selectionFocus` directly,
+				// with no call to `copySelectionToClipboard`). Re-read the real
+				// bounds before deciding: a copy that would be a no-op must not
+				// consume ctrl+c, or an in-flight interrupt gets swallowed for
+				// nothing.
+				if (!typedReceiver.getSelectionBounds()) {
+					state.clear();
+					deps.requestRender();
 					return Reflect.apply(predecessor, receiver, args);
-				},
-			)
-		: undefined;
+				}
+				performingRealCopy = true;
+				try {
+					copyWithNotice(typedReceiver, deps.getConfig().mouse.copyNotice);
+				} finally {
+					performingRealCopy = false;
+				}
+				state.clear();
+				deps.requestRender();
+				return { consume: true };
+			}
+			return Reflect.apply(predecessor, receiver, args);
+		},
+	);
 
 	return () => {
 		cleanupCopy();
-		cleanupViewportInput?.();
-		if (state && activeState === state) activeState = previousState;
+		cleanupViewportInput();
+		if (activeState === state) activeState = previousState;
 	};
-}
-
-/**
- * Keeps a frame's border out of the highlight `applySelection` paints.
- *
- * `applySelection` (`node_modules/@earendil-works/pi-tui/dist/tui-alt-screen.js`)
- * builds the highlighted screen itself, inline, from a call to
- * `this.getSelectionColumns(line, row, screenSelection, minColumn, maxColumn)`
- * per row — there is no separate step to intercept for "which columns get
- * inverted". So rather than re-render anything, this shadows
- * `getSelectionColumns` on the receiver for the one call, shrinking the
- * range it returns on frame-owned rows so predecessor's own highlighting
- * naturally stops short of the border. Shadow-and-restore is the same shape
- * `copyWithNotice` already uses on `flash`.
- *
- * `args[1]` is the `layout` parameter `applySelection` was actually called
- * with (defaulting to `this.currentLayout` only when omitted) — `doRender`
- * passes the layout it just computed, which can be a step ahead of
- * `receiver.currentLayout` at this point in the render, so that is read in
- * preference to it.
- *
- * The rows `applySelection` hands out are *screen* rows, and frames are owned
- * in *content* rows, so the one conversion this needs is
- * `contentRow = row - origin.rect.y` — `origin` being the scroll content box,
- * whose `rect.y` is `viewportY - scrollTop` (see `scrollContentOrigin`). Pi's
- * own `applySelection` derives the same offset the long way round, as
- * `box.rect.y + selection.row - scrollTop` against the ScrollView's box.
- *
- * One `FrameFinder` is built per `applySelection` call and shared by every
- * row it asks about, so the component renders behind it happen once per
- * highlighted frame rather than once per row.
- */
-function installFrameFreeHighlight(prototype: MouseCapablePrototype): () => void {
-	return installPrototypePatch(
-		prototype,
-		"applySelection",
-		"mouse-apply-selection",
-		({ predecessor, receiver, args }) => {
-			const typedReceiver = receiver as MouseCapablePrototype;
-			const layoutArg = (args[1] as { root: BoxLike } | undefined) ?? typedReceiver.currentLayout;
-			const root = layoutArg?.root;
-			const scrollView = root && typedReceiver.getSelectionBounds()?.start.scrollView;
-			const origin = scrollView ? scrollContentOrigin(root, scrollView) : undefined;
-			const contentLines = scrollView ? scrollContentLinesFor(root, scrollView) : undefined;
-			if (!origin || !contentLines) return Reflect.apply(predecessor, receiver, args);
-
-			const frameAt = frameFinderFor(origin, contentLines);
-			const originalGetSelectionColumns = typedReceiver.getSelectionColumns;
-			typedReceiver.getSelectionColumns = function frameFreeGetSelectionColumns(
-				this: unknown,
-				line: string,
-				row: number,
-				...rest: unknown[]
-			): SelectionColumns {
-				const columns = Reflect.apply(originalGetSelectionColumns, this, [
-					line,
-					row,
-					...rest,
-				]) as SelectionColumns;
-				const contentRow = row - origin.rect.y;
-				const frame = frameAt(contentRow);
-				if (!frame || contentRow < frame.top || contentRow > frame.bottom) return columns;
-				const edges = frameEdgeColumns(line, origin);
-				if (!edges) return columns;
-				return {
-					start: Math.max(columns.start, edges.left),
-					end: Math.min(columns.end, edges.right),
-				};
-			};
-			try {
-				return Reflect.apply(predecessor, receiver, args);
-			} finally {
-				typedReceiver.getSelectionColumns = originalGetSelectionColumns;
-			}
-		},
-	);
 }
 
 /**
@@ -407,22 +250,21 @@ export function installMouse(prototype: object, deps: InstallMouseDeps): () => v
 
 	const typedPrototype = prototype as MouseCapablePrototype;
 	const cleanups: Array<() => void> = [];
-	// Each gated on exactly its own declared requirement, independently:
-	// `frameFreeSelection` alone still installs a (frame-free) copy patch
-	// when `selectionPendingMode` cannot (e.g. no `handleViewportInput`),
-	// and `selectionPendingMode`'s extra behaviour layers on top when it can
-	// — see `installCopying`.
-	if (enabled.has("frameFreeSelection")) {
-		cleanups.push(installCopying(typedPrototype, deps, enabled.has("selectionPendingMode")));
-	}
-	// Highlighting is a nicety on top of copying (capabilities.ts), so it is
-	// gated on nothing but its own capabilities, independent of every feature
-	// flag above. It reads `getSelectionBounds` directly to find the scroll
-	// view a selection lives in, so that one is checked here too — Pi's own
-	// `applySelection` opens with the same call, so a build exposing one
-	// without the other would be broken regardless.
-	if (available.has("applySelection") && available.has("getSelectionBounds")) {
-		cleanups.push(installFrameFreeHighlight(typedPrototype));
+	// Frame-free selection is deliberately not installed, and is not a feature
+	// in `capabilities.ts` either. It rewrote the clipboard text to drop a tool
+	// box's border, which meant *inferring* where a frame was from the rendered
+	// rows — and a frame is not a structural concept in Pi. It is a visual
+	// convention `pi-toolbox` paints, so every discriminator (rule-capped
+	// edges, `setExpanded`, blank-row trimming, verticals) was a guess that a
+	// new component could falsify: `BashExecutionComponent` is rule-capped and
+	// expandable and draws no frame, so any box-drawn table inside bash output
+	// lost its borders. Copying now goes through Pi's own text, untouched.
+	//
+	// What would bring it back: `pi-toolbox` publishing its frame geometry —
+	// which rows it drew a border on, at which columns — so Starline reads a
+	// fact instead of inferring one. Nothing short of that.
+	if (enabled.has("selectionPendingMode")) {
+		cleanups.push(installSelectionPendingMode(typedPrototype, deps));
 	}
 
 	if (cleanups.length === 0) return () => {};

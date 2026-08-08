@@ -22,7 +22,6 @@ const PATCHED_METHODS = [
 	"routeWheel",
 	"handleSelectionMouseEvent",
 	"copySelectionToClipboard",
-	"applySelection",
 	"getWordSelection",
 ];
 

@@ -13,7 +13,6 @@ export type MouseCapability =
 	| "routeWheel"
 	| "handleSelectionMouseEvent"
 	| "copySelectionToClipboard"
-	| "applySelection"
 	| "getWordSelection"
 	| "getSelectionBounds"
 	| "getSelectionColumns"
@@ -21,7 +20,6 @@ export type MouseCapability =
 
 export type MouseFeature =
 	| "selectionPendingMode"
-	| "frameFreeSelection"
 	| "pathAwareWords"
 	| "clickToExpandTools"
 	| "editorWheelScroll"
@@ -33,14 +31,20 @@ const CAPABILITIES: readonly MouseCapability[] = [
 	"routeWheel",
 	"handleSelectionMouseEvent",
 	"copySelectionToClipboard",
-	"applySelection",
 	"getWordSelection",
 	"getSelectionBounds",
 	"getSelectionColumns",
 	"flash",
 ];
 
-/** Every capability a feature needs before it may install. */
+/**
+ * Every capability a feature needs before it may install.
+ *
+ * There is no `frameFreeSelection` entry, deliberately: the feature is cut
+ * (see `installMouse` in `index.ts`). A feature listed here is one
+ * `installMouse` installs, and a table that claims a feature nothing installs
+ * is worse than no table.
+ */
 const REQUIREMENTS: Record<MouseFeature, readonly MouseCapability[]> = {
 	// Without ctrl+c interception the pending mode strands a highlight the user
 	// cannot copy, which is worse than copy-on-release. It also reads the
@@ -50,19 +54,6 @@ const REQUIREMENTS: Record<MouseFeature, readonly MouseCapability[]> = {
 	selectionPendingMode: [
 		"copySelectionToClipboard",
 		"handleViewportInput",
-		"getSelectionBounds",
-		"getSelectionColumns",
-		"flash",
-	],
-	// Copying is the point; the highlight is a nicety, so this stays on when
-	// only `applySelection` (or `handleViewportInput`, which only
-	// `selectionPendingMode` needs) is gone. But the copy itself reads the
-	// selection directly (`getSelectionBounds`, `getSelectionColumns`) to
-	// build the frame-free text and raises its own notice (`flash`) — see
-	// `performFrameFreeCopy` in `index.ts` — so those three must be reachable
-	// too, the same as `selectionPendingMode` needs them for its own reasons.
-	frameFreeSelection: [
-		"copySelectionToClipboard",
 		"getSelectionBounds",
 		"getSelectionColumns",
 		"flash",

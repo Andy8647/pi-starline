@@ -103,6 +103,28 @@ export function isComponentLike(value: unknown): value is ComponentLike {
 	);
 }
 
+/**
+ * Whether `component` is one of Pi's expandable message components — the duck
+ * type for "clicking this could expand or collapse it". Verified against the
+ * installed `pi-coding-agent`: `bash-execution`, `branch-summary-message`,
+ * `compaction-summary-message`, `custom-entry`, `custom-message`,
+ * `skill-invocation-message` and `tool-execution` all expose `setExpanded`;
+ * pi-tui's own leaf components (`Text`, `Markdown`, `Container`) expose none.
+ *
+ * Note what this does *not* say: nothing about how the component looks. It
+ * was briefly used to infer that a component had drawn a border, which is
+ * exactly the inference frame-free selection was cut for — `setExpanded` says
+ * a box could be expanded, never that a box was drawn. It is kept for the
+ * question it can answer, which is Task 8's.
+ */
+export function isExpandableComponent(component: unknown): boolean {
+	return (
+		typeof component === "object" &&
+		component !== null &&
+		typeof (component as { setExpanded?: unknown }).setExpanded === "function"
+	);
+}
+
 function childrenOf(component: unknown): readonly unknown[] {
 	const children = (component as { children?: unknown }).children;
 	return Array.isArray(children) ? children : [];

@@ -10,19 +10,22 @@
  * `LAYOUT_NODE`, and only `Stack` and `ScrollView` have one. The transcript is
  * one leaf box with `children: []`.
  *
- * So the facts underneath `component-tree.ts` are pinned here, in the real
- * engine: the leaf box's `component` is the transcript container, its
- * `rect.width` is the width that container was rendered at, and its rows are
- * that container's own `render` output. If any of those stops being true, this
- * goes red instead of the feature going quietly inert again.
+ * That feature is gone (see `installMouse`), but the finding outlives it: any
+ * question about an individual message — which one was clicked, which one owns
+ * a row — has to be answered from the *component* tree, because the layout
+ * tree has nothing below the transcript. So the facts underneath
+ * `component-tree.ts` are pinned here, in the real engine: the leaf box's
+ * `component` is the transcript container, its `rect.width` is the width that
+ * container was rendered at, and its rows are that container's own `render`
+ * output. If any of those stops being true, this goes red rather than the next
+ * feature built on them going quietly inert.
  */
 
 import { ScrollView, Text, VStack } from "@earendil-works/pi-tui";
 import { renderLayoutFrame } from "@earendil-works/pi-tui/dist/layout.js";
 import { describe, expect, it } from "vitest";
-import { frameRowsIn, scrollContentOrigin } from "../../extensions/starline/mouse/frame-detection";
-import type { BoxLike } from "../../extensions/starline/mouse/hit-test";
-import { copyableLines } from "../../extensions/starline/mouse/selection-copy";
+import { createComponentTree } from "../../extensions/starline/mouse/component-tree";
+import { type BoxLike, scrollContentOrigin } from "../../extensions/starline/mouse/hit-test";
 import { makeTranscript, rowRangeOf } from "../mouse/component-graph";
 
 const WIDTH = 40;
@@ -62,45 +65,42 @@ describe("Pi's transcript layout", () => {
 		expect(lines?.length).toBeGreaterThan(HEIGHT); // it really does overflow
 	});
 
-	it("copies a real selection frame-free, with the table intact", () => {
-		const { transcript, frame, scroll, scrollBox } = renderTranscript();
-		const origin = scrollContentOrigin(frame.root as BoxLike, scrollBox.scrollView);
+	it("resolves a content row to the message component that rendered it", () => {
+		// What the layout tree cannot answer, and what `component-tree.ts` is
+		// for: taking the leaf box's own component and width — the only two
+		// things the box offers — back down to an individual message.
+		const { transcript, frame, scrollBox } = renderTranscript();
+		const origin = scrollContentOrigin(frame.root as BoxLike, scrollBox.scrollView) as BoxLike;
 		const lines = scrollBox.scrollContentLines ?? [];
-		const start = rowRangeOf(lines, transcript.tool, WIDTH).start;
-		const end = lines.length - 1;
+		const tree = createComponentTree(transcript.document, origin.rect.width, lines);
+		const toolRows = rowRangeOf(lines, transcript.tool, WIDTH);
+		const tableRows = rowRangeOf(lines, transcript.table, WIDTH);
 
-		const owned = frameRowsIn(start, end, lines, origin as BoxLike);
-		const copied = copyableLines(
-			lines.slice(start, end + 1).map((line) => line.trimEnd()),
-			owned,
-		);
-
-		expect(copied).toEqual([
-			"",
-			"hello from the tool",
-			" ┌───┬───┐",
-			" │ a │ b │",
-			" ├───┼───┤",
-			" │ c │ d │",
-			" └───┴───┘",
+		expect(origin.component).toBe(transcript.document);
+		expect(tree.ownerAt(toolRows.start)?.component).toBe(transcript.tool);
+		expect(tree.ownerAt(toolRows.end - 1)?.component).toBe(transcript.tool);
+		expect(tree.ownerAt(tableRows.start)?.component).toBe(transcript.table);
+		// The chain really is nested rather than flat: document > chat > message.
+		expect(tree.pathAt(toolRows.start).map((span) => span.component)).toEqual([
+			transcript.document,
+			transcript.chat,
+			transcript.tool,
 		]);
-		expect(scroll.scrollTop).toBe(0);
 	});
 
 	it("gives the same answer after the transcript has scrolled away", () => {
-		// The ordinary copyOnSelect:false flow: select, then scroll (Pi does it
-		// on its own while a response streams), then press ctrl+c. The layout
-		// tree's `clip` changes underneath; content rows do not.
+		// Content rows are captured once (at mouse-down, at a click) and asked
+		// about later, by which time Pi may have scrolled — it does so on its
+		// own while a response streams. The layout tree's `clip` and the content
+		// box's `rect.y` both move; which component rendered content row N does
+		// not, because the component graph has no viewport in it.
 		const { transcript, frame, scroll, scrollBox } = renderTranscript();
 		const lines = scrollBox.scrollContentLines ?? [];
-		const start = rowRangeOf(lines, transcript.tool, WIDTH).start;
-		const before = frameRowsIn(
-			start,
-			lines.length - 1,
-			lines,
-			scrollContentOrigin(frame.root as BoxLike, scrollBox.scrollView) as BoxLike,
-		);
+		const origin = scrollContentOrigin(frame.root as BoxLike, scrollBox.scrollView) as BoxLike;
+		const row = rowRangeOf(lines, transcript.tool, WIDTH).start;
+		const before = createComponentTree(transcript.document, origin.rect.width, lines).ownerAt(row);
 
+		expect(origin.rect.y).toBe(0);
 		scroll.scrollToEnd();
 		const scrolled = renderLayoutFrame(
 			new VStack([{ component: scroll, grow: 1 }, { component: new Text("dock", 0, 0) }]),
@@ -116,8 +116,13 @@ describe("Pi's transcript layout", () => {
 
 		expect(scroll.scrollTop).toBeGreaterThan(0);
 		// The rows really are off-screen now: the content box sits above the
-		// viewport and its clip has been cut back to what is still painted.
+		// viewport by exactly scrollTop, which is the offset a screen row has to
+		// be converted through to become a content row.
 		expect(scrolledOrigin.rect.y).toBe(-scroll.scrollTop);
-		expect([...frameRowsIn(start, lines.length - 1, lines, scrolledOrigin)]).toEqual([...before]);
+		expect(scrolledOrigin.rect.width).toBe(origin.rect.width);
+		expect(
+			createComponentTree(transcript.document, scrolledOrigin.rect.width, lines).ownerAt(row)
+				?.component,
+		).toBe(before?.component);
 	});
 });

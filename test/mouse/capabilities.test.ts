@@ -16,7 +16,6 @@ const ALL = [
 	"routeWheel",
 	"handleSelectionMouseEvent",
 	"copySelectionToClipboard",
-	"applySelection",
 	"getWordSelection",
 	"getSelectionBounds",
 	"getSelectionColumns",
@@ -36,12 +35,12 @@ describe("probeCapabilities", () => {
 
 	it("skips a non-writable method", () => {
 		const proto = prototypeWith(ALL);
-		Object.defineProperty(proto, "applySelection", {
+		Object.defineProperty(proto, "copySelectionToClipboard", {
 			value: () => undefined,
 			writable: false,
 			configurable: true,
 		});
-		expect(probeCapabilities(proto).has("applySelection")).toBe(false);
+		expect(probeCapabilities(proto).has("copySelectionToClipboard")).toBe(false);
 	});
 
 	it("skips a non-configurable method", () => {
@@ -89,7 +88,7 @@ describe("probeCapabilities", () => {
 describe("enabledFeatures", () => {
 	it("enables everything when every capability is present", () => {
 		const features = enabledFeatures(probeCapabilities(prototypeWith(ALL)));
-		expect(features.size).toBe(7);
+		expect(features.size).toBe(6);
 	});
 
 	it("disables the pending mode when ctrl+c cannot be intercepted", () => {
@@ -100,10 +99,20 @@ describe("enabledFeatures", () => {
 		expect(features.has("editorBufferCopy")).toBe(true);
 	});
 
-	it("keeps frame-free copying when only the highlight path is missing", () => {
-		const without = ALL.filter((name) => name !== "applySelection");
-		const features = enabledFeatures(probeCapabilities(prototypeWith(without)));
-		expect(features.has("frameFreeSelection")).toBe(true);
+	it("claims no feature that installMouse would not install", () => {
+		// A capability probe is a report on Pi's surface; a *feature* is a
+		// promise that installMouse installs something. Frame-free selection is
+		// cut, so neither it nor the `applySelection` it was highlighted
+		// through survives anywhere in here.
+		const features = enabledFeatures(probeCapabilities(prototypeWith(ALL)));
+		expect([...features].sort()).toEqual([
+			"clickToExpandTools",
+			"editorBufferCopy",
+			"editorClickToCaret",
+			"editorWheelScroll",
+			"pathAwareWords",
+			"selectionPendingMode",
+		]);
 	});
 
 	it("disables both click features when the mouse event handler is missing", () => {

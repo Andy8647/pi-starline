@@ -1,14 +1,17 @@
-import { Container, Text } from "@earendil-works/pi-tui";
+import { Container, Markdown, Text } from "@earendil-works/pi-tui";
 import { describe, expect, it } from "vitest";
 import {
 	type ComponentLike,
 	createComponentTree,
 	isComponentLike,
+	isExpandableComponent,
 } from "../../extensions/starline/mouse/component-tree";
 import {
+	ExpandableText,
 	FixedLines,
 	FramedToolComponent,
 	makeTranscript,
+	plainMarkdownTheme,
 	rowRangeOf,
 	ThrowingComponent,
 } from "./component-graph";
@@ -209,5 +212,29 @@ describe("createComponentTree structural cases", () => {
 		expect(wide?.lines).toEqual(tool.render(60));
 		expect(narrow?.lines).toEqual(tool.render(20));
 		expect(narrow?.end).toBeGreaterThan(wide?.end ?? 0);
+	});
+});
+
+describe("isExpandableComponent", () => {
+	it("is true for a component exposing a callable setExpanded", () => {
+		expect(isExpandableComponent(new FramedToolComponent())).toBe(true);
+		// Looks nothing like a box, and that is the point: the duck type answers
+		// "can this expand", never "did this draw a border".
+		expect(isExpandableComponent(new ExpandableText(["plain output"]))).toBe(true);
+	});
+
+	it("is false for pi-tui's own leaf components", () => {
+		expect(isExpandableComponent(new Markdown("| a |\n| --- |\n", 1, 0, plainMarkdownTheme))).toBe(
+			false,
+		);
+		expect(isExpandableComponent(new Container())).toBe(false);
+		expect(isExpandableComponent(new Text("hi", 0, 0))).toBe(false);
+	});
+
+	it("is false for non-objects and for a non-callable setExpanded", () => {
+		expect(isExpandableComponent(undefined)).toBe(false);
+		expect(isExpandableComponent(null)).toBe(false);
+		expect(isExpandableComponent("box")).toBe(false);
+		expect(isExpandableComponent({ setExpanded: true })).toBe(false);
 	});
 });

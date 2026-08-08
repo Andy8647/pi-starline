@@ -16,10 +16,9 @@
  * }
  * ```
  *
- * — with the theme colouring dropped. It lives in its own module because
- * several test files need it and every one of them used square corners
- * instead, which is exactly how a rule-row glyph set with no `╭ ╮ ╰ ╯` in it
- * survived three review rounds while matching none of the frames that ship.
+ * — with the theme colouring dropped, so `FramedToolComponent` in
+ * `component-graph.ts` renders the shape that really ships rather than a
+ * hand-typed approximation of it.
  */
 
 /** `padToWidth` from `pi-toolbox/frame.ts`, for plain (unstyled) text. */
@@ -34,13 +33,4 @@ export function drawToolboxFrame(lines: readonly string[], width: number): strin
 	for (const line of lines) out.push(`│${padToWidth(line, inner)}│`);
 	out.push(`╰${"─".repeat(inner)}╯`);
 	return out;
-}
-
-/**
- * One framed body line, `inner + 2` cells wide. The extra leading space is
- * Pi's own shell padding, which lives inside the frame rather than being
- * drawn by it.
- */
-export function toolboxFrame(body: string, inner = 8): string[] {
-	return drawToolboxFrame([` ${body}`], inner + 2);
 }
