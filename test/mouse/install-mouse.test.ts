@@ -157,6 +157,61 @@ describe("installMouse selectionPendingMode", () => {
 		dispose();
 	});
 
+	it("a deselect clears a stale arm instead of leaving it to swallow ctrl+c", () => {
+		const { prototype, calls } = makePrototype();
+		const dispose = installMouse(prototype, {
+			getConfig: makeConfig(false, true),
+			requestRender,
+		});
+
+		prototype.copySelectionToClipboard(); // release #1: real bounds, arms
+		expect(activeSelectionHintText()).not.toBeNull();
+
+		// release #2: a plain click elsewhere collapses the selection. Pi calls
+		// copySelectionToClipboard unconditionally on every release; its own
+		// getSelectionBounds() now returns undefined.
+		prototype.selectionBounds = undefined;
+		prototype.copySelectionToClipboard();
+		expect(activeSelectionHintText()).toBeNull();
+
+		calls.length = 0; // isolate what ctrl+c does from here
+		const result = prototype.handleViewportInput("\x03");
+
+		// The interrupt must reach Pi's real handler, not be consumed for a
+		// no-op copy. Assert the predecessor actually ran, not just the shape
+		// of the return value.
+		expect(calls).toContain("viewport:\x03");
+		expect(result).toBeUndefined();
+		expect(activeSelectionHintText()).toBeNull();
+		dispose();
+	});
+
+	it("ctrl+c does not consume when an armed selection has gone stale some other way", () => {
+		// The same class of bug from the handleViewportInput side: state.pending
+		// can be true while Pi's own selection is already gone through a path
+		// that never calls copySelectionToClipboard (starting a new drag
+		// overwrites selectionAnchor/selectionFocus directly). This simulates
+		// that by mutating the bounds without a release in between.
+		const { prototype, calls } = makePrototype();
+		const dispose = installMouse(prototype, {
+			getConfig: makeConfig(false, true),
+			requestRender,
+		});
+
+		prototype.copySelectionToClipboard(); // arms
+		expect(activeSelectionHintText()).not.toBeNull();
+
+		prototype.selectionBounds = undefined; // Pi's selection is gone, unobserved
+
+		calls.length = 0;
+		const result = prototype.handleViewportInput("\x03");
+
+		expect(calls).toContain("viewport:\x03");
+		expect(result).toBeUndefined();
+		expect(activeSelectionHintText()).toBeNull();
+		dispose();
+	});
+
 	it("dispose removes the patches", () => {
 		const { prototype } = makePrototype();
 		const original = prototype.copySelectionToClipboard;

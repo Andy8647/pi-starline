@@ -148,7 +148,19 @@ function installSelectionPendingMode(
 			}
 			const typedReceiver = receiver as MouseCapablePrototype;
 			const bounds = typedReceiver.getSelectionBounds();
-			if (!bounds) return undefined;
+			if (!bounds) {
+				// A collapsed or empty selection (e.g. a plain click after a prior
+				// drag) still reaches this call — Pi runs it unconditionally on
+				// every release and relies on its own `if (!selection) return;`
+				// guard. Any stale arm from an earlier selection must not survive
+				// this: left in place, it would make a later ctrl+c consume the
+				// key for a no-op copy instead of falling through to interrupt.
+				if (state.pending) {
+					state.clear();
+					deps.requestRender();
+				}
+				return undefined;
+			}
 			state.arm(selectionText(typedReceiver, bounds).length);
 			deps.requestRender();
 			return undefined;
@@ -162,9 +174,21 @@ function installSelectionPendingMode(
 		({ predecessor, receiver, args }) => {
 			const data = args[0];
 			if (data === CTRL_C && state.pending) {
+				const typedReceiver = receiver as MouseCapablePrototype;
+				// `state.pending` can be stale: Pi clears its own selection
+				// through paths this module never sees (e.g. starting a new drag
+				// overwrites `selectionAnchor`/`selectionFocus` directly, with no
+				// call to `copySelectionToClipboard`). Re-read the real bounds
+				// before deciding: a copy that would be a no-op must not consume
+				// ctrl+c, or an in-flight interrupt gets swallowed for nothing.
+				if (!typedReceiver.getSelectionBounds()) {
+					state.clear();
+					deps.requestRender();
+					return Reflect.apply(predecessor, receiver, args);
+				}
 				performingRealCopy = true;
 				try {
-					copyWithNotice(receiver as MouseCapablePrototype, deps.getConfig().mouse.copyNotice);
+					copyWithNotice(typedReceiver, deps.getConfig().mouse.copyNotice);
 				} finally {
 					performingRealCopy = false;
 				}
