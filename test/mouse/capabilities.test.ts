@@ -1,0 +1,109 @@
+import { describe, expect, it } from "vitest";
+import {
+	disabledFeatureWarning,
+	enabledFeatures,
+	probeCapabilities,
+} from "../../extensions/starline/mouse/capabilities";
+
+function prototypeWith(names: string[]): object {
+	const proto: Record<string, unknown> = {};
+	for (const name of names) proto[name] = function stub() {};
+	return proto;
+}
+
+const ALL = [
+	"handleViewportInput",
+	"routeWheel",
+	"handleSelectionMouseEvent",
+	"copySelectionToClipboard",
+	"applySelection",
+	"getWordSelection",
+];
+
+describe("probeCapabilities", () => {
+	it("finds every capability on a complete prototype", () => {
+		expect([...probeCapabilities(prototypeWith(ALL))].sort()).toEqual([...ALL].sort());
+	});
+
+	it("skips a non-function property", () => {
+		const proto = prototypeWith(ALL) as Record<string, unknown>;
+		proto.routeWheel = 42;
+		expect(probeCapabilities(proto).has("routeWheel")).toBe(false);
+	});
+
+	it("skips a non-writable method", () => {
+		const proto = prototypeWith(ALL);
+		Object.defineProperty(proto, "applySelection", {
+			value: () => undefined,
+			writable: false,
+			configurable: true,
+		});
+		expect(probeCapabilities(proto).has("applySelection")).toBe(false);
+	});
+
+	it("skips a non-configurable method", () => {
+		const proto = prototypeWith(ALL);
+		Object.defineProperty(proto, "getWordSelection", {
+			value: () => undefined,
+			writable: true,
+			configurable: false,
+		});
+		expect(probeCapabilities(proto).has("getWordSelection")).toBe(false);
+	});
+
+	it("survives a prototype whose getter throws", () => {
+		const proto = prototypeWith(ALL);
+		Object.defineProperty(proto, "routeWheel", {
+			get() {
+				throw new Error("boom");
+			},
+			configurable: true,
+		});
+		expect(() => probeCapabilities(proto)).not.toThrow();
+		expect(probeCapabilities(proto).has("routeWheel")).toBe(false);
+	});
+});
+
+describe("enabledFeatures", () => {
+	it("enables everything when every capability is present", () => {
+		const features = enabledFeatures(probeCapabilities(prototypeWith(ALL)));
+		expect(features.size).toBe(7);
+	});
+
+	it("disables the pending mode when ctrl+c cannot be intercepted", () => {
+		const without = ALL.filter((name) => name !== "handleViewportInput");
+		const features = enabledFeatures(probeCapabilities(prototypeWith(without)));
+		expect(features.has("selectionPendingMode")).toBe(false);
+		// Copying from the editor buffer needs no key interception.
+		expect(features.has("editorBufferCopy")).toBe(true);
+	});
+
+	it("keeps frame-free copying when only the highlight path is missing", () => {
+		const without = ALL.filter((name) => name !== "applySelection");
+		const features = enabledFeatures(probeCapabilities(prototypeWith(without)));
+		expect(features.has("frameFreeSelection")).toBe(true);
+	});
+
+	it("disables both click features when the mouse event handler is missing", () => {
+		const without = ALL.filter((name) => name !== "handleSelectionMouseEvent");
+		const features = enabledFeatures(probeCapabilities(prototypeWith(without)));
+		expect(features.has("clickToExpandTools")).toBe(false);
+		expect(features.has("editorClickToCaret")).toBe(false);
+	});
+});
+
+describe("disabledFeatureWarning", () => {
+	it("is silent when nothing is disabled", () => {
+		expect(
+			disabledFeatureWarning(enabledFeatures(probeCapabilities(prototypeWith(ALL)))),
+		).toBeNull();
+	});
+
+	it("names every disabled feature in one message", () => {
+		const features = enabledFeatures(probeCapabilities(prototypeWith([])));
+		const warning = disabledFeatureWarning(features);
+		expect(warning).toContain("selectionPendingMode");
+		expect(warning).toContain("editorWheelScroll");
+		expect(warning?.split("\n")).toHaveLength(1);
+	});
+});
