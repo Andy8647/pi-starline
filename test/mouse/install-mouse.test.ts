@@ -224,3 +224,123 @@ describe("installMouse selectionPendingMode", () => {
 		expect(activeSelectionHintText()).toBeNull();
 	});
 });
+
+function decodeOsc52(data: string): string {
+	const match = /\x1b\]52;c;([A-Za-z0-9+/=]*)\x07/.exec(data);
+	return Buffer.from(match?.[1] ?? "", "base64").toString();
+}
+
+/**
+ * A three-row selection over a box frame — top and bottom rules, one body
+ * row — plus the layout tree that says a box owns rows 0-2 at columns 0-9.
+ * `currentLayout`/`terminal` are what `performFrameFreeCopy` needs; neither
+ * is a probed capability (see `index.ts`'s comment on `terminal`), so they
+ * can be present on a fake regardless of which methods this fixture omits.
+ */
+function makeFramedFixture() {
+	const written: string[] = [];
+	return {
+		written,
+		bounds: { start: { row: 0, col: 0 }, end: { row: 2, col: 10 } } as SelectionBounds,
+		previousScreen: ["┌────────┐", "│ hello  │", "└────────┘"],
+		currentLayout: { root: { rect: { x: 0, y: 0, width: 10, height: 3 }, children: [] } },
+		terminal: { write: (data: string) => written.push(data) },
+	};
+}
+
+describe("installMouse frameFreeSelection independent of selectionPendingMode", () => {
+	let requestRender: () => void;
+
+	beforeEach(() => {
+		requestRender = vi.fn();
+	});
+
+	it("still strips a frame from the copy when selectionPendingMode cannot install (no handleViewportInput)", () => {
+		// Regression: capabilities.ts declares frameFreeSelection needs only
+		// copySelectionToClipboard/getSelectionBounds/getSelectionColumns/flash,
+		// none of which is handleViewportInput. A Pi build missing it must still
+		// get a frame-free copy, not silently lose the feature because it used
+		// to ride along inside selectionPendingMode's install.
+		const fixture = makeFramedFixture();
+		let predecessorCalls = 0;
+		const prototype = {
+			selectionBounds: fixture.bounds,
+			previousScreen: fixture.previousScreen,
+			currentLayout: fixture.currentLayout,
+			terminal: fixture.terminal,
+			getSelectionBounds() {
+				return this.selectionBounds;
+			},
+			getSelectionColumns: fakeSelectionColumns,
+			copySelectionToClipboard() {
+				// Pi's own (unstripped) fallback — must not run once the frame-free
+				// write has already succeeded.
+				predecessorCalls++;
+			},
+			flash() {},
+			routeWheel() {},
+			handleSelectionMouseEvent() {},
+			applySelection() {},
+			getWordSelection() {},
+			// handleViewportInput deliberately absent.
+		};
+
+		const dispose = installMouse(prototype, {
+			// copyOnSelect: false is meaningless without handleViewportInput to
+			// arm-and-wait for, but must not be treated as "do nothing" either.
+			getConfig: makeConfig(false, true),
+			requestRender,
+		});
+
+		prototype.copySelectionToClipboard();
+
+		expect(predecessorCalls).toBe(0);
+		expect(fixture.written).toHaveLength(1);
+		expect(decodeOsc52(fixture.written[0])).toBe("hello");
+		dispose();
+	});
+
+	it("keeps the pending-arm + ctrl+c flow frame-free when both features are enabled", () => {
+		// With selectionPendingMode also available, behaviour is unchanged from
+		// before this fix: arm on release, real (frame-free) copy on ctrl+c.
+		const fixture = makeFramedFixture();
+		const prototype = {
+			selectionBounds: fixture.bounds,
+			previousScreen: fixture.previousScreen,
+			currentLayout: fixture.currentLayout,
+			terminal: fixture.terminal,
+			getSelectionBounds() {
+				return this.selectionBounds;
+			},
+			getSelectionColumns: fakeSelectionColumns,
+			copySelectionToClipboard() {},
+			handleViewportInput(data: string) {
+				return data === "\x03" ? undefined : { consume: true };
+			},
+			flash() {},
+			routeWheel() {},
+			handleSelectionMouseEvent() {},
+			applySelection() {},
+			getWordSelection() {},
+		};
+
+		const dispose = installMouse(prototype, {
+			getConfig: makeConfig(false, true),
+			requestRender,
+		});
+
+		prototype.copySelectionToClipboard(); // release: armed, nothing written yet
+		expect(fixture.written).toEqual([]);
+		// The hint's character count is the frame-free length ("hello", not the
+		// unstripped 30 characters of the three raw rows).
+		expect(activeSelectionHintText()).toBe("5 characters selected, ctrl+c to copy");
+
+		const result = prototype.handleViewportInput("\x03");
+
+		expect(result).toEqual({ consume: true });
+		expect(fixture.written).toHaveLength(1);
+		expect(decodeOsc52(fixture.written[0])).toBe("hello");
+		expect(activeSelectionHintText()).toBeNull();
+		dispose();
+	});
+});

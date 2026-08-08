@@ -55,8 +55,18 @@ const REQUIREMENTS: Record<MouseFeature, readonly MouseCapability[]> = {
 		"flash",
 	],
 	// Copying is the point; the highlight is a nicety, so this stays on when
-	// only `applySelection` is gone.
-	frameFreeSelection: ["copySelectionToClipboard"],
+	// only `applySelection` (or `handleViewportInput`, which only
+	// `selectionPendingMode` needs) is gone. But the copy itself reads the
+	// selection directly (`getSelectionBounds`, `getSelectionColumns`) to
+	// build the frame-free text and raises its own notice (`flash`) — see
+	// `performFrameFreeCopy` in `index.ts` — so those three must be reachable
+	// too, the same as `selectionPendingMode` needs them for its own reasons.
+	frameFreeSelection: [
+		"copySelectionToClipboard",
+		"getSelectionBounds",
+		"getSelectionColumns",
+		"flash",
+	],
 	pathAwareWords: ["getWordSelection"],
 	clickToExpandTools: ["handleSelectionMouseEvent"],
 	editorWheelScroll: ["routeWheel"],

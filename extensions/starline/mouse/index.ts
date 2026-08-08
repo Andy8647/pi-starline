@@ -3,19 +3,29 @@
  *
  * This is the first module that actually touches Pi rather than describing
  * what it would do to it. `installMouse` probes what the running Pi build
- * exposes, logs once if something is missing, and for `selectionPendingMode`
- * wraps two of Pi's `TuiAltScreen` methods through `installPrototypePatch`:
+ * exposes, logs once if something is missing, and installs each feature
+ * gated on exactly its own declared requirement (`capabilities.ts`) —
+ * `frameFreeSelection`, `selectionPendingMode`, and highlighting all install
+ * independently of one another, even though two of them share a method:
  *
- * - `copySelectionToClipboard` — the method Pi calls itself on mouse release.
- *   With `copyOnSelect` off, this wrapper intercepts that call, arms the
- *   pending state instead of copying, and calls through for every other
- *   caller (including its own ctrl+c path below).
- * - `handleViewportInput` — watched for a bare `ctrl+c` (`\x03`). With a
- *   selection pending it performs the real copy by calling back through
+ * - `copySelectionToClipboard` — the method Pi calls itself on mouse
+ *   release. `installCopying` wraps it whenever `frameFreeSelection` is
+ *   enabled, rewriting the text it copies to be frame-free (see
+ *   `performFrameFreeCopy`). When `selectionPendingMode` is *also* enabled,
+ *   the same wrapper additionally arms a pending state instead of copying
+ *   immediately when `copyOnSelect` is off, calling through for every other
+ *   caller (including its own ctrl+c path below). Without pending mode,
+ *   every release just copies immediately, frame-free.
+ * - `handleViewportInput` — only patched when `selectionPendingMode` is
+ *   enabled. Watched for a bare `ctrl+c` (`\x03`); with a selection pending
+ *   it performs the real copy by calling back through
  *   `copySelectionToClipboard` (guarded so that call is recognised as the
  *   real thing and not re-armed), then clears the pending state. Anything
  *   else — including `ctrl+c` with nothing pending — calls through to Pi's
  *   own handler, which is what keeps `ctrl+c` interrupting.
+ * - `applySelection` — patched independently whenever the capability itself
+ *   is present, keeping a frame's border out of the highlight; see
+ *   `installFrameFreeHighlight`.
  */
 import { sliceByColumn, stripTerminalSequences } from "@earendil-works/pi-tui";
 import type { PolishedTuiConfig } from "../config";
@@ -252,13 +262,36 @@ function copyWithNotice(receiver: MouseCapablePrototype, showNotice: boolean): v
 	}
 }
 
-function installSelectionPendingMode(
+/**
+ * Installs frame-free copying on `copySelectionToClipboard`, and — only when
+ * `pendingModeEnabled` — layers `selectionPendingMode`'s arm-and-wait-for-ctrl+c
+ * behaviour on top of it via a second patch on `handleViewportInput`.
+ *
+ * This is one patch with an internally-gated branch rather than two
+ * competing installs on the same method, because `installPrototypePatch`
+ * only ever holds one registration per adapter key (see
+ * `prototype-patch-registry.ts`) — a second `"mouse-copy"` install would
+ * replace the first, not compose with it. `frameFreeSelection` and
+ * `selectionPendingMode` are still independently gated at the call site in
+ * `installMouse`: `pendingModeEnabled` is exactly `enabled.has("selectionPendingMode")`,
+ * so this function's own body is the only place their behaviours combine.
+ *
+ * With `pendingModeEnabled: false` — `frameFreeSelection` on its own,
+ * `selectionPendingMode` off (say `handleViewportInput` is missing) — every
+ * release copies immediately, frame-free, the same as Pi's own default
+ * behaviour except for the text: honouring `copyOnSelect: false` requires
+ * `handleViewportInput` to ever be useful (a selection nobody can signal
+ * ctrl+c for would just be stranded), so that setting is not read at all in
+ * this mode.
+ */
+function installCopying(
 	prototype: MouseCapablePrototype,
 	deps: InstallMouseDeps,
+	pendingModeEnabled: boolean,
 ): () => void {
-	const state = new SelectionPendingState();
+	const state = pendingModeEnabled ? new SelectionPendingState() : undefined;
 	const previousState = activeState;
-	activeState = state;
+	if (state) activeState = state;
 
 	// Set while this module is driving `copySelectionToClipboard` itself (the
 	// ctrl+c path below), so the `mouse-copy` patch calls through instead of
@@ -270,20 +303,24 @@ function installSelectionPendingMode(
 		"copySelectionToClipboard",
 		"mouse-copy",
 		({ predecessor, receiver, args }) => {
-			const copyOnSelect = deps.getConfig().mouse.copyOnSelect;
 			const typedReceiver = receiver as MouseCapablePrototype;
+			// Without pending mode there is nothing to arm-and-wait for, so every
+			// release takes the real-copy branch below regardless of config.
+			const copyOnSelect = !state || deps.getConfig().mouse.copyOnSelect;
 			if (copyOnSelect || performingRealCopy) {
 				// The real copy, whether Pi triggered it directly on release
-				// (`copyOnSelect: true`) or this module is driving it itself for
-				// ctrl+c below. Either way the text must be frame-free, which
-				// predecessor's own text-building does not know how to be — see
-				// `performFrameFreeCopy`. Falls back to predecessor verbatim when
-				// there is nothing to copy or no terminal to write it to, so an
-				// empty/collapsed selection still gets predecessor's own no-op.
+				// (`copyOnSelect: true`, or pending mode unavailable) or this
+				// module is driving it itself for ctrl+c below. Either way the
+				// text must be frame-free, which predecessor's own text-building
+				// does not know how to be — see `performFrameFreeCopy`. Falls back
+				// to predecessor verbatim when there is nothing to copy or no
+				// terminal to write it to, so an empty/collapsed selection still
+				// gets predecessor's own no-op.
 				const bounds = typedReceiver.getSelectionBounds();
 				if (bounds && performFrameFreeCopy(typedReceiver, bounds)) return undefined;
 				return Reflect.apply(predecessor, receiver, args);
 			}
+			// state is guaranteed here: copyOnSelect is only false when state exists.
 			const bounds = typedReceiver.getSelectionBounds();
 			if (!bounds) {
 				// A collapsed or empty selection (e.g. a plain click after a prior
@@ -304,43 +341,46 @@ function installSelectionPendingMode(
 		},
 	);
 
-	const cleanupViewportInput = installPrototypePatch(
-		prototype,
-		"handleViewportInput",
-		"mouse-viewport-input",
-		({ predecessor, receiver, args }) => {
-			const data = args[0];
-			if (data === CTRL_C && state.pending) {
-				const typedReceiver = receiver as MouseCapablePrototype;
-				// `state.pending` can be stale: Pi clears its own selection
-				// through paths this module never sees (e.g. starting a new drag
-				// overwrites `selectionAnchor`/`selectionFocus` directly, with no
-				// call to `copySelectionToClipboard`). Re-read the real bounds
-				// before deciding: a copy that would be a no-op must not consume
-				// ctrl+c, or an in-flight interrupt gets swallowed for nothing.
-				if (!typedReceiver.getSelectionBounds()) {
-					state.clear();
-					deps.requestRender();
+	const cleanupViewportInput = state
+		? installPrototypePatch(
+				prototype,
+				"handleViewportInput",
+				"mouse-viewport-input",
+				({ predecessor, receiver, args }) => {
+					const data = args[0];
+					if (data === CTRL_C && state.pending) {
+						const typedReceiver = receiver as MouseCapablePrototype;
+						// `state.pending` can be stale: Pi clears its own selection
+						// through paths this module never sees (e.g. starting a new
+						// drag overwrites `selectionAnchor`/`selectionFocus` directly,
+						// with no call to `copySelectionToClipboard`). Re-read the real
+						// bounds before deciding: a copy that would be a no-op must not
+						// consume ctrl+c, or an in-flight interrupt gets swallowed for
+						// nothing.
+						if (!typedReceiver.getSelectionBounds()) {
+							state.clear();
+							deps.requestRender();
+							return Reflect.apply(predecessor, receiver, args);
+						}
+						performingRealCopy = true;
+						try {
+							copyWithNotice(typedReceiver, deps.getConfig().mouse.copyNotice);
+						} finally {
+							performingRealCopy = false;
+						}
+						state.clear();
+						deps.requestRender();
+						return { consume: true };
+					}
 					return Reflect.apply(predecessor, receiver, args);
-				}
-				performingRealCopy = true;
-				try {
-					copyWithNotice(typedReceiver, deps.getConfig().mouse.copyNotice);
-				} finally {
-					performingRealCopy = false;
-				}
-				state.clear();
-				deps.requestRender();
-				return { consume: true };
-			}
-			return Reflect.apply(predecessor, receiver, args);
-		},
-	);
+				},
+			)
+		: undefined;
 
 	return () => {
 		cleanupCopy();
-		cleanupViewportInput();
-		if (activeState === state) activeState = previousState;
+		cleanupViewportInput?.();
+		if (state && activeState === state) activeState = previousState;
 	};
 }
 
@@ -447,12 +487,13 @@ export function installMouse(prototype: object, deps: InstallMouseDeps): () => v
 
 	const typedPrototype = prototype as MouseCapablePrototype;
 	const cleanups: Array<() => void> = [];
-	// `selectionPendingMode`'s own requirements are a superset of
-	// `frameFreeSelection`'s single one (`copySelectionToClipboard`), so
-	// frame-free copying rides along whenever pending mode installs — see
-	// `performFrameFreeCopy`'s call sites inside `installSelectionPendingMode`.
-	if (enabled.has("selectionPendingMode")) {
-		cleanups.push(installSelectionPendingMode(typedPrototype, deps));
+	// Each gated on exactly its own declared requirement, independently:
+	// `frameFreeSelection` alone still installs a (frame-free) copy patch
+	// when `selectionPendingMode` cannot (e.g. no `handleViewportInput`),
+	// and `selectionPendingMode`'s extra behaviour layers on top when it can
+	// — see `installCopying`.
+	if (enabled.has("frameFreeSelection")) {
+		cleanups.push(installCopying(typedPrototype, deps, enabled.has("selectionPendingMode")));
 	}
 	// Highlighting is a nicety on top of copying (capabilities.ts), so it is
 	// gated on nothing but its own capability, independent of every feature
