@@ -14,7 +14,15 @@ const LEGACY_PROTOTYPE_PATCH_REGISTRY = Symbol.for("pi-zentui.prototype-patch-re
 type PrototypePatchAdapter =
 	| "user-message-render"
 	| "user-message-invalidate"
-	| "selector-border-render";
+	| "selector-border-render"
+	| "mouse-viewport-input"
+	| "mouse-wheel"
+	| "mouse-selection-event"
+	| "mouse-copy"
+	| "mouse-apply-selection"
+	| "mouse-word-selection";
+
+type PrototypeMethodName = string;
 
 type PrototypeMethod = (this: unknown, ...args: unknown[]) => unknown;
 
@@ -32,7 +40,7 @@ type Registration = {
 };
 
 type PatchRecord = {
-	method: "render" | "invalidate";
+	method: PrototypeMethodName;
 	predecessor: PrototypeMethod;
 	wrapper: PrototypeMethod;
 	registration?: Registration;
@@ -63,7 +71,7 @@ function registryFor(target: PatchTarget): PatchRegistry {
 
 function createCleanup(
 	target: PatchTarget,
-	method: "render" | "invalidate",
+	method: PrototypeMethodName,
 	adapter: PrototypePatchAdapter,
 	registry: PatchRegistry,
 	record: PatchRecord,
@@ -90,7 +98,7 @@ function createCleanup(
 
 export function installPrototypePatch(
 	targetValue: object,
-	method: "render" | "invalidate",
+	method: PrototypeMethodName,
 	adapter: PrototypePatchAdapter,
 	behavior: PatchBehavior,
 ): () => void {
