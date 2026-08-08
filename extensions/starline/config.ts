@@ -104,16 +104,54 @@ export type FooterSegmentsConfig = {
 	packageVersion: boolean;
 };
 
-export type FixedEditorConfig = {
+export type MouseConfig = {
 	enabled: boolean;
-	mouseScroll: boolean;
-	/** Show the "copied to clipboard" notice. Only fires for an automatic copy. */
+	wheelRouting: boolean;
+	/** Show a "copied to clipboard" notice for a copy Starline itself performs. */
 	copyNotice: boolean;
 	/** Copy on mouse release. When false the highlight waits for ctrl+c. */
 	copyOnSelect: boolean;
 	/** Clicking a tool box's frame or its expand hint expands that one box. */
 	clickToExpandTools: boolean;
+	/** Double/triple-click word selection stops at path separators. */
+	pathAwareWords: boolean;
 };
+
+const FIXED_EDITOR_KEY_MAP: Record<string, keyof MouseConfig> = {
+	enabled: "enabled",
+	mouseScroll: "wheelRouting",
+	copyNotice: "copyNotice",
+	copyOnSelect: "copyOnSelect",
+	clickToExpandTools: "clickToExpandTools",
+};
+
+/**
+ * Carry a 0.2.x `fixedEditor` block over to `mouse`.
+ *
+ * The old name described a compositor that no longer exists. Anything already
+ * written under `mouse` was set deliberately and outranks what is being
+ * migrated.
+ */
+export function migrateFixedEditorKeys(raw: Record<string, unknown>): {
+	config: Record<string, unknown>;
+	migrated: boolean;
+} {
+	const legacy = raw.fixedEditor;
+	if (!legacy || typeof legacy !== "object") return { config: raw, migrated: false };
+
+	const existing = (typeof raw.mouse === "object" && raw.mouse !== null ? raw.mouse : {}) as Record<
+		string,
+		unknown
+	>;
+	const mouse: Record<string, unknown> = { ...existing };
+	for (const [oldKey, newKey] of Object.entries(FIXED_EDITOR_KEY_MAP)) {
+		const value = (legacy as Record<string, unknown>)[oldKey];
+		if (value !== undefined && !(newKey in mouse)) mouse[newKey] = value;
+	}
+
+	const { fixedEditor: _dropped, ...rest } = raw;
+	return { config: { ...rest, mouse }, migrated: true };
+}
 
 export type ExtensionStatusPlacement = "off" | "left" | "middle" | "right";
 export type ExtensionStatusColorMode = "themed" | "original";
@@ -226,7 +264,7 @@ export type PolishedTuiConfig = {
 	gitCommit: GitCommitConfig;
 	gitMetrics: GitMetricsConfig;
 	extensionStatuses: ExtensionStatusesConfig;
-	fixedEditor: FixedEditorConfig;
+	mouse: MouseConfig;
 };
 
 /**
@@ -371,12 +409,13 @@ export const defaultConfig: PolishedTuiConfig = {
 		placements: {},
 		colorModes: {},
 	},
-	fixedEditor: {
-		enabled: false,
-		mouseScroll: true,
+	mouse: {
+		enabled: true,
+		wheelRouting: true,
 		copyNotice: true,
 		copyOnSelect: true,
 		clickToExpandTools: true,
+		pathAwareWords: true,
 	},
 };
 
@@ -780,26 +819,27 @@ function normalizeExtensionStatuses(
 	};
 }
 
-function normalizeFixedEditorConfig(record: Record<string, unknown>): FixedEditorConfig {
+function normalizeMouseConfig(record: Record<string, unknown>): MouseConfig {
 	return {
-		enabled:
-			typeof record.enabled === "boolean" ? record.enabled : defaultConfig.fixedEditor.enabled,
-		mouseScroll:
-			typeof record.mouseScroll === "boolean"
-				? record.mouseScroll
-				: defaultConfig.fixedEditor.mouseScroll,
+		enabled: typeof record.enabled === "boolean" ? record.enabled : defaultConfig.mouse.enabled,
+		wheelRouting:
+			typeof record.wheelRouting === "boolean"
+				? record.wheelRouting
+				: defaultConfig.mouse.wheelRouting,
 		copyNotice:
-			typeof record.copyNotice === "boolean"
-				? record.copyNotice
-				: defaultConfig.fixedEditor.copyNotice,
+			typeof record.copyNotice === "boolean" ? record.copyNotice : defaultConfig.mouse.copyNotice,
 		copyOnSelect:
 			typeof record.copyOnSelect === "boolean"
 				? record.copyOnSelect
-				: defaultConfig.fixedEditor.copyOnSelect,
+				: defaultConfig.mouse.copyOnSelect,
 		clickToExpandTools:
 			typeof record.clickToExpandTools === "boolean"
 				? record.clickToExpandTools
-				: defaultConfig.fixedEditor.clickToExpandTools,
+				: defaultConfig.mouse.clickToExpandTools,
+		pathAwareWords:
+			typeof record.pathAwareWords === "boolean"
+				? record.pathAwareWords
+				: defaultConfig.mouse.pathAwareWords,
 	};
 }
 
@@ -973,9 +1013,9 @@ export function mergeConfig(parsed: unknown): PolishedTuiConfig {
 		? normalizeGitMetricsConfig(config.gitMetrics as Record<string, unknown>)
 		: defaultConfig.gitMetrics;
 	const gitBranch = parseGitBranchConfig(config.gitBranch);
-	const fixedEditor = isRecord(config.fixedEditor)
-		? normalizeFixedEditorConfig(config.fixedEditor as Record<string, unknown>)
-		: defaultConfig.fixedEditor;
+	const mouse = isRecord(config.mouse)
+		? normalizeMouseConfig(config.mouse as Record<string, unknown>)
+		: defaultConfig.mouse;
 	const editorMetadataFormat = stringValue(config, "editorMetadataFormat");
 	return {
 		projectRefreshIntervalMs: parseProjectRefreshIntervalMs(config.projectRefreshIntervalMs),
@@ -1019,7 +1059,7 @@ export function mergeConfig(parsed: unknown): PolishedTuiConfig {
 			colors: { ...extensionStatuses.colors },
 			icons: { ...extensionStatuses.icons },
 		},
-		fixedEditor,
+		mouse,
 	};
 }
 
@@ -1055,7 +1095,22 @@ export function getExtensionStatusColorMode(
 export function loadConfig(): PolishedTuiConfig {
 	try {
 		if (!existsSync(configPath)) return mergeConfig({});
-		return mergeConfig(JSON.parse(readFileSync(configPath, "utf8")));
+		const parsed = JSON.parse(readFileSync(configPath, "utf8"));
+		if (!isRecord(parsed)) return mergeConfig(parsed);
+
+		const { config, migrated } = migrateFixedEditorKeys(parsed);
+		if (migrated) {
+			try {
+				writeConfigAtomically(configPath, config);
+			} catch {
+				// Best effort: still use the migrated config for this run even if
+				// the write-back fails (e.g. read-only filesystem).
+			}
+			console.warn(
+				"[starline] Renamed your `fixedEditor` settings to `mouse` — the fixed editor is gone and Pi's own fullscreen mode replaces it. Your choices were kept.",
+			);
+		}
+		return mergeConfig(config);
 	} catch {
 		return mergeConfig({});
 	}
@@ -1234,23 +1289,19 @@ export function saveExtensionStatusColorMode(
 	});
 }
 
-export function saveFixedEditorPatch(
-	patch: Partial<FixedEditorConfig>,
-	path = configPath,
-): PolishedTuiConfig {
+export function saveMousePatch(patch: Partial<MouseConfig>, path = configPath): PolishedTuiConfig {
 	return mutateConfig(path, (record) => {
-		const existing = isRecord(record.fixedEditor)
-			? { ...(record.fixedEditor as Record<string, unknown>) }
-			: {};
-		record.fixedEditor = {
+		const existing = isRecord(record.mouse) ? { ...(record.mouse as Record<string, unknown>) } : {};
+		record.mouse = {
 			...existing,
 			...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
-			...(patch.mouseScroll !== undefined ? { mouseScroll: patch.mouseScroll } : {}),
+			...(patch.wheelRouting !== undefined ? { wheelRouting: patch.wheelRouting } : {}),
 			...(patch.copyNotice !== undefined ? { copyNotice: patch.copyNotice } : {}),
 			...(patch.copyOnSelect !== undefined ? { copyOnSelect: patch.copyOnSelect } : {}),
 			...(patch.clickToExpandTools !== undefined
 				? { clickToExpandTools: patch.clickToExpandTools }
 				: {}),
+			...(patch.pathAwareWords !== undefined ? { pathAwareWords: patch.pathAwareWords } : {}),
 		};
 	});
 }

@@ -11,11 +11,11 @@ import {
 	type ExtensionStatusColorMode,
 	type ExtensionStatusPlacement,
 	ensureConfigExists,
-	type FixedEditorConfig,
 	type FooterSegmentsConfig,
 	type GitBranchConfig,
 	type IconMode,
 	loadConfig,
+	type MouseConfig,
 	type PathDisplayConfig,
 	type PolishedTuiConfig,
 	type SeparatorStyle,
@@ -23,11 +23,11 @@ import {
 	saveContextStylePatch,
 	saveExtensionStatusColorMode,
 	saveExtensionStatusPlacement,
-	saveFixedEditorPatch,
 	saveFooterFormatPatch,
 	saveFooterSegmentsPatch,
 	saveGitBranchPatch,
 	saveIconsModePatch,
+	saveMousePatch,
 	savePathDisplayPatch,
 	saveSeparatorPatch,
 	saveUiFeaturesPatch,
@@ -428,7 +428,7 @@ export default function (pi: ExtensionAPI) {
 		syncFooterState(ctx);
 		stopProjectRefresh();
 		applyConfiguredUi(ctx);
-		if (currentConfig.fixedEditor?.enabled) {
+		if (currentConfig.mouse?.enabled) {
 			installFixedEditorProbe(ctx, getCurrentConfig, sessionLifecycle);
 		}
 		refresh();
@@ -542,8 +542,8 @@ export default function (pi: ExtensionAPI) {
 		setExtensionStatusColorMode(key: string, colorMode: ExtensionStatusColorMode) {
 			currentConfig = saveExtensionStatusColorMode(key, colorMode);
 		},
-		setFixedEditor(patch: Partial<FixedEditorConfig>, ctx: ExtensionContext) {
-			currentConfig = saveFixedEditorPatch(patch);
+		setFixedEditor(patch: Partial<MouseConfig>, ctx: ExtensionContext) {
+			currentConfig = saveMousePatch(patch);
 			if (patch.enabled === true) {
 				installFixedEditorProbe(ctx, getCurrentConfig, sessionLifecycle);
 			} else if (patch.enabled === false) {

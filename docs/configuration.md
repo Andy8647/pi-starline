@@ -32,7 +32,7 @@ Every option Starline has. For the guide to the pinned editor, see [Fixed editor
 | `gitCommit` | object | `{ "hashLength": 7, "onlyDetached": true, "showTag": true }` | Starship `git_commit`-style options for the `gitCommit` footer segment. |
 | `gitMetrics` | object | `{ "onlyNonzero": true, "ignoreSubmodules": false }` | Starship `git_metrics`-style options for the `gitMetrics` footer segment. |
 | `extensionStatuses` | object | see [Pill footer](#pill-footer) | Placement, colour, and icon for third-party extension statuses. |
-| `fixedEditor` | object | `{ "enabled": false, "mouseScroll": true, "copyNotice": true, "copyOnSelect": true, "clickToExpandTools": true }` | Pins the editor and footer at the bottom of the terminal, see [Fixed editor](fixed-editor.md). |
+| `mouse` | object | see [Mouse features](#mouse-features) | Wheel routing, click-to-expand tool boxes, path-aware word selection, and Starline's own copy behaviour. |
 
 User config lives at `~/.pi/agent/starline.json`. The file is optional: missing or invalid known values fall back to Starline defaults, unknown keys are ignored at runtime, and `/starline` can patch color-source settings, UI feature toggles, built-in footer segment visibility, and active third-party status placements.
 
@@ -209,12 +209,13 @@ Default config values — copy this and change any value you want:
 		"colors": {},
 		"icons": {}
 	},
-	"fixedEditor": {
-		"enabled": false,
-		"mouseScroll": true,
+	"mouse": {
+		"enabled": true,
+		"wheelRouting": true,
 		"copyNotice": true,
 		"copyOnSelect": true,
-		"clickToExpandTools": true
+		"clickToExpandTools": true,
+		"pathAwareWords": true
 	}
 }
 ```
@@ -452,6 +453,30 @@ Expansion refuses if the text behind the placeholder is no longer what was
 collapsed: Pi renumbers paste ids when a marker is deleted, so an id can come to
 point somewhere else. The cost of refusing is a second placeholder; the cost of
 guessing would be silently pasting the wrong thing.
+
+## Mouse features
+
+```json
+{
+	"mouse": {
+		"enabled": true,
+		"wheelRouting": true,
+		"copyNotice": true,
+		"copyOnSelect": true,
+		"clickToExpandTools": true,
+		"pathAwareWords": true
+	}
+}
+```
+
+`mouse` replaces the old `fixedEditor` namespace: what it named stopped being either fixed or only about the editor once Starline moved to patching Pi 0.84's own renderer instead of running its own compositor. A `fixedEditor` block from an older config is migrated automatically the first time Starline loads it — every old key is carried over under its new name, the old block is removed, and the change is written back once with a warning. An explicit `mouse` key already present in the config always wins over whatever the migration would have written for it.
+
+- `enabled` — master switch for every mouse feature below. On by default.
+- `wheelRouting` — routes the mouse wheel to scroll the transcript instead of leaving it to the terminal.
+- `copyNotice` — shows a "Copied to clipboard" flash for a copy **Starline** performs, such as `ctrl+c` in pending selection mode. Pi confirms its own copy-on-release with its own flash regardless of this setting.
+- `copyOnSelect` — copy on mouse release. When `false`, a highlight waits for `ctrl+c` instead (pending selection mode).
+- `clickToExpandTools` — clicking a tool box's frame or its expand hint expands that one box.
+- `pathAwareWords` — double/triple-click word selection stops at path separators (`/`, `.`) instead of only at whitespace.
 
 ## Editor cursor
 

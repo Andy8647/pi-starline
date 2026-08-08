@@ -64,7 +64,7 @@ describe("fixed-editor probe lifecycle", () => {
 			ctx as never,
 			() => ({
 				...defaultConfig,
-				fixedEditor: { ...defaultConfig.fixedEditor, enabled: true },
+				mouse: { ...defaultConfig.mouse, enabled: true },
 			}),
 			lifecycle,
 		);
@@ -114,7 +114,7 @@ describe("fixed-editor probe lifecycle", () => {
 			ctx as never,
 			() => ({
 				...defaultConfig,
-				fixedEditor: { ...defaultConfig.fixedEditor, enabled: true },
+				mouse: { ...defaultConfig.mouse, enabled: true },
 			}),
 			lifecycle,
 		);

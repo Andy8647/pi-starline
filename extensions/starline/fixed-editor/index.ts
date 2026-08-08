@@ -123,7 +123,7 @@ function warnUnsupported(ctx: ExtensionContext): void {
 	console.warn(
 		"[starline] Fixed editor is off: it cannot reach this Pi's renderer. " +
 			'Pi 0.84 has its own — set tuiMode to "fullscreen" in /settings. ' +
-			"Run /starline fixed-editor disable to hide this message.",
+			"Run /starline mouse disable to hide this message.",
 	);
 }
 
@@ -135,7 +135,7 @@ function installFromProbe(
 	if (compositor) return;
 	try {
 		const config = getConfig();
-		if (!config.fixedEditor?.enabled) return;
+		if (!config.mouse?.enabled) return;
 
 		const capabilities = inspectPiTui(tui);
 		if (!capabilities) {
@@ -146,11 +146,11 @@ function installFromProbe(
 		const next = new TerminalSplitCompositor(
 			capabilities,
 			() => ({
-				enabled: getConfig().fixedEditor?.enabled ?? false,
-				mouseScroll: getConfig().fixedEditor?.mouseScroll ?? false,
-				copyNotice: getConfig().fixedEditor?.copyNotice ?? true,
-				copyOnSelect: getConfig().fixedEditor?.copyOnSelect ?? true,
-				clickToExpandTools: getConfig().fixedEditor?.clickToExpandTools ?? true,
+				enabled: getConfig().mouse?.enabled ?? false,
+				mouseScroll: getConfig().mouse?.wheelRouting ?? false,
+				copyNotice: getConfig().mouse?.copyNotice ?? true,
+				copyOnSelect: getConfig().mouse?.copyOnSelect ?? true,
+				clickToExpandTools: getConfig().mouse?.clickToExpandTools ?? true,
 				hardwareCursor: getConfig().editorCursor === "terminal",
 				editorClickCursor: getConfig().editorClickCursor,
 				editorPaddingY: getConfig().editorPaddingY,
@@ -180,7 +180,7 @@ const WIDGET_KEY = "starline-fixed-editor-probe";
 /**
  * Register the fixed-editor probe widget.
  * Call from session_start after editor + footer install.
- * Only activates when `fixedEditor.enabled` is true.
+ * Only activates when `mouse.enabled` is true.
  */
 export function installFixedEditorProbe(
 	ctx: ExtensionContext,

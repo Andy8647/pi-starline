@@ -26,10 +26,10 @@ import {
 	saveContextThresholdsPatch,
 	saveExtensionStatusColorMode,
 	saveExtensionStatusPlacement,
-	saveFixedEditorPatch,
 	saveFooterFormatPatch,
 	saveFooterSegmentsPatch,
 	saveGitBranchPatch,
+	saveMousePatch,
 	savePathDisplayPatch,
 	saveSeparatorPatch,
 	saveUiFeaturesPatch,
@@ -106,42 +106,44 @@ describe("mergeConfig", () => {
 		});
 	});
 
-	it("defaults fixedEditor to disabled with mouse scroll on", () => {
-		expect(mergeConfig({}).fixedEditor).toEqual({
-			enabled: false,
-			mouseScroll: true,
+	it("defaults mouse features to enabled", () => {
+		expect(mergeConfig({}).mouse).toEqual({
+			enabled: true,
+			wheelRouting: true,
 			copyNotice: true,
 			copyOnSelect: true,
 			clickToExpandTools: true,
+			pathAwareWords: true,
 		});
-		expect(defaultConfig.fixedEditor).toEqual({
-			enabled: false,
-			mouseScroll: true,
+		expect(defaultConfig.mouse).toEqual({
+			enabled: true,
+			wheelRouting: true,
 			copyNotice: true,
 			copyOnSelect: true,
 			clickToExpandTools: true,
+			pathAwareWords: true,
 		});
 	});
 
-	it("accepts fixedEditor config", () => {
-		expect(mergeConfig({ fixedEditor: { enabled: true, mouseScroll: false } }).fixedEditor).toEqual(
-			{
-				enabled: true,
-				mouseScroll: false,
-				copyNotice: true,
-				copyOnSelect: true,
-				clickToExpandTools: true,
-			},
-		);
-	});
-
-	it("normalizes invalid fixedEditor values", () => {
-		expect(mergeConfig({ fixedEditor: { enabled: "yes" } }).fixedEditor).toEqual({
+	it("accepts mouse config", () => {
+		expect(mergeConfig({ mouse: { enabled: false, wheelRouting: false } }).mouse).toEqual({
 			enabled: false,
-			mouseScroll: true,
+			wheelRouting: false,
 			copyNotice: true,
 			copyOnSelect: true,
 			clickToExpandTools: true,
+			pathAwareWords: true,
+		});
+	});
+
+	it("normalizes invalid mouse values", () => {
+		expect(mergeConfig({ mouse: { enabled: "yes" } }).mouse).toEqual({
+			enabled: true,
+			wheelRouting: true,
+			copyNotice: true,
+			copyOnSelect: true,
+			clickToExpandTools: true,
+			pathAwareWords: true,
 		});
 	});
 
@@ -1362,33 +1364,34 @@ describe("style rendering", () => {
 	});
 });
 
-describe("saveFixedEditorPatch", () => {
+describe("saveMousePatch", () => {
 	it("saves enabled flag and round-trips", () => {
 		const dir = mkdtempSync(join(tmpdir(), "starline-cfg-"));
 		const path = join(dir, "starline.json");
 		try {
-			const config = saveFixedEditorPatch({ enabled: true }, path);
-			expect(config.fixedEditor.enabled).toBe(true);
+			const config = saveMousePatch({ enabled: false }, path);
+			expect(config.mouse.enabled).toBe(false);
 
 			const raw = JSON.parse(readFileSync(path, "utf8"));
-			expect(raw.fixedEditor.enabled).toBe(true);
+			expect(raw.mouse.enabled).toBe(false);
 		} finally {
 			rmSync(dir, { recursive: true });
 		}
 	});
 
-	it("saves mouseScroll flag alongside existing enabled", () => {
+	it("saves wheelRouting flag alongside existing enabled, without dropping it", () => {
 		const dir = mkdtempSync(join(tmpdir(), "starline-cfg-"));
 		const path = join(dir, "starline.json");
 		try {
-			saveFixedEditorPatch({ enabled: true }, path);
-			const config = saveFixedEditorPatch({ mouseScroll: true }, path);
-			expect(config.fixedEditor).toEqual({
-				enabled: true,
-				mouseScroll: true,
+			saveMousePatch({ enabled: false }, path);
+			const config = saveMousePatch({ wheelRouting: false }, path);
+			expect(config.mouse).toEqual({
+				enabled: false,
+				wheelRouting: false,
 				copyNotice: true,
 				copyOnSelect: true,
 				clickToExpandTools: true,
+				pathAwareWords: true,
 			});
 		} finally {
 			rmSync(dir, { recursive: true });

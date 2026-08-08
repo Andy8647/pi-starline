@@ -15,7 +15,6 @@ import {
 	type ContextStyle,
 	type ExtensionStatusColorMode,
 	type ExtensionStatusPlacement,
-	type FixedEditorConfig,
 	type FooterSegmentsConfig,
 	type GitBranchConfig,
 	type GitBranchMaxLength,
@@ -25,6 +24,7 @@ import {
 	isExtensionStatusColorMode,
 	isExtensionStatusPlacement,
 	isSeparatorStyle,
+	type MouseConfig,
 	type PathDisplayConfig,
 	type PathDisplayMode,
 	type PolishedTuiConfig,
@@ -91,7 +91,7 @@ type SettingsCommandDeps = {
 	getActiveExtensionStatuses: () => ReadonlyMap<string, string>;
 	setExtensionStatusPlacement: (key: string, placement: ExtensionStatusPlacement) => void;
 	setExtensionStatusColorMode: (key: string, colorMode: ExtensionStatusColorMode) => void;
-	setFixedEditor: (patch: Partial<FixedEditorConfig>, ctx: ExtensionContext) => void;
+	setFixedEditor: (patch: Partial<MouseConfig>, ctx: ExtensionContext) => void;
 	requestRender: () => void;
 	settingsListTheme?: SettingsListTheme;
 };
@@ -183,9 +183,9 @@ const directCommandSuggestions = [
 	"copy-friendly enable",
 	"copy-friendly disable",
 	"copy-friendly toggle",
-	"fixed-editor enable",
-	"fixed-editor disable",
-	"fixed-editor toggle",
+	"mouse enable",
+	"mouse disable",
+	"mouse toggle",
 	"format clear",
 	"format $cwd on $git_branch $fill $context",
 	"format $cwd( on $git_branch)($git_status)$fill($context)( | $cost)",
@@ -356,7 +356,7 @@ function parseDirectFeatureCommand(
 	};
 }
 
-function parseFixedEditorCommand(
+function parseMouseCommand(
 	args: string,
 	config: PolishedTuiConfig,
 ): { enabled: boolean } | undefined {
@@ -365,7 +365,7 @@ function parseFixedEditorCommand(
 
 	const words = normalized.split(/\s+/g).filter(Boolean);
 	const hasWord = (value: string) => words.includes(value);
-	if (!hasWord("fixededitor") && !(hasWord("fixed") && hasWord("editor"))) return undefined;
+	if (!hasWord("mouse")) return undefined;
 
 	const action = hasWord("toggle")
 		? "toggle"
@@ -377,7 +377,7 @@ function parseFixedEditorCommand(
 	if (!action) return undefined;
 
 	return {
-		enabled: action === "toggle" ? !config.fixedEditor.enabled : action === "enable",
+		enabled: action === "toggle" ? !config.mouse.enabled : action === "enable",
 	};
 }
 
@@ -444,35 +444,35 @@ function buildItems(
 			}),
 		);
 		items.push({
-			id: "fixedEditor",
-			label: "Fixed editor (experimental)",
+			id: "mouse",
+			label: "Mouse features",
 			description:
-				"Pin editor + footer at bottom while transcript scrolls. Uses alternate screen mode.",
-			currentValue: featureValue(config.fixedEditor.enabled),
+				"Wheel routing, click-to-expand tool boxes, path-aware word selection, and Starline's own copy behaviour.",
+			currentValue: featureValue(config.mouse.enabled),
 			values: featureStateValues,
 		});
-		if (config.fixedEditor.enabled) {
+		if (config.mouse.enabled) {
 			items.push({
-				id: "fixedEditorMouseScroll",
-				label: "Mouse scroll",
+				id: "mouseWheelRouting",
+				label: "Wheel routing",
 				description:
 					"Scroll transcript with mouse wheel. Breaks native terminal selection and tmux scrollback.",
-				currentValue: featureValue(config.fixedEditor.mouseScroll),
+				currentValue: featureValue(config.mouse.wheelRouting),
 				values: featureStateValues,
 			});
 			items.push({
-				id: "fixedEditorCopyNotice",
+				id: "mouseCopyNotice",
 				label: "Copy notice",
-				description: "Show a 'Copied to clipboard' message when drag-selecting text.",
-				currentValue: featureValue(config.fixedEditor.copyNotice),
+				description: "Show a 'Copied to clipboard' message for a copy Starline performs.",
+				currentValue: featureValue(config.mouse.copyNotice),
 				values: featureStateValues,
 			});
 			items.push({
-				id: "fixedEditorClickToExpandTools",
+				id: "mouseClickToExpandTools",
 				label: "Click to expand tools",
 				description:
-					"Click a tool box's border or its expand hint to expand that one box. Needs mouse scroll.",
-				currentValue: featureValue(config.fixedEditor.clickToExpandTools),
+					"Click a tool box's border or its expand hint to expand that one box. Needs wheel routing.",
+				currentValue: featureValue(config.mouse.clickToExpandTools),
 				values: featureStateValues,
 			});
 		}
@@ -663,17 +663,17 @@ export function registerStarlineSettingsCommand(pi: ExtensionAPI, deps: Settings
 				return;
 			}
 
-			const fixedEditorCommand = parseFixedEditorCommand(args, deps.getConfig());
-			if (fixedEditorCommand) {
+			const mouseCommand = parseMouseCommand(args, deps.getConfig());
+			if (mouseCommand) {
 				try {
-					deps.setFixedEditor({ enabled: fixedEditorCommand.enabled }, ctx);
+					deps.setFixedEditor({ enabled: mouseCommand.enabled }, ctx);
 					deps.requestRender();
 					if (ctx.hasUI) {
-						ctx.ui.notify(`Fixed editor: ${featureValue(fixedEditorCommand.enabled)}`, "info");
+						ctx.ui.notify(`Mouse: ${featureValue(mouseCommand.enabled)}`, "info");
 					}
 				} catch (error) {
 					const message = error instanceof Error ? error.message : String(error);
-					if (ctx.hasUI) ctx.ui.notify(`Could not update fixed editor: ${message}`, "error");
+					if (ctx.hasUI) ctx.ui.notify(`Could not update mouse settings: ${message}`, "error");
 				}
 				return;
 			}
@@ -806,23 +806,23 @@ export function registerStarlineSettingsCommand(pi: ExtensionAPI, deps: Settings
 									return;
 								}
 
-								if (id === "fixedEditor" && isFeatureState(newValue)) {
+								if (id === "mouse" && isFeatureState(newValue)) {
 									deps.setFixedEditor({ enabled: newValue === "enabled" }, ctx);
 									settingsList = makeSettingsList();
 									deps.requestRender();
-									ctx.ui.notify(`Fixed editor: ${newValue}`, "info");
+									ctx.ui.notify(`Mouse: ${newValue}`, "info");
 									tui.requestRender();
 									return;
 								}
-								if (id === "fixedEditorMouseScroll" && isFeatureState(newValue)) {
-									deps.setFixedEditor({ mouseScroll: newValue === "enabled" }, ctx);
+								if (id === "mouseWheelRouting" && isFeatureState(newValue)) {
+									deps.setFixedEditor({ wheelRouting: newValue === "enabled" }, ctx);
 									settingsList.updateValue(id, newValue);
 									deps.requestRender();
-									ctx.ui.notify(`Mouse scroll: ${newValue}`, "info");
+									ctx.ui.notify(`Wheel routing: ${newValue}`, "info");
 									tui.requestRender();
 									return;
 								}
-								if (id === "fixedEditorCopyNotice" && isFeatureState(newValue)) {
+								if (id === "mouseCopyNotice" && isFeatureState(newValue)) {
 									deps.setFixedEditor({ copyNotice: newValue === "enabled" }, ctx);
 									settingsList.updateValue(id, newValue);
 									deps.requestRender();
@@ -830,7 +830,7 @@ export function registerStarlineSettingsCommand(pi: ExtensionAPI, deps: Settings
 									tui.requestRender();
 									return;
 								}
-								if (id === "fixedEditorClickToExpandTools" && isFeatureState(newValue)) {
+								if (id === "mouseClickToExpandTools" && isFeatureState(newValue)) {
 									deps.setFixedEditor({ clickToExpandTools: newValue === "enabled" }, ctx);
 									settingsList.updateValue(id, newValue);
 									deps.requestRender();
