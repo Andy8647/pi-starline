@@ -37,8 +37,13 @@ export type HitTestOptions = {
 	 * cell under the pointer) must honour it, and a question asked in
 	 * *content* space (which component owns content row N of a scroll view)
 	 * must not: content row N belongs to the same component whether or not the
-	 * viewport happens to be showing it. See `frameRowsIn` in
-	 * `frame-detection.ts`, which is the only caller that passes this.
+	 * viewport happens to be showing it.
+	 *
+	 * Frame ownership used to be the caller; it moved to `component-tree.ts`,
+	 * where the distinction cannot arise at all because a component graph has
+	 * no clip to consult. This stays for the next content-space question asked
+	 * of the layout tree — the distinction is a property of `clip`, not of the
+	 * caller that first ran into it.
 	 */
 	ignoreClip?: boolean;
 };

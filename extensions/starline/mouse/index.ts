@@ -32,10 +32,9 @@ import type { PolishedTuiConfig } from "../config";
 import { installPrototypePatch } from "../prototype-patch-registry";
 import { disabledFeatureWarning, enabledFeatures, probeCapabilities } from "./capabilities";
 import {
-	frameBoxAt,
 	frameEdgeColumns,
+	frameFinderFor,
 	frameRowsIn,
-	probeColumn,
 	scrollContentOrigin,
 } from "./frame-detection";
 import { type BoxLike, scrollContentLinesFor } from "./hit-test";
@@ -125,9 +124,16 @@ function selectionText(receiver: MouseCapablePrototype, bounds: SelectionBounds)
 			).trimEnd(),
 		);
 	}
+	// Only the scroll-content path can be asked about frames. `origin`'s rows
+	// have to be a component's own render for `frameRowsIn` to walk it (see
+	// `component-tree.ts`), and `scrollContentLines` is exactly that — the
+	// transcript `Container` rendered at the content width. `previousScreen`
+	// is not: it is the composited screen, with overlays, flashes and the
+	// scrollbar painted into it, which no component's render will ever match.
+	// Nothing is lost by it — every framed component lives in the transcript.
 	const origin = scrollView
 		? scrollContentOrigin(receiver.currentLayout?.root, scrollView)
-		: receiver.currentLayout?.root;
+		: undefined;
 	const framed = origin
 		? frameRowsIn(bounds.start.row, bounds.end.row, sourceLines, origin)
 		: new Set<number>();
@@ -326,6 +332,17 @@ function installCopying(
  * passes the layout it just computed, which can be a step ahead of
  * `receiver.currentLayout` at this point in the render, so that is read in
  * preference to it.
+ *
+ * The rows `applySelection` hands out are *screen* rows, and frames are owned
+ * in *content* rows, so the one conversion this needs is
+ * `contentRow = row - origin.rect.y` — `origin` being the scroll content box,
+ * whose `rect.y` is `viewportY - scrollTop` (see `scrollContentOrigin`). Pi's
+ * own `applySelection` derives the same offset the long way round, as
+ * `box.rect.y + selection.row - scrollTop` against the ScrollView's box.
+ *
+ * One `FrameFinder` is built per `applySelection` call and shared by every
+ * row it asks about, so the component renders behind it happen once per
+ * highlighted frame rather than once per row.
  */
 function installFrameFreeHighlight(prototype: MouseCapablePrototype): () => void {
 	return installPrototypePatch(
@@ -336,10 +353,12 @@ function installFrameFreeHighlight(prototype: MouseCapablePrototype): () => void
 			const typedReceiver = receiver as MouseCapablePrototype;
 			const layoutArg = (args[1] as { root: BoxLike } | undefined) ?? typedReceiver.currentLayout;
 			const root = layoutArg?.root;
-			const screen = args[0] as readonly string[] | undefined;
-			if (!root || !screen) return Reflect.apply(predecessor, receiver, args);
+			const scrollView = root && typedReceiver.getSelectionBounds()?.start.scrollView;
+			const origin = scrollView ? scrollContentOrigin(root, scrollView) : undefined;
+			const contentLines = scrollView ? scrollContentLinesFor(root, scrollView) : undefined;
+			if (!origin || !contentLines) return Reflect.apply(predecessor, receiver, args);
 
-			const lineAt = (row: number) => screen[row];
+			const frameAt = frameFinderFor(origin, contentLines);
 			const originalGetSelectionColumns = typedReceiver.getSelectionColumns;
 			typedReceiver.getSelectionColumns = function frameFreeGetSelectionColumns(
 				this: unknown,
@@ -352,8 +371,10 @@ function installFrameFreeHighlight(prototype: MouseCapablePrototype): () => void
 					row,
 					...rest,
 				]) as SelectionColumns;
-				const box = frameBoxAt(root, probeColumn(line), row, lineAt);
-				const edges = box && frameEdgeColumns(line, box);
+				const contentRow = row - origin.rect.y;
+				const frame = frameAt(contentRow);
+				if (!frame || contentRow < frame.top || contentRow > frame.bottom) return columns;
+				const edges = frameEdgeColumns(line, origin);
 				if (!edges) return columns;
 				return {
 					start: Math.max(columns.start, edges.left),
@@ -395,9 +416,12 @@ export function installMouse(prototype: object, deps: InstallMouseDeps): () => v
 		cleanups.push(installCopying(typedPrototype, deps, enabled.has("selectionPendingMode")));
 	}
 	// Highlighting is a nicety on top of copying (capabilities.ts), so it is
-	// gated on nothing but its own capability, independent of every feature
-	// flag above.
-	if (available.has("applySelection")) {
+	// gated on nothing but its own capabilities, independent of every feature
+	// flag above. It reads `getSelectionBounds` directly to find the scroll
+	// view a selection lives in, so that one is checked here too — Pi's own
+	// `applySelection` opens with the same call, so a build exposing one
+	// without the other would be broken regardless.
+	if (available.has("applySelection") && available.has("getSelectionBounds")) {
 		cleanups.push(installFrameFreeHighlight(typedPrototype));
 	}
 
