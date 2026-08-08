@@ -12,6 +12,8 @@ import type { PolishedTuiConfig } from "./config";
 import { applyEditorCursorStyleToLines } from "./editor-cursor";
 import { renderEditorMetadataFormat } from "./editor-metadata-format";
 import { pasteExpandHintText } from "./fixed-editor/paste-collapse";
+import { activeSelectionHintText } from "./mouse";
+import { composeHints } from "./mouse/hint";
 import {
 	EDITOR_ACCENT_FALLBACK,
 	EDITOR_BORDER_FALLBACK,
@@ -140,7 +142,7 @@ function getEditorChromeWidths(config: PolishedTuiConfig, uiTheme: Theme, reset:
  * so the hint shows up whatever the user has done to that template.
  */
 function composeRightStatus(vimStatus: string | undefined, uiTheme: Theme): string | undefined {
-	const hint = pasteExpandHintText();
+	const hint = composeHints(pasteExpandHintText(), activeSelectionHintText());
 	if (!hint) return vimStatus;
 	const styled = safeThemeFg(uiTheme, "muted", hint);
 	return vimStatus ? `${vimStatus} ⋅ ${styled}` : styled;
