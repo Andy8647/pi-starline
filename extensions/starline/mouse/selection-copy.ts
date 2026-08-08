@@ -48,18 +48,29 @@ export function stripFrameColumns(line: string, ownedByFrame: boolean): string {
 }
 
 /**
- * The extracted rows of a selection, with every frame's rule rows dropped
- * entirely and every frame's body rows stripped of their verticals.
- * `frameRows` holds the indices into `lines` that the caller has determined
- * are body rows of a box frame — see `mouse/index.ts` for how that set is
- * built from Pi's layout tree.
+ * The extracted rows of a selection, with a frame's rule rows dropped
+ * entirely and a frame's body rows stripped of their verticals. `frameRows`
+ * holds the indices into `lines` that the caller has determined are rows of
+ * a box frame — see `mouse/index.ts` (`frameRowsIn`, in `frame-detection.ts`)
+ * for how that set is built from Pi's layout tree, which includes a frame's
+ * own top and bottom rule rows, not just its body (see that module's
+ * docstring on `frameBoxAt`).
+ *
+ * A rule row is dropped only when its own index is in `frameRows` — not on
+ * sight, the way an earlier version of this function did. A markdown table's
+ * `┌─┬─┐` / `├─┼─┤` / `└─┴─┘` rows are rule rows by shape but are never in
+ * `frameRows` (a table's component has no `setExpanded`, so `frameBoxAt`
+ * never matches it), so they now survive a selection exactly like any other
+ * table row — this is what makes "intact, pipes and all" actually true,
+ * rather than true for the pipes alone while the borders vanished.
  */
 export function copyableLines(lines: readonly string[], frameRows: ReadonlySet<number>): string[] {
 	const result: string[] = [];
 	for (let index = 0; index < lines.length; index++) {
 		const line = lines[index] ?? "";
-		if (isRuleRow(line)) continue;
-		result.push(stripFrameColumns(line, frameRows.has(index)));
+		const owned = frameRows.has(index);
+		if (owned && isRuleRow(line)) continue;
+		result.push(stripFrameColumns(line, owned));
 	}
 	return result;
 }

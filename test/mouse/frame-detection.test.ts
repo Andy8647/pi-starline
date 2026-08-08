@@ -94,7 +94,7 @@ describe("frameRowsIn + copyableLines", () => {
 		expect(copyableLines(lines, owned)).toEqual(["hello"]);
 	});
 
-	it("keeps every pipe of an isolated markdown table intact", () => {
+	it("keeps a lone markdown table intact — pipes, borders, and separator", () => {
 		// The scenario from the review: a markdown block that is only a table
 		// produces a box whose own top and bottom rows are rule rows, same as a
 		// real frame's. Its component (no setExpanded) is what must keep this
@@ -107,11 +107,10 @@ describe("frameRowsIn + copyableLines", () => {
 		const lines = ["┌───┬───┐", "│ a │ b │", "├───┼───┤", "│ c │ d │", "└───┴───┘"];
 		const owned = frameRowsIn(0, 4, lines, table);
 		expect(owned.size).toBe(0);
-		// The body rows survive with every pipe: stripFrameColumns never runs on
-		// them, because they were never marked owned. (The table's own top,
-		// separator, and bottom rules are still dropped by copyableLines' own
-		// rule-row check, same as any other row that is nothing but box-drawing
-		// glyphs — that part is unconditional and unrelated to ownership.)
-		expect(copyableLines(lines, owned)).toEqual(["│ a │ b │", "│ c │ d │"]);
+		// Every row survives byte-identical: not just the body rows' pipes, but
+		// the table's own top border, header separator, and bottom border too.
+		// copyableLines only drops a rule row when its own index is in
+		// frameRows — none of this table's rows ever are.
+		expect(copyableLines(lines, owned)).toEqual(lines);
 	});
 });
