@@ -17,6 +17,7 @@ const ALL = [
 	"handleSelectionMouseEvent",
 	"copySelectionToClipboard",
 	"getWordSelection",
+	"getSelectionSourceLine",
 	"getSelectionBounds",
 	"getSelectionColumns",
 	"flash",

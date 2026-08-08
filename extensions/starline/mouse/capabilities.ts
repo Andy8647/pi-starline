@@ -14,6 +14,7 @@ export type MouseCapability =
 	| "handleSelectionMouseEvent"
 	| "copySelectionToClipboard"
 	| "getWordSelection"
+	| "getSelectionSourceLine"
 	| "getSelectionBounds"
 	| "getSelectionColumns"
 	| "flash";
@@ -32,6 +33,7 @@ const CAPABILITIES: readonly MouseCapability[] = [
 	"handleSelectionMouseEvent",
 	"copySelectionToClipboard",
 	"getWordSelection",
+	"getSelectionSourceLine",
 	"getSelectionBounds",
 	"getSelectionColumns",
 	"flash",
@@ -58,7 +60,10 @@ const REQUIREMENTS: Record<MouseFeature, readonly MouseCapability[]> = {
 		"getSelectionColumns",
 		"flash",
 	],
-	pathAwareWords: ["getWordSelection"],
+	// Also reads the line under the pointer through the receiver's own
+	// `getSelectionSourceLine`, so the patch has a real line to hand
+	// `wordRangeAt` — without it there's nothing to compute a range over.
+	pathAwareWords: ["getWordSelection", "getSelectionSourceLine"],
 	clickToExpandTools: ["handleSelectionMouseEvent"],
 	editorWheelScroll: ["routeWheel"],
 	editorClickToCaret: ["handleSelectionMouseEvent"],

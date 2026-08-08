@@ -5,8 +5,9 @@
  * what it would do to it. `installMouse` probes what the running Pi build
  * exposes, logs once if something is missing, and installs each feature gated
  * on exactly its own declared requirement (`capabilities.ts`). Today that is
- * one feature, `selectionPendingMode`, across two patches:
+ * two features:
  *
+ * `selectionPendingMode`, across two patches:
  * - `copySelectionToClipboard` — the method Pi calls itself on mouse
  *   release. Wrapped to arm a pending state instead of copying immediately
  *   when `copyOnSelect` is off, calling through for every other caller
@@ -18,6 +19,16 @@
  *   else — including `ctrl+c` with nothing pending — calls through to Pi's
  *   own handler, which is what keeps `ctrl+c` interrupting.
  *
+ * `pathAwareWords`, one patch:
+ * - `getWordSelection` — Pi's own double-click word lookup, replaced with
+ *   `wordRangeAt` (`word-select.ts`, ported from pi issue #7746) so a path or
+ *   a kebab-case identifier selects whole instead of stopping at `/` or `-`.
+ *   The installed 0.84.1 build predates #7746, so this substitutes Pi's
+ *   entire word-selection rule rather than layering path handling on top of
+ *   it — that is what #7746 itself proposes, not scope creep introduced
+ *   here. Calls through when `wordRangeAt` declines (column past the end of
+ *   the line) or when `mouse.pathAwareWords` is off.
+ *
  * What Starline never does here is rewrite the text: the clipboard gets
  * exactly what Pi's own `copySelectionToClipboard` puts there. See
  * `installMouse` for why frame-free selection is not part of this.
@@ -28,6 +39,7 @@ import { installPrototypePatch } from "../prototype-patch-registry";
 import { disabledFeatureWarning, enabledFeatures, probeCapabilities } from "./capabilities";
 import { type BoxLike, scrollContentLinesFor } from "./hit-test";
 import { SelectionPendingState, selectionHintText } from "./selection-state";
+import { wordRangeAt } from "./word-select";
 
 const CTRL_C = "\x03";
 
@@ -47,6 +59,8 @@ type MouseCapablePrototype = {
 	copySelectionToClipboard(this: unknown): void;
 	handleViewportInput(this: unknown, data: string): { consume: boolean } | undefined;
 	flash(this: unknown, message: string, durationMs?: number): void;
+	getWordSelection(this: unknown, point: SelectionPoint): SelectionBounds | undefined;
+	getSelectionSourceLine(this: unknown, point: SelectionPoint): string;
 	previousScreen?: readonly string[];
 	// Not probed capabilities (see capabilities.ts): plain instance fields
 	// this module only ever reads.
@@ -234,6 +248,43 @@ function installSelectionPendingMode(
 }
 
 /**
+ * Installs `pathAwareWords` on `getWordSelection`.
+ *
+ * The receiver's own `getSelectionSourceLine` gives the raw line under the
+ * point; `stripTerminalSequences` is applied the same way predecessor itself
+ * applies it (see `getWordSelection` in
+ * `node_modules/@earendil-works/pi-tui/dist/tui-alt-screen.js`), so
+ * `wordRangeAt` sees the same plain text Pi's own segmenter would. `col` is
+ * the only thing the wrapper changes on the way out — `row`, `scrollView`
+ * and any other point field ride through unmodified, which is what keeps a
+ * scroll-view selection landing in the right place.
+ */
+function installPathAwareWords(
+	prototype: MouseCapablePrototype,
+	deps: InstallMouseDeps,
+): () => void {
+	return installPrototypePatch(
+		prototype,
+		"getWordSelection",
+		"mouse-word-selection",
+		({ predecessor, receiver, args }) => {
+			if (!deps.getConfig().mouse.pathAwareWords) {
+				return Reflect.apply(predecessor, receiver, args);
+			}
+			const typedReceiver = receiver as MouseCapablePrototype;
+			const point = args[0] as SelectionPoint;
+			const line = stripTerminalSequences(typedReceiver.getSelectionSourceLine(point));
+			const range = wordRangeAt(line, point.col);
+			if (!range) return Reflect.apply(predecessor, receiver, args);
+			return {
+				start: { ...point, col: range.start },
+				end: { ...point, col: range.end, boundary: true },
+			};
+		},
+	);
+}
+
+/**
  * Probes Pi, warns once about whatever this build cannot support, and
  * installs the mouse features that are available. Returns a disposer that
  * removes every patch this call installed.
@@ -265,6 +316,9 @@ export function installMouse(prototype: object, deps: InstallMouseDeps): () => v
 	// fact instead of inferring one. Nothing short of that.
 	if (enabled.has("selectionPendingMode")) {
 		cleanups.push(installSelectionPendingMode(typedPrototype, deps));
+	}
+	if (enabled.has("pathAwareWords")) {
+		cleanups.push(installPathAwareWords(typedPrototype, deps));
 	}
 
 	if (cleanups.length === 0) return () => {};
