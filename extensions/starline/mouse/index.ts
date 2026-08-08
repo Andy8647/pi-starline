@@ -17,22 +17,33 @@
  *   else — including `ctrl+c` with nothing pending — calls through to Pi's
  *   own handler, which is what keeps `ctrl+c` interrupting.
  */
+import { sliceByColumn, stripTerminalSequences } from "@earendil-works/pi-tui";
 import type { PolishedTuiConfig } from "../config";
 import { installPrototypePatch } from "../prototype-patch-registry";
 import { disabledFeatureWarning, enabledFeatures, probeCapabilities } from "./capabilities";
+import { type BoxLike, scrollContentLinesFor } from "./hit-test";
 import { SelectionPendingState, selectionHintText } from "./selection-state";
 
 const CTRL_C = "\x03";
 
-type SelectionPoint = { scrollView?: unknown; row: number; col: number };
+type SelectionPoint = { scrollView?: unknown; row: number; col: number; boundary?: boolean };
 type SelectionBounds = { start: SelectionPoint; end: SelectionPoint };
+type SelectionColumns = { start: number; end: number };
 
 /** The slice of `TuiAltScreen` this module reads or wraps. */
 type MouseCapablePrototype = {
 	getSelectionBounds(this: unknown): SelectionBounds | undefined;
+	getSelectionColumns(
+		this: unknown,
+		line: string,
+		row: number,
+		selection: SelectionBounds,
+	): SelectionColumns;
 	copySelectionToClipboard(this: unknown): void;
 	handleViewportInput(this: unknown, data: string): { consume: boolean } | undefined;
 	flash(this: unknown, message: string, durationMs?: number): void;
+	previousScreen?: readonly string[];
+	currentLayout?: { root: BoxLike };
 };
 
 export type InstallMouseDeps = {
@@ -56,18 +67,33 @@ export function activeSelectionHintText(): string | null {
 }
 
 /**
- * A same-row selection reports its exact width. A multi-row one does not,
- * because the text of the other rows lives in Pi's private layout/previous-
- * screen bookkeeping, and duplicating that lookup here would turn this
- * wrapper into a second copy of `copySelectionToClipboard`'s own logic. The
- * hint is cosmetic — the real copy on ctrl+c always goes through Pi's own
- * method, so it is always exact regardless of what this estimate says.
+ * The exact text `copySelectionToClipboard` would produce, built the same way
+ * it builds it: per row, through the receiver's own `getSelectionColumns`,
+ * then `sliceByColumn` and `stripTerminalSequences` (both exported by
+ * pi-tui), joined with "\n" — see `copySelectionToClipboard` in
+ * `node_modules/@earendil-works/pi-tui/dist/tui-alt-screen.js`. Reusing Pi's
+ * own helpers instead of re-deriving the column math is what keeps this exact
+ * rather than an estimate. The scroll-view case needs the box behind
+ * `bounds.start.scrollView`; `getScrollViewBox` that finds it is not exported
+ * from pi-tui's published entry point, so `scrollContentLinesFor` mirrors its
+ * (trivial) tree walk in `hit-test.ts`.
  */
-function estimateSelectionLength(bounds: SelectionBounds): number {
-	if (bounds.start.row === bounds.end.row) {
-		return Math.max(0, bounds.end.col - bounds.start.col);
+function selectionText(receiver: MouseCapablePrototype, bounds: SelectionBounds): string {
+	const sourceLines = bounds.start.scrollView
+		? scrollContentLinesFor(receiver.currentLayout?.root, bounds.start.scrollView)
+		: receiver.previousScreen;
+	if (!sourceLines) return "";
+	const rows: string[] = [];
+	for (let row = bounds.start.row; row <= bounds.end.row; row++) {
+		const line = sourceLines[row] ?? "";
+		const columns = receiver.getSelectionColumns(line, row, bounds);
+		rows.push(
+			stripTerminalSequences(
+				sliceByColumn(line, columns.start, Math.max(0, columns.end - columns.start), true),
+			).trimEnd(),
+		);
 	}
-	return Math.max(1, bounds.end.col);
+	return rows.join("\n");
 }
 
 /**
@@ -120,9 +146,10 @@ function installSelectionPendingMode(
 			if (copyOnSelect || performingRealCopy) {
 				return Reflect.apply(predecessor, receiver, args);
 			}
-			const bounds = (receiver as MouseCapablePrototype).getSelectionBounds();
+			const typedReceiver = receiver as MouseCapablePrototype;
+			const bounds = typedReceiver.getSelectionBounds();
 			if (!bounds) return undefined;
-			state.arm(estimateSelectionLength(bounds));
+			state.arm(selectionText(typedReceiver, bounds).length);
 			deps.requestRender();
 			return undefined;
 		},
@@ -168,7 +195,7 @@ export function installMouse(prototype: object, deps: InstallMouseDeps): () => v
 	const warning = disabledFeatureWarning(enabled);
 	if (warning && !hasWarned) {
 		hasWarned = true;
-		console.error(warning);
+		console.warn(warning);
 	}
 
 	if (!enabled.has("selectionPendingMode")) return () => {};

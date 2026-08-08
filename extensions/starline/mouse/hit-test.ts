@@ -45,3 +45,26 @@ export function boxFor(root: BoxLike, component: unknown): BoxLike | undefined {
 	}
 	return undefined;
 }
+
+export type ScrollBoxLike = BoxLike & {
+	scrollView?: unknown;
+	scrollContentLines?: readonly string[];
+};
+
+/**
+ * The lines behind a scroll view, found by walking the layout tree. This is
+ * `getScrollViewBox`'s own logic from `layout.js`, mirrored here in miniature
+ * because it is not exported from pi-tui's published entry point.
+ */
+export function scrollContentLinesFor(
+	root: ScrollBoxLike | undefined,
+	scrollView: unknown,
+): readonly string[] | undefined {
+	if (!root) return undefined;
+	if (root.scrollView === scrollView) return root.scrollContentLines;
+	for (const child of root.children ?? []) {
+		const found = scrollContentLinesFor(child as ScrollBoxLike, scrollView);
+		if (found) return found;
+	}
+	return undefined;
+}

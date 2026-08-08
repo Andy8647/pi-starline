@@ -14,7 +14,10 @@ export type MouseCapability =
 	| "handleSelectionMouseEvent"
 	| "copySelectionToClipboard"
 	| "applySelection"
-	| "getWordSelection";
+	| "getWordSelection"
+	| "getSelectionBounds"
+	| "getSelectionColumns"
+	| "flash";
 
 export type MouseFeature =
 	| "selectionPendingMode"
@@ -32,13 +35,25 @@ const CAPABILITIES: readonly MouseCapability[] = [
 	"copySelectionToClipboard",
 	"applySelection",
 	"getWordSelection",
+	"getSelectionBounds",
+	"getSelectionColumns",
+	"flash",
 ];
 
 /** Every capability a feature needs before it may install. */
 const REQUIREMENTS: Record<MouseFeature, readonly MouseCapability[]> = {
 	// Without ctrl+c interception the pending mode strands a highlight the user
-	// cannot copy, which is worse than copy-on-release.
-	selectionPendingMode: ["copySelectionToClipboard", "handleViewportInput"],
+	// cannot copy, which is worse than copy-on-release. It also reads the
+	// selection directly (`getSelectionBounds`, `getSelectionColumns`) to build
+	// an exact character count, and raises its own notice (`flash`), so all
+	// three must be reachable too.
+	selectionPendingMode: [
+		"copySelectionToClipboard",
+		"handleViewportInput",
+		"getSelectionBounds",
+		"getSelectionColumns",
+		"flash",
+	],
 	// Copying is the point; the highlight is a nicety, so this stays on when
 	// only `applySelection` is gone.
 	frameFreeSelection: ["copySelectionToClipboard"],

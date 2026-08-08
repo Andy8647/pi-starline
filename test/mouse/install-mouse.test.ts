@@ -3,12 +3,14 @@ import type { PolishedTuiConfig } from "../../extensions/starline/config";
 import { activeSelectionHintText, installMouse } from "../../extensions/starline/mouse/index";
 
 type SelectionBounds = { start: { row: number; col: number }; end: { row: number; col: number } };
+type SelectionColumns = { start: number; end: number };
 
 type FakeAltScreen = {
-	selectionText: string;
 	selectionBounds: SelectionBounds | undefined;
+	previousScreen: string[];
 	copySelectionToClipboard(): void;
 	getSelectionBounds(): SelectionBounds | undefined;
+	getSelectionColumns(line: string, row: number, selection: SelectionBounds): SelectionColumns;
 	handleViewportInput(data: string): { consume: boolean } | undefined;
 	flash(message: string, durationMs?: number): void;
 	routeWheel(): void;
@@ -17,14 +19,32 @@ type FakeAltScreen = {
 	getWordSelection(): void;
 };
 
+/**
+ * A minimal stand-in for `getSelectionColumns` — real enough to exercise
+ * `selectionText`'s row-by-row loop without pulling in grapheme-boundary
+ * handling, which is Pi's own concern and covered by
+ * `test/mouse/__real-pi-verify` style checks against the actual prototype.
+ */
+function fakeSelectionColumns(
+	line: string,
+	row: number,
+	selection: SelectionBounds,
+): SelectionColumns {
+	return {
+		start: row === selection.start.row ? selection.start.col : 0,
+		end: row === selection.end.row ? selection.end.col : line.length,
+	};
+}
+
 function makePrototype(): { prototype: FakeAltScreen; calls: string[] } {
 	const calls: string[] = [];
 	const prototype: FakeAltScreen = {
-		selectionText: "",
 		selectionBounds: { start: { row: 0, col: 0 }, end: { row: 0, col: 5 } },
+		previousScreen: ["hello world"],
 		getSelectionBounds() {
 			return this.selectionBounds;
 		},
+		getSelectionColumns: fakeSelectionColumns,
 		copySelectionToClipboard() {
 			calls.push("copy");
 			this.flash("Copied!");

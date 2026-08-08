@@ -18,6 +18,9 @@ const ALL = [
 	"copySelectionToClipboard",
 	"applySelection",
 	"getWordSelection",
+	"getSelectionBounds",
+	"getSelectionColumns",
+	"flash",
 ];
 
 describe("probeCapabilities", () => {
