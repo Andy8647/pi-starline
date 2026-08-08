@@ -236,6 +236,12 @@ function decodeOsc52(data: string): string {
  * `currentLayout`/`terminal` are what `performFrameFreeCopy` needs; neither
  * is a probed capability (see `index.ts`'s comment on `terminal`), so they
  * can be present on a fake regardless of which methods this fixture omits.
+ *
+ * The box's `component` exposes `setExpanded`, standing in for the
+ * expandable tool/message components `pi-toolbox` actually frames (see
+ * `frame-detection.ts`'s `isExpandableComponent`) — without it this box
+ * would not be recognised as a frame at all, only as a rule-capped rectangle
+ * a markdown table could equally produce.
  */
 function makeFramedFixture() {
 	const written: string[] = [];
@@ -243,7 +249,13 @@ function makeFramedFixture() {
 		written,
 		bounds: { start: { row: 0, col: 0 }, end: { row: 2, col: 10 } } as SelectionBounds,
 		previousScreen: ["┌────────┐", "│ hello  │", "└────────┘"],
-		currentLayout: { root: { rect: { x: 0, y: 0, width: 10, height: 3 }, children: [] } },
+		currentLayout: {
+			root: {
+				component: { setExpanded: () => {} },
+				rect: { x: 0, y: 0, width: 10, height: 3 },
+				children: [],
+			},
+		},
 		terminal: { write: (data: string) => written.push(data) },
 	};
 }
