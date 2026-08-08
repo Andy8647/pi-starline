@@ -9,8 +9,8 @@
  */
 
 import { sliceByColumn, stripTerminalSequences } from "@earendil-works/pi-tui";
-import { type BoxLike, boxesAt } from "./hit-test";
-import { isRuleRow } from "./selection-copy";
+import { type BoxLike, boxesAt, type HitTestOptions } from "./hit-test";
+import { isRuleRow, isVerticalGlyph } from "./selection-copy";
 
 /**
  * The child laid out behind a scroll view, in the same tree walk
@@ -80,6 +80,11 @@ export function isExpandableComponent(component: unknown): boolean {
  * Walked innermost-first so a frame nested inside another frame is judged by
  * the one immediately around the row.
  *
+ * `options` is handed straight to `boxesAt`; `frameRowsIn` passes
+ * `{ ignoreClip: true }` because it asks in content coordinates, and the
+ * highlight path in `index.ts` passes nothing because it asks in screen
+ * coordinates — see `HitTestOptions` for why the two differ.
+ *
  * The component check is what keeps a markdown table from ever matching: a
  * `Markdown` block that is only a table produces a box whose own first and
  * last rows genuinely are rule rows (`┌─┬─┐` / `└─┴─┘` match the same glyph
@@ -91,8 +96,9 @@ export function frameBoxAt(
 	x: number,
 	screenY: number,
 	lineAt: (row: number) => string | undefined,
+	options?: HitTestOptions,
 ): BoxLike | undefined {
-	const path = boxesAt(origin, x, screenY);
+	const path = boxesAt(origin, x, screenY, options);
 	for (let index = path.length - 1; index >= 0; index--) {
 		const box = path[index];
 		if (box.rect.height < 2) continue;
@@ -109,6 +115,18 @@ export function frameBoxAt(
  * frame, as indices into that extraction (0-based, matching what
  * `copyableLines` expects). `sourceLines` and `origin` share one row space:
  * `sourceLines[row]` is the text at `origin.rect.y + row`.
+ *
+ * The hit test ignores `clip` (`ignoreClip`), and must: these rows are
+ * *content* rows of the scroll view, captured at mouse-down and unchanged
+ * afterwards, while `clip` is rewritten every frame to whatever the viewport
+ * currently shows. Honouring it made ownership depend on the scroll position
+ * at copy time — select a frame, scroll it out of view, press ctrl+c, and the
+ * hit test returned an empty path for rows that had scrolled away, so the
+ * frame they belonged to went unrecognised and its `╭────╮` was copied
+ * verbatim. Verified against real pi-tui geometry: a scrolled transcript's
+ * content box has `rect.y === -scrollTop` with `clip` pinned to the viewport,
+ * so every row above the fold fails `rectContains(clip, …)`. Which component
+ * owns a content row does not change when the viewport moves.
  */
 export function frameRowsIn(
 	rowStart: number,
@@ -121,7 +139,9 @@ export function frameRowsIn(
 	for (let row = rowStart; row <= rowEnd; row++) {
 		const line = sourceLines[row] ?? "";
 		const screenY = origin.rect.y + row;
-		if (frameBoxAt(origin, probeColumn(line), screenY, lineAt)) owned.add(row - rowStart);
+		if (frameBoxAt(origin, probeColumn(line), screenY, lineAt, { ignoreClip: true })) {
+			owned.add(row - rowStart);
+		}
 	}
 	return owned;
 }
@@ -148,7 +168,8 @@ export function frameEdgeColumns(
 	const leftCol = box.rect.x;
 	const rightCol = box.rect.x + box.rect.width - 1;
 	if (rightCol <= leftCol) return undefined;
-	if (charAtColumn(line, leftCol) !== "│" || charAtColumn(line, rightCol) !== "│") return undefined;
+	if (!isVerticalGlyph(charAtColumn(line, leftCol))) return undefined;
+	if (!isVerticalGlyph(charAtColumn(line, rightCol))) return undefined;
 	const left = charAtColumn(line, leftCol + 1) === " " ? leftCol + 2 : leftCol + 1;
 	const right = charAtColumn(line, rightCol - 1) === " " ? rightCol - 1 : rightCol;
 	return { left, right };

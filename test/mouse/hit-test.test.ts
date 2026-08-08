@@ -58,6 +58,31 @@ describe("boxesAt", () => {
 		expect(boxesAt(clipped, 5, 1)).toHaveLength(1);
 		expect(boxesAt(clipped, 20, 1)).toHaveLength(0);
 	});
+
+	it("ignores clip on request, and descends into clipped-out children", () => {
+		// Content-space questions ("which component owns content row N") must
+		// not depend on where the viewport happens to be — see HitTestOptions.
+		// The child here is scrolled entirely above the fold, the way pi-tui
+		// leaves a scrolled transcript's boxes: rect in content coordinates,
+		// clip collapsed onto the viewport.
+		const child: BoxLike = {
+			component: { name: "child" },
+			rect: { x: 0, y: -15, width: 10, height: 3 },
+			clip: { x: 0, y: 0, width: 10, height: 0 },
+			children: [],
+		};
+		const content: BoxLike = {
+			component: { name: "content" },
+			rect: { x: 0, y: -15, width: 10, height: 24 },
+			clip: { x: 0, y: 0, width: 10, height: 9 },
+			children: [child],
+		};
+		expect(boxesAt(content, 0, -15)).toHaveLength(0);
+		expect(boxesAt(content, 0, -15, { ignoreClip: true }).map((box) => box.component)).toEqual([
+			content.component,
+			child.component,
+		]);
+	});
 });
 
 describe("boxFor", () => {

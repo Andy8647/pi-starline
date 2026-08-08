@@ -20,16 +20,45 @@
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
 
 /**
- * A frame's own rule row: nothing on it but the glyphs a border draws its
- * corners and horizontals from. Deliberately without `│` — a rule has no
- * vertical on it, that is what makes it a *rule* rather than a body row.
+ * The box-drawing glyphs that carry a vertical stroke: a frame's *side*, which
+ * is what a body row is bounded by. Light, heavy, double, their dashed
+ * variants, and the two light/heavy transitions — the whole vertical family of
+ * the Unicode Box Drawing block, so a theme that draws its frames heavy or
+ * double is recognised without another edit here.
+ *
+ * This is the counterpart to `BOX_DRAWING_RE` below, and keeping the two apart
+ * is the point: the retired `fixed-editor/frame.ts` held one combined set with
+ * `│` and `┃` in it, which is right for "is this cell a frame glyph" and wrong
+ * for "is this row a rule" — a combined set would call `│ hello │` a rule the
+ * moment its content happened to be box-drawing too.
  */
-const RULE_ROW_RE = /^[┌└├┬┴┼─┐┘┤]+$/;
+const VERTICAL_GLYPHS = "│┃║╎╏┆┇┊┋╽╿";
+const VERTICAL_RE = new RegExp(`[${VERTICAL_GLYPHS}]`);
+
+/**
+ * The Unicode Box Drawing block (U+2500–U+257F) and nothing else. A rule row
+ * is a line drawn entirely from it *with no vertical on it* — that absence is
+ * what makes a rule a rule rather than a body row, and it is why the vertical
+ * family is subtracted rather than the horizontal family enumerated.
+ *
+ * Enumerating was the earlier approach and it silently broke the feature: the
+ * list held only the square-cornered glyphs (`┌┐└┘`), while every frame this
+ * exists to strip is drawn by `pi-toolbox`, which draws rounded ones
+ * (`╭${"─".repeat(n)}╮` / `╰${"─".repeat(n)}╯`, see its `frame.ts`). A
+ * subtractive test cannot go stale that way — every corner, tee, cross and
+ * horizontal in the block, at any weight, is covered by construction.
+ */
+const BOX_DRAWING_RE = /^[─-╿]+$/;
+
+/** Whether a single cell is one of a frame's verticals — see `VERTICAL_GLYPHS`. */
+export function isVerticalGlyph(char: string): boolean {
+	return char.length === 1 && VERTICAL_GLYPHS.includes(char);
+}
 
 /** Whether a line is entirely a box frame's rule — a row a selection should skip, not copy. */
 export function isRuleRow(line: string): boolean {
 	const plain = stripTerminalSequences(line).trim();
-	return plain.length > 0 && RULE_ROW_RE.test(plain);
+	return plain.length > 0 && BOX_DRAWING_RE.test(plain) && !VERTICAL_RE.test(plain);
 }
 
 /**
@@ -41,9 +70,9 @@ export function isRuleRow(line: string): boolean {
 export function stripFrameColumns(line: string, ownedByFrame: boolean): string {
 	if (!ownedByFrame) return line;
 	let body = line;
-	if (body.startsWith("│")) body = body.slice(1);
+	if (isVerticalGlyph(body.slice(0, 1))) body = body.slice(1);
 	if (body.startsWith(" ")) body = body.slice(1);
-	if (body.endsWith("│")) body = body.slice(0, -1);
+	if (isVerticalGlyph(body.slice(-1))) body = body.slice(0, -1);
 	return body.trimEnd();
 }
 

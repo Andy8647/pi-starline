@@ -26,13 +26,33 @@ function visible(box: BoxLike, x: number, y: number): boolean {
 	return box.clip ? rectContains(box.clip, x, y) : true;
 }
 
+export type HitTestOptions = {
+	/**
+	 * Match on `rect` alone, ignoring `clip`.
+	 *
+	 * `clip` answers "is this cell painted right now" — pi-tui rewrites it on
+	 * every frame to the intersection of the box with its scroll viewport
+	 * (`updateClips` in `layout.js`), while `rect` stays in the content's own
+	 * coordinates. So a question asked in *screen* space (which box drew the
+	 * cell under the pointer) must honour it, and a question asked in
+	 * *content* space (which component owns content row N of a scroll view)
+	 * must not: content row N belongs to the same component whether or not the
+	 * viewport happens to be showing it. See `frameRowsIn` in
+	 * `frame-detection.ts`, which is the only caller that passes this.
+	 */
+	ignoreClip?: boolean;
+};
+
 /** Root first, innermost last. Empty when the point is outside the root. */
-export function boxesAt(root: BoxLike, x: number, y: number): BoxLike[] {
+export function boxesAt(root: BoxLike, x: number, y: number, options?: HitTestOptions): BoxLike[] {
+	const hit = options?.ignoreClip
+		? (box: BoxLike) => rectContains(box.rect, x, y)
+		: (box: BoxLike) => visible(box, x, y);
 	const path: BoxLike[] = [];
 	let current: BoxLike | undefined = root;
-	while (current && visible(current, x, y)) {
+	while (current && hit(current)) {
 		path.push(current);
-		current = current.children?.find((child) => visible(child, x, y));
+		current = current.children?.find(hit);
 	}
 	return path;
 }

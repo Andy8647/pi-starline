@@ -1,8 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PolishedTuiConfig } from "../../extensions/starline/config";
 import { activeSelectionHintText, installMouse } from "../../extensions/starline/mouse/index";
+import { toolboxFrame } from "./toolbox-frame";
 
-type SelectionBounds = { start: { row: number; col: number }; end: { row: number; col: number } };
+type SelectionBounds = {
+	start: { row: number; col: number; scrollView?: unknown };
+	end: { row: number; col: number };
+};
 type SelectionColumns = { start: number; end: number };
 
 type FakeAltScreen = {
@@ -242,13 +246,18 @@ function decodeOsc52(data: string): string {
  * `frame-detection.ts`'s `isExpandableComponent`) — without it this box
  * would not be recognised as a frame at all, only as a rule-capped rectangle
  * a markdown table could equally produce.
+ *
+ * The frame text is `toolboxFrame`, i.e. `pi-toolbox`'s own rounded output.
+ * It used to be square-cornered here, which made this end-to-end test pass
+ * against a frame shape that never occurs while the shipping one silently did
+ * nothing.
  */
 function makeFramedFixture() {
 	const written: string[] = [];
 	return {
 		written,
 		bounds: { start: { row: 0, col: 0 }, end: { row: 2, col: 10 } } as SelectionBounds,
-		previousScreen: ["┌────────┐", "│ hello  │", "└────────┘"],
+		previousScreen: toolboxFrame("hello"),
 		currentLayout: {
 			root: {
 				component: { setExpanded: () => {} },
@@ -309,6 +318,84 @@ describe("installMouse frameFreeSelection independent of selectionPendingMode", 
 		expect(predecessorCalls).toBe(0);
 		expect(fixture.written).toHaveLength(1);
 		expect(decodeOsc52(fixture.written[0])).toBe("hello");
+		dispose();
+	});
+
+	it("strips a frame that has scrolled out of the viewport by copy time", () => {
+		// Finding B, through the same path a real copy takes: patch installed on
+		// copySelectionToClipboard, selection in scroll-view coordinates, text
+		// read back off the OSC 52 write.
+		//
+		// The geometry is what pi-tui's own renderLayoutFrame produces for a
+		// scrolled transcript (probed against the installed package): the scroll
+		// content box keeps `rect.y === -scrollTop` while `clip` stays pinned to
+		// the viewport. Selection rows are content rows fixed at mouse-down, so
+		// the ordinary copyOnSelect:false flow — select, scroll, ctrl+c — asks
+		// about rows the viewport no longer shows. While the hit test consulted
+		// `clip`, those rows resolved to no box at all and the frame was copied
+		// verbatim.
+		const lines = [...toolboxFrame("hello"), ...Array.from({ length: 21 }, (_, i) => `row ${i}`)];
+		const scrollView = { name: "transcript" };
+		const written: string[] = [];
+		const frameBox = {
+			component: { setExpanded: () => {} },
+			rect: { x: 0, y: -15, width: 10, height: 3 },
+			clip: { x: 0, y: 0, width: 10, height: 0 },
+			children: [],
+		};
+		const prototype = {
+			selectionBounds: {
+				start: { row: 0, col: 0, scrollView },
+				end: { row: 2, col: 10 },
+			} as SelectionBounds,
+			previousScreen: [] as string[],
+			currentLayout: {
+				root: {
+					rect: { x: 0, y: 0, width: 10, height: 10 },
+					clip: { x: 0, y: 0, width: 10, height: 10 },
+					children: [
+						{
+							scrollView,
+							scrollContentLines: lines,
+							rect: { x: 0, y: 0, width: 10, height: 9 },
+							clip: { x: 0, y: 0, width: 10, height: 9 },
+							children: [
+								{
+									component: {}, // the transcript Container: not expandable
+									rect: { x: 0, y: -15, width: 10, height: 24 },
+									clip: { x: 0, y: 0, width: 10, height: 9 },
+									children: [frameBox],
+								},
+							],
+						},
+					],
+				},
+			},
+			terminal: { write: (data: string) => written.push(data) },
+			getSelectionBounds() {
+				return this.selectionBounds;
+			},
+			getSelectionColumns: fakeSelectionColumns,
+			copySelectionToClipboard() {},
+			handleViewportInput(data: string) {
+				return data === "\x03" ? undefined : { consume: true };
+			},
+			flash() {},
+			routeWheel() {},
+			handleSelectionMouseEvent() {},
+			applySelection() {},
+			getWordSelection() {},
+		};
+
+		const dispose = installMouse(prototype, {
+			getConfig: makeConfig(true, true),
+			requestRender,
+		});
+
+		prototype.copySelectionToClipboard();
+
+		expect(written).toHaveLength(1);
+		expect(decodeOsc52(written[0])).toBe("hello");
 		dispose();
 	});
 
