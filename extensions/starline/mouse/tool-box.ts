@@ -54,12 +54,45 @@
  * rule is scoped to that component's own rows. An ordinary message that quotes
  * the hint — an assistant explaining `ctrl+o`, a paste of these very docs — is
  * a `Text` or a `Markdown` with no `setExpanded` anywhere in its path, so it
- * resolves to nothing and the press starts a selection as usual. The residual
- * is narrower than that: a line *inside an expandable box's own output* that
- * happens to contain `(ctrl+o to expand)` is indistinguishable from the box's
- * hint by text alone, and toggles that same box. Structurally there is nothing
- * left to separate them — Pi renders both through the same `Text` — and the
- * worst case is that a click on the box opens the box.
+ * resolves to nothing and the press starts a selection as usual.
+ *
+ * ## Two accepted limitations
+ *
+ * Both are known, both were weighed, and neither has a fix worth its cost.
+ * They are recorded here and in `docs/configuration.md` because a user meets
+ * them before they meet any of the reasoning above.
+ *
+ * **1. Clicking cannot always collapse what it expanded.** The premise that
+ * "the hint row exists in both states, so one rule covers both directions" is
+ * only true of `bash-execution` and of `tool-execution` results that still
+ * have a preview to hide. For everything else Pi renders the hint *only while
+ * collapsed*, so expanding it removes the very row that would close it again:
+ *
+ * - `core/tools/{read,grep,ls,write,find}.js` append the hint inside `if
+ *   (remaining > 0)`, and expanding sets `maxLines` to `lines.length`, so
+ *   `remaining` becomes 0 and the row is not emitted at all (`read.js:113-118`
+ *   is the clearest instance).
+ * - `skill-invocation-message.js:42`, `branch-summary-message.js:39` and
+ *   `compaction-summary-message.js:40` build the hint in their `else` branch,
+ *   i.e. only when `this.expanded` is false.
+ *
+ * So for those types a click expands and nothing closes it but `ctrl+o`, which
+ * closes everything. This is Pi's rendering, not a gap in the matching rule —
+ * there is no row to match, and inventing a second target (the title line, the
+ * first output row) would mean guessing at a component's layout, which is the
+ * inference this module exists to avoid.
+ *
+ * **2. A box's own output can read like its hint.** The component scoping
+ * above stops a *different* message from being clickable, but not the box's
+ * own body: a line inside an expandable component that literally contains
+ * `(ctrl+o to expand)` — `cat` of a file documenting the keybinding, a
+ * transcript of this very docstring — is indistinguishable from the real hint,
+ * because Pi renders the box's output and the box's hint through the same
+ * `Text` with the same structure and only different theme colours. Matching
+ * the colours instead would make the rule depend on the user's theme.
+ * Accepted: the worst case is that a click on a box opens the box it is
+ * already inside — no crash, no lost input, and the same click a row above or
+ * below behaves normally.
  */
 
 import { keyText } from "@earendil-works/pi-coding-agent";
