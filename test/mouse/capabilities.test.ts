@@ -51,7 +51,7 @@ describe("probeCapabilities", () => {
 		expect(probeCapabilities(proto).has("getWordSelection")).toBe(false);
 	});
 
-	it("survives a prototype whose getter throws", () => {
+	it("skips an accessor property", () => {
 		const proto = prototypeWith(ALL);
 		Object.defineProperty(proto, "routeWheel", {
 			get() {
@@ -59,8 +59,27 @@ describe("probeCapabilities", () => {
 			},
 			configurable: true,
 		});
-		expect(() => probeCapabilities(proto)).not.toThrow();
 		expect(probeCapabilities(proto).has("routeWheel")).toBe(false);
+	});
+
+	it("disables a capability when the prototype throws on inspection", () => {
+		// Pi 0.84 hands extensions a Proxy over its renderer, so a probe can be
+		// pointed at one whose traps throw. The rule is that a probe never
+		// propagates: it reports the capability as unavailable and the feature
+		// depending on it stays off.
+		const hostile = new Proxy(
+			{},
+			{
+				getOwnPropertyDescriptor() {
+					throw new Error("boom");
+				},
+				getPrototypeOf() {
+					return null;
+				},
+			},
+		);
+		expect(() => probeCapabilities(hostile)).not.toThrow();
+		expect(probeCapabilities(hostile).size).toBe(0);
 	});
 });
 
