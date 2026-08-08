@@ -344,20 +344,28 @@ function installSelectionPendingMode(
 	};
 }
 
+/** The single visible character at a terminal column, ANSI stripped. */
+function charAtColumn(line: string, column: number): string {
+	return stripTerminalSequences(sliceByColumn(line, column, 1, true));
+}
+
 /**
  * The columns a frame's own verticals occupy on `line`, precisely: `box`'s
  * `rect.x` and `rect.x + rect.width - 1` are exactly where the layout tree
  * says this box's border sits, so — unlike `stripFrameColumns`, which works
  * on already-sliced text and can just look at the ends of the string — this
- * reads the *full* row at those absolute columns.
+ * reads the *full* row at those absolute columns. Goes through `sliceByColumn`
+ * rather than plain string indexing because `rect.x` is a terminal-cell
+ * column, and a wide or multi-code-unit character earlier on the line would
+ * put those two out of step.
  */
 function frameEdgeColumns(line: string, box: BoxLike): { left: number; right: number } | undefined {
-	const plain = stripTerminalSequences(line);
 	const leftCol = box.rect.x;
 	const rightCol = box.rect.x + box.rect.width - 1;
-	if (rightCol <= leftCol || plain[leftCol] !== "│" || plain[rightCol] !== "│") return undefined;
-	const left = plain[leftCol + 1] === " " ? leftCol + 2 : leftCol + 1;
-	const right = plain[rightCol - 1] === " " ? rightCol - 1 : rightCol;
+	if (rightCol <= leftCol) return undefined;
+	if (charAtColumn(line, leftCol) !== "│" || charAtColumn(line, rightCol) !== "│") return undefined;
+	const left = charAtColumn(line, leftCol + 1) === " " ? leftCol + 2 : leftCol + 1;
+	const right = charAtColumn(line, rightCol - 1) === " " ? rightCol - 1 : rightCol;
 	return { left, right };
 }
 
