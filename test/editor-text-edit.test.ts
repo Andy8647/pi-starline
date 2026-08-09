@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { deleteEditorVisualRange } from "../extensions/starline/fixed-editor/editor-text-edit";
+import { deleteEditorVisualRange } from "../extensions/starline/mouse/editor-text-edit";
 
 /**
  * Stands in for Pi's editor: the members the splice reaches for, plus a visual

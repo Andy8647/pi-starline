@@ -11,14 +11,14 @@
 
 import { copyToClipboard } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
+import { type EditorBoxGeometry, findEditorBox, hitTestEditorBox } from "../mouse/editor-hit-test";
 import { scrollEditorWindow } from "../mouse/editor-scroll";
-import { type EditorBoxGeometry, findEditorBox, hitTestEditorBox } from "./editor-hit-test";
 import {
 	editorScrollOffset,
 	editorVisualRowText,
 	positionEditorTextCursor,
-} from "./editor-text-cursor";
-import { deleteEditorVisualRange } from "./editor-text-edit";
+} from "../mouse/editor-text-cursor";
+import { deleteEditorVisualRange } from "../mouse/editor-text-edit";
 import { isToggleTarget } from "./expandable";
 import { frameContentSpan } from "./frame";
 import { pasteExpandHintText } from "./paste-collapse";

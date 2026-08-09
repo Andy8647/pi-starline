@@ -133,6 +133,9 @@ describe("enabledFeatures", () => {
 		expect(features.has("editorWheelScroll")).toBe(false);
 		// Word selection returns a range and lets Pi repaint on its own path.
 		expect(features.has("pathAwareWords")).toBe(true);
+		// So does click-to-caret: it never consumes the press, and Pi's own press
+		// branch repaints unconditionally at the end of it.
+		expect(features.has("editorClickToCaret")).toBe(true);
 	});
 
 	it("disables click-to-expand when overlays cannot be detected", () => {
@@ -146,6 +149,10 @@ describe("enabledFeatures", () => {
 		// so without this the wheel would scroll a draft hidden behind a dialog.
 		expect(features.has("editorWheelScroll")).toBe(false);
 		expect(features.has("selectionPendingMode")).toBe(true);
+		// The same layout an overlay is composited over still holds the editor, so
+		// both editor click features would answer for rows a dialog is covering.
+		expect(features.has("editorClickToCaret")).toBe(false);
+		expect(features.has("editorBufferCopy")).toBe(false);
 	});
 
 	it("disables both click features when the mouse event handler is missing", () => {
@@ -153,6 +160,19 @@ describe("enabledFeatures", () => {
 		const features = enabledFeatures(probeCapabilities(prototypeWith(without)));
 		expect(features.has("clickToExpandTools")).toBe(false);
 		expect(features.has("editorClickToCaret")).toBe(false);
+	});
+
+	it("disables buffer copy without the selection it would have to recognise", () => {
+		// It has to read the bounds to find out whether the selection is the
+		// editor's at all, and it raises Pi's own "Copied!" itself because it
+		// answers the copy instead of calling through.
+		for (const capability of ["getSelectionBounds", "flash"] as const) {
+			const without = ALL.filter((name) => name !== capability);
+			const features = enabledFeatures(probeCapabilities(prototypeWith(without)));
+			expect(features.has("editorBufferCopy")).toBe(false);
+			// The caret needs neither, and must survive both.
+			expect(features.has("editorClickToCaret")).toBe(true);
+		}
 	});
 });
 

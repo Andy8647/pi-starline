@@ -95,8 +95,31 @@ const REQUIREMENTS: Record<MouseFeature, readonly MouseCapability[]> = {
 	// (`tui.js:123`), so without it a notch aimed at a dialog would scroll the
 	// draft hidden behind it.
 	editorWheelScroll: ["routeWheel", "hasOverlay", "requestRender"],
-	editorClickToCaret: ["handleSelectionMouseEvent"],
-	editorBufferCopy: ["copySelectionToClipboard"],
+	// The press arrives through `handleSelectionMouseEvent`, and it asks
+	// `hasOverlay` for the same reason the two features above do: an overlay is
+	// composited over a layout that still contains the editor, so a click on a
+	// dialog would otherwise move the caret in the box behind it.
+	//
+	// `requestRender` is deliberately *not* here, unlike click-to-expand's entry.
+	// This feature never consumes the press — it moves the caret and calls
+	// through — and Pi's own press branch ends in `this.requestRender()`
+	// unconditionally (`tui-alt-screen.js:699`), so the moved caret is on screen
+	// by the time the call returns. Listing it would disable a feature that works
+	// without it, which is the same class of error as claiming one that does not.
+	editorClickToCaret: ["handleSelectionMouseEvent", "hasOverlay"],
+	// It wraps `copySelectionToClipboard`, reads the selection through
+	// `getSelectionBounds` to find out whether it is the editor's, and raises
+	// Pi's own "Copied!" through `flash` when it answers the copy itself.
+	// `hasOverlay` again: a selection dropped on a dialog must not be read as
+	// text from the draft behind it.
+	//
+	// The clipboard write goes through `terminal.write`, which is not listed
+	// because it is not on this prototype — `terminal` is a plain instance field
+	// holding somebody else's object, the same class of thing as `currentLayout`.
+	// It is checked at the call site instead, and a terminal that cannot be
+	// written to makes the copy fall through to Pi rather than disabling the
+	// feature at install time.
+	editorBufferCopy: ["copySelectionToClipboard", "getSelectionBounds", "hasOverlay", "flash"],
 };
 
 function isPatchable(prototype: object, name: string): boolean {

@@ -5,7 +5,7 @@ import {
 	findEditorBox,
 	hitTestEditorBox,
 	isEditorRule,
-} from "../extensions/starline/fixed-editor/editor-hit-test";
+} from "../extensions/starline/mouse/editor-hit-test";
 import {
 	editorScrollOffset,
 	editorVisualRowCount,
@@ -14,7 +14,7 @@ import {
 	resolveEditorInternals,
 	resolveEditorTextPointAt,
 	supportsEditorTextCursor,
-} from "../extensions/starline/fixed-editor/editor-text-cursor";
+} from "../extensions/starline/mouse/editor-text-cursor";
 
 const RULE = "─".repeat(40);
 const RAIL = "│ ";

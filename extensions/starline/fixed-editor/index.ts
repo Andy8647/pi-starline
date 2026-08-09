@@ -12,10 +12,10 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { type Component, type TUI, visibleWidth } from "@earendil-works/pi-tui";
 
 import type { PolishedTuiConfig } from "../config";
+import { editorTextColumn } from "../mouse/editor-hit-test";
 import type { SessionLifecycle } from "../session-lifecycle";
 import { renderStyleForSourceOrFallback } from "../style";
 import { TerminalSplitCompositor } from "./compositor";
-import { editorTextColumn } from "./editor-hit-test";
 import { inspectPiTui } from "./pi-compat";
 
 let compositor: TerminalSplitCompositor | null = null;

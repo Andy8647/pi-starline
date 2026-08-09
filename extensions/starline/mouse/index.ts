@@ -5,7 +5,10 @@
  * what it would do to it. `installMouse` probes what the running Pi build
  * exposes, logs once if something is missing, and installs each feature gated
  * on exactly its own declared requirement (`capabilities.ts`). Today that is
- * four features:
+ * six features across five patches — two methods carry two features each, and
+ * in both cases the two share a single patch, because the patch registry holds
+ * one behaviour per adapter key and a second registration would silently
+ * replace the first:
  *
  * `selectionPendingMode`, across two patches:
  * - `copySelectionToClipboard` — the method Pi calls itself on mouse
@@ -48,14 +51,34 @@
  *   notch behaves the same in both editor modes. Every other notch calls
  *   through.
  *
- * What Starline never does here is rewrite the text: the clipboard gets
- * exactly what Pi's own `copySelectionToClipboard` puts there. See
- * `installMouse` for why frame-free selection is not part of this.
+ * `editorClickToCaret`, sharing the `handleSelectionMouseEvent` patch:
+ * - A left-button press inside the input box moves the caret to the character
+ *   under it, then calls through, so Pi still drops its selection anchor there
+ *   and a drag from that point still selects and highlights as it always did.
+ *   `editor-caret.ts` carries the screen-to-buffer arithmetic and why the box's
+ *   rectangle is not the text.
+ *
+ * `editorBufferCopy`, sharing the `copySelectionToClipboard` patch:
+ * - A selection lying inside the input box is copied from the *draft* rather
+ *   than from the rendered rows. That is the one place this module builds
+ *   clipboard bytes itself, and the reason is that the rendered rows are not
+ *   the draft: they carry the rail glyph down the left, the padding each row is
+ *   filled out to, and a hard newline wherever the draft happened to wrap.
+ *
+ * Everywhere else the clipboard gets exactly what Pi's own
+ * `copySelectionToClipboard` puts there — see `installMouse` for why frame-free
+ * selection is not part of this.
  */
 import { sliceByColumn, stripTerminalSequences } from "@earendil-works/pi-tui";
 import type { PolishedTuiConfig } from "../config";
 import { installPrototypePatch } from "../prototype-patch-registry";
-import { disabledFeatureWarning, enabledFeatures, probeCapabilities } from "./capabilities";
+import {
+	disabledFeatureWarning,
+	enabledFeatures,
+	type MouseFeature,
+	probeCapabilities,
+} from "./capabilities";
+import { editorSelectionTextFor, moveEditorCaretTo } from "./editor-caret";
 import { activeEditor, wheelTarget } from "./editor-mouse";
 import { scrollEditorBy } from "./editor-scroll";
 import { type BoxLike, scrollContentLinesFor } from "./hit-test";
@@ -116,8 +139,12 @@ type MouseCapablePrototype = {
 	// Not probed capabilities (see capabilities.ts): plain instance fields
 	// this module only ever reads.
 	currentLayout?: { root: BoxLike };
-	/** `TuiBase.terminal` (`tui.js:101`); `rows` is a getter on it. */
-	terminal?: { rows?: number };
+	/**
+	 * `TuiBase.terminal` (`tui.js:101`); `rows` is a getter on it, and `write` is
+	 * how `copySelectionToClipboard` reaches the clipboard — it emits OSC 52
+	 * through the terminal rather than through any renderer method.
+	 */
+	terminal?: { rows?: number; write?: (data: string) => void };
 	/**
 	 * How many lines one notch moves, `max(1, options.wheelScrollLines ?? 1)`
 	 * (`tui-alt-screen.js:73`). Read so the editor scrolls by the same amount
@@ -222,96 +249,199 @@ function copyWithNotice(receiver: MouseCapablePrototype, showNotice: boolean): v
 }
 
 /**
- * Installs `selectionPendingMode`: arm on release, copy on ctrl+c.
+ * Writes the draft's own text to the clipboard for a selection that lies inside
+ * the input box, and reports whether it did — `false` means this selection was
+ * not the editor's and Pi's own copy must run instead.
  *
- * Two patches, both belonging to this one feature. The
- * `copySelectionToClipboard` patch decides whether a release copies now or
- * arms and waits; the `handleViewportInput` patch is what a waiting selection
- * is eventually released by. Neither touches the *text* — the real copy is
- * always predecessor's, so what lands on the clipboard is Pi's own bytes.
+ * This is the one place in the module that builds clipboard bytes rather than
+ * letting predecessor build them, and it is deliberate: Pi copies *rendered*
+ * rows, so a selection in the input box picks up the rail glyph, the padding
+ * the frame fills each row out to, and a newline wherever the draft happened to
+ * wrap. None of that is in the draft. The bytes go out the same way Pi's own
+ * copy sends them — OSC 52 through `terminal.write`, see
+ * `copySelectionToClipboard` in
+ * `node_modules/@earendil-works/pi-tui/dist/tui-alt-screen.js` — so nothing
+ * downstream can tell the two copies apart.
+ *
+ * The flash is unconditional, exactly as Pi's is. `copyNotice: false` is
+ * honoured by `copyWithNotice`, which shadows `flash` around the whole call;
+ * checking the setting here as well would suppress the notice twice on one path
+ * and not at all on the other.
  */
-function installSelectionPendingMode(
+function editorTextForSelection(
+	receiver: MouseCapablePrototype,
+	config: PolishedTuiConfig,
+	bounds: SelectionBounds,
+): string | undefined {
+	try {
+		// An overlay is composited over a layout that still contains the editor,
+		// so without this a selection dropped on a dialog would be read as text
+		// from the draft hidden behind it. Both callers ask it, or the hint could
+		// count one text while the copy sends another.
+		if (receiver.hasOverlay()) return undefined;
+		return editorSelectionTextFor(receiver, config, bounds);
+	} catch {
+		return undefined;
+	}
+}
+
+function copyEditorSelection(receiver: MouseCapablePrototype, config: PolishedTuiConfig): boolean {
+	try {
+		const bounds = receiver.getSelectionBounds();
+		if (!bounds) return false;
+		const text = editorTextForSelection(receiver, config, bounds);
+		// undefined is "not the editor's"; "" is the editor's and empty, which is
+		// still ours to answer — falling through would have Pi copy the rail out
+		// of a blank row.
+		if (text === undefined) return false;
+		if (text.length === 0) return true;
+		const write = receiver.terminal?.write;
+		if (typeof write !== "function") return false;
+		write.call(receiver.terminal, `\x1b]52;c;${Buffer.from(text).toString("base64")}\x07`);
+		receiver.flash("Copied!");
+		return true;
+	} catch {
+		// Reading the editor and the layout is best effort. Anything this trips
+		// over means Pi's own copy should run.
+		return false;
+	}
+}
+
+/**
+ * The text a copy of this selection would put on the clipboard, for the pending
+ * hint's character count.
+ *
+ * It has to ask the same two paths the copy itself asks, in the same order, or
+ * the hint promises a number ctrl+c does not deliver.
+ */
+function pendingSelectionText(
+	receiver: MouseCapablePrototype,
+	config: PolishedTuiConfig,
+	bounds: SelectionBounds,
+	bufferCopy: boolean,
+): string {
+	const buffered = bufferCopy ? editorTextForSelection(receiver, config, bounds) : undefined;
+	return buffered ?? selectionText(receiver, bounds);
+}
+
+/**
+ * Installs the two features that live on `copySelectionToClipboard`.
+ *
+ * `selectionPendingMode` — arm on release, copy on ctrl+c — spans two patches:
+ * the copy patch decides whether a release copies now or arms and waits, and
+ * the `handleViewportInput` patch is what a waiting selection is eventually
+ * released by.
+ *
+ * `editorBufferCopy` sits in front of the real copy on that same method. They
+ * share one patch rather than taking a key each because
+ * `installPrototypePatch` holds exactly one behaviour per adapter key: a second
+ * registration under `mouse-copy` would silently replace the first, and two
+ * different keys would leave the order they run in — and which of them gets to
+ * consume the call — implicit. Here the precedence is written down: the buffer
+ * copy answers first, and only when it declines does the pending mode or
+ * predecessor see the call.
+ *
+ * Either feature can be off. With `selectionPendingMode` unavailable there is
+ * no state and every call is a real copy; with `editorBufferCopy` unavailable
+ * the clipboard is Pi's own bytes, exactly as before.
+ */
+function installCopying(
 	prototype: MouseCapablePrototype,
 	deps: InstallMouseDeps,
+	features: ReadonlySet<MouseFeature>,
 ): () => void {
-	const state = new SelectionPendingState();
+	const bufferCopy = features.has("editorBufferCopy");
+	const state = features.has("selectionPendingMode") ? new SelectionPendingState() : undefined;
 	const previousState = activeState;
-	activeState = state;
+	if (state) activeState = state;
 
 	// Set while this module is driving `copySelectionToClipboard` itself (the
-	// ctrl+c path below), so the `mouse-copy` patch calls through instead of
+	// ctrl+c path below), so the `mouse-copy` patch performs the copy instead of
 	// re-arming the state it is itself in the middle of clearing.
 	let performingRealCopy = false;
 
-	const cleanupCopy = installPrototypePatch(
-		prototype,
-		"copySelectionToClipboard",
-		"mouse-copy",
-		({ predecessor, receiver, args }) => {
-			const typedReceiver = receiver as MouseCapablePrototype;
-			if (deps.getConfig().mouse.copyOnSelect || performingRealCopy) {
-				// The real copy, whether Pi triggered it directly on release
-				// (`copyOnSelect: true`) or this module is driving it itself for
-				// ctrl+c below. Predecessor writes the clipboard, unmodified.
-				return Reflect.apply(predecessor, receiver, args);
-			}
-			const bounds = typedReceiver.getSelectionBounds();
-			if (!bounds) {
-				// A collapsed or empty selection (e.g. a plain click after a prior
-				// drag) still reaches this call — Pi runs it unconditionally on
-				// every release and relies on its own `if (!selection) return;`
-				// guard. Any stale arm from an earlier selection must not survive
-				// this: left in place, it would make a later ctrl+c consume the
-				// key for a no-op copy instead of falling through to interrupt.
-				if (state.pending) {
-					state.clear();
-					typedReceiver.requestRender();
-				}
-				return undefined;
-			}
-			state.arm(selectionText(typedReceiver, bounds).length);
-			typedReceiver.requestRender();
-			return undefined;
-		},
-	);
+	const cleanups: Array<() => void> = [];
 
-	const cleanupViewportInput = installPrototypePatch(
-		prototype,
-		"handleViewportInput",
-		"mouse-viewport-input",
-		({ predecessor, receiver, args }) => {
-			const data = args[0];
-			if (data === CTRL_C && state.pending) {
+	cleanups.push(
+		installPrototypePatch(
+			prototype,
+			"copySelectionToClipboard",
+			"mouse-copy",
+			({ predecessor, receiver, args }) => {
 				const typedReceiver = receiver as MouseCapablePrototype;
-				// `state.pending` can be stale: Pi clears its own selection
-				// through paths this module never sees (e.g. starting a new
-				// drag overwrites `selectionAnchor`/`selectionFocus` directly,
-				// with no call to `copySelectionToClipboard`). Re-read the real
-				// bounds before deciding: a copy that would be a no-op must not
-				// consume ctrl+c, or an in-flight interrupt gets swallowed for
-				// nothing.
-				if (!typedReceiver.getSelectionBounds()) {
-					state.clear();
-					typedReceiver.requestRender();
+				const config = deps.getConfig();
+				if (!state || config.mouse.copyOnSelect || performingRealCopy) {
+					// The real copy, whether Pi triggered it directly on release
+					// (`copyOnSelect: true`), this module is driving it itself for
+					// ctrl+c below, or pending mode is not installed at all.
+					if (bufferCopy && copyEditorSelection(typedReceiver, config)) return undefined;
 					return Reflect.apply(predecessor, receiver, args);
 				}
-				performingRealCopy = true;
-				try {
-					copyWithNotice(typedReceiver, deps.getConfig().mouse.copyNotice);
-				} finally {
-					performingRealCopy = false;
+				const bounds = typedReceiver.getSelectionBounds();
+				if (!bounds) {
+					// A collapsed or empty selection (e.g. a plain click after a prior
+					// drag) still reaches this call — Pi runs it unconditionally on
+					// every release and relies on its own `if (!selection) return;`
+					// guard. Any stale arm from an earlier selection must not survive
+					// this: left in place, it would make a later ctrl+c consume the
+					// key for a no-op copy instead of falling through to interrupt.
+					if (state.pending) {
+						state.clear();
+						typedReceiver.requestRender();
+					}
+					return undefined;
 				}
-				state.clear();
+				state.arm(pendingSelectionText(typedReceiver, config, bounds, bufferCopy).length);
 				typedReceiver.requestRender();
-				return { consume: true };
-			}
-			return Reflect.apply(predecessor, receiver, args);
-		},
+				return undefined;
+			},
+		),
+	);
+
+	if (!state) {
+		return () => {
+			for (const cleanup of cleanups) cleanup();
+		};
+	}
+
+	cleanups.push(
+		installPrototypePatch(
+			prototype,
+			"handleViewportInput",
+			"mouse-viewport-input",
+			({ predecessor, receiver, args }) => {
+				const data = args[0];
+				if (data === CTRL_C && state.pending) {
+					const typedReceiver = receiver as MouseCapablePrototype;
+					// `state.pending` can be stale: Pi clears its own selection
+					// through paths this module never sees (e.g. starting a new
+					// drag overwrites `selectionAnchor`/`selectionFocus` directly,
+					// with no call to `copySelectionToClipboard`). Re-read the real
+					// bounds before deciding: a copy that would be a no-op must not
+					// consume ctrl+c, or an in-flight interrupt gets swallowed for
+					// nothing.
+					if (!typedReceiver.getSelectionBounds()) {
+						state.clear();
+						typedReceiver.requestRender();
+						return Reflect.apply(predecessor, receiver, args);
+					}
+					performingRealCopy = true;
+					try {
+						copyWithNotice(typedReceiver, deps.getConfig().mouse.copyNotice);
+					} finally {
+						performingRealCopy = false;
+					}
+					state.clear();
+					typedReceiver.requestRender();
+					return { consume: true };
+				}
+				return Reflect.apply(predecessor, receiver, args);
+			},
+		),
 	);
 
 	return () => {
-		cleanupCopy();
-		cleanupViewportInput();
+		for (const cleanup of cleanups) cleanup();
 		if (activeState === state) activeState = previousState;
 	};
 }
@@ -413,30 +543,80 @@ function pressExpandTarget(
 }
 
 /**
- * Installs `clickToExpandTools` on `handleSelectionMouseEvent`.
+ * Puts the caret where a press landed, when the press landed in the input box.
  *
- * A thin wrapper: it either finds a hint row under the press and consumes it,
- * or calls through to Pi untouched. Consuming is what keeps the click from
- * also dropping a selection anchor into the box it just opened; every other
- * press — including a press anywhere else inside the same box — still starts a
- * selection, because copying text out of tool output is the common case and
- * must not be stolen.
+ * Nothing is consumed: the press goes on to Pi, which drops its selection
+ * anchor there exactly as it always did, so a drag from that point still
+ * highlights and still copies. That is also what pays for the repaint — Pi's
+ * own press branch ends in `requestRender()` unconditionally
+ * (`tui-alt-screen.js:699`), so this feature never has to ask for one itself,
+ * and `requestRender` is correspondingly absent from its requirements.
  */
-function installClickToExpandTools(
+function moveCaretForPress(
+	receiver: MouseCapablePrototype,
+	event: unknown,
+	deps: InstallMouseDeps,
+): void {
+	try {
+		const config = deps.getConfig();
+		if (!config.editorClickCursor) return;
+		if (!isLeftButtonPress(event)) return;
+		// Pi resolves no scroll view while an overlay is up, so neither does this
+		// — a click on a dialog must not move a caret in the box behind it.
+		if (receiver.hasOverlay()) return;
+		moveEditorCaretTo(receiver, config, event.x, event.y);
+	} catch {
+		// Moving the caret is a best-effort read of Pi's internals and of an
+		// editor this module did not necessarily build. Anything it trips over
+		// means this press was an ordinary press.
+	}
+}
+
+/**
+ * Installs the two features that live on `handleSelectionMouseEvent`.
+ *
+ * They share one patch because `installPrototypePatch` holds exactly one
+ * behaviour per adapter key — a second registration under
+ * `mouse-selection-event` would silently replace the first, and giving them a
+ * key each would leave the order they run in implicit, which matters here
+ * because only one of them may consume the press. Written as one patch the
+ * precedence is explicit and testable:
+ *
+ * 1. `clickToExpandTools` gets the press first, and *consumes* it when it lands
+ *    on a tool box's hint row. That is what keeps the click from also dropping
+ *    a selection anchor into the box it just opened.
+ * 2. `editorClickToCaret` gets every press expand did not take, moves the caret
+ *    if the press was inside the input box, and never consumes.
+ * 3. Pi gets the press either way, unless expand took it.
+ *
+ * The two cannot collide in practice — the hint rows are in the transcript and
+ * the caret rows are in the dock — but the ordering is what makes that a fact
+ * rather than a hope, and either feature may be off without disturbing the
+ * other.
+ */
+function installSelectionMouse(
 	prototype: MouseCapablePrototype,
 	deps: InstallMouseDeps,
+	features: ReadonlySet<MouseFeature>,
 ): () => void {
+	const expandTools = features.has("clickToExpandTools");
+	const clickToCaret = features.has("editorClickToCaret");
 	return installPrototypePatch(
 		prototype,
 		"handleSelectionMouseEvent",
 		"mouse-selection-event",
 		({ predecessor, receiver, args }) => {
 			const typedReceiver = receiver as MouseCapablePrototype;
-			const target = pressExpandTarget(typedReceiver, args[0], deps);
-			if (!target) return Reflect.apply(predecessor, receiver, args);
-			target.component.setExpanded(target.expanded);
-			typedReceiver.requestRender();
-			return undefined;
+			if (expandTools) {
+				const target = pressExpandTarget(typedReceiver, args[0], deps);
+				if (target) {
+					target.component.setExpanded(target.expanded);
+					typedReceiver.requestRender();
+					return undefined;
+				}
+			}
+			if (clickToCaret) moveCaretForPress(typedReceiver, args[0], deps);
+			return Reflect.apply(predecessor, receiver, args);
 		},
 	);
 }
@@ -568,14 +748,14 @@ export function installMouse(prototype: object, deps: InstallMouseDeps): () => v
 	// What would bring it back: `pi-toolbox` publishing its frame geometry —
 	// which rows it drew a border on, at which columns — so Starline reads a
 	// fact instead of inferring one. Nothing short of that.
-	if (enabled.has("selectionPendingMode")) {
-		cleanups.push(installSelectionPendingMode(typedPrototype, deps));
+	if (enabled.has("selectionPendingMode") || enabled.has("editorBufferCopy")) {
+		cleanups.push(installCopying(typedPrototype, deps, enabled));
 	}
 	if (enabled.has("pathAwareWords")) {
 		cleanups.push(installPathAwareWords(typedPrototype, deps));
 	}
-	if (enabled.has("clickToExpandTools")) {
-		cleanups.push(installClickToExpandTools(typedPrototype, deps));
+	if (enabled.has("clickToExpandTools") || enabled.has("editorClickToCaret")) {
+		cleanups.push(installSelectionMouse(typedPrototype, deps, enabled));
 	}
 	if (enabled.has("editorWheelScroll")) {
 		cleanups.push(installEditorWheelScroll(typedPrototype, deps));

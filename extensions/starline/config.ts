@@ -203,7 +203,7 @@ export type PolishedTuiConfig = {
 	segmentOptions: SegmentOptionsConfig;
 	editorModelLabel: ModelLabelSource;
 	editorCursor: EditorCursorStyle;
-	/** Clicking in the editor text moves the caret there. Needs the fixed editor. */
+	/** Clicking in the editor text moves the caret there. Needs `mouse.enabled`. */
 	editorClickCursor: boolean;
 	/** Collapse pastes at this many lines. 11 (default) leaves Pi's threshold alone. */
 	pasteCollapseLines: number;

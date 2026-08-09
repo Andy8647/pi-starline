@@ -106,13 +106,31 @@ export function editorBoxFor(root: BoxLike | undefined, editor: unknown): BoxLik
 }
 
 /**
- * Whether a wheel notch at `(x, y)` belongs to the input box or to the
- * transcript behind it.
+ * Whether the input box is what is painted at `(x, y)`.
  *
  * The box has to be under the pointer *and* actually painted there, which is
  * why this asks `boxesAt` rather than testing the rectangle directly:
  * `boxesAt` walks down from the root honouring each box's `clip`, so a dock
  * squeezed out of the viewport cannot claim rows it is not drawing.
+ *
+ * Two features ask it — the wheel, for which notch belongs to the draft, and
+ * click-to-caret, for which press does.
+ */
+export function pointerOverEditor(
+	root: BoxLike | undefined,
+	editor: unknown,
+	x: number,
+	y: number,
+): boolean {
+	if (!root) return false;
+	const box = editorBoxFor(root, editor);
+	if (!box) return false;
+	return boxesAt(root, x, y).includes(box);
+}
+
+/**
+ * Whether a wheel notch at `(x, y)` belongs to the input box or to the
+ * transcript behind it.
  */
 export function wheelTarget(
 	root: BoxLike | undefined,
@@ -120,8 +138,5 @@ export function wheelTarget(
 	x: number,
 	y: number,
 ): WheelTarget {
-	if (!root) return "transcript";
-	const box = editorBoxFor(root, editor);
-	if (!box) return "transcript";
-	return boxesAt(root, x, y).includes(box) ? "editor" : "transcript";
+	return pointerOverEditor(root, editor, x, y) ? "editor" : "transcript";
 }
