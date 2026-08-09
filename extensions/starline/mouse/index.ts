@@ -5,7 +5,7 @@
  * what it would do to it. `installMouse` probes what the running Pi build
  * exposes, logs once if something is missing, and installs each feature gated
  * on exactly its own declared requirement (`capabilities.ts`). Today that is
- * three features:
+ * four features:
  *
  * `selectionPendingMode`, across two patches:
  * - `copySelectionToClipboard` — the method Pi calls itself on mouse
@@ -38,6 +38,16 @@
  *   usual. `tool-box.ts` carries the reasoning for why the hint row is the
  *   only target and why resolution goes through the component tree.
  *
+ * `editorWheelScroll`, one patch:
+ * - `routeWheel` — Pi's own wheel routing, which knows only about scroll views
+ *   and therefore always scrolls the transcript. Wrapped so a notch that landed
+ *   on the input box scrolls the *draft* instead, when the draft is taller than
+ *   the box. `editor-mouse.ts` carries how the box is located (not where the
+ *   plan for this said it would be) and how the live editor is reached; the
+ *   scroll itself is `editor-scroll.ts`, shared with the fixed editor so a
+ *   notch behaves the same in both editor modes. Every other notch calls
+ *   through.
+ *
  * What Starline never does here is rewrite the text: the clipboard gets
  * exactly what Pi's own `copySelectionToClipboard` puts there. See
  * `installMouse` for why frame-free selection is not part of this.
@@ -46,6 +56,8 @@ import { sliceByColumn, stripTerminalSequences } from "@earendil-works/pi-tui";
 import type { PolishedTuiConfig } from "../config";
 import { installPrototypePatch } from "../prototype-patch-registry";
 import { disabledFeatureWarning, enabledFeatures, probeCapabilities } from "./capabilities";
+import { activeEditor, wheelTarget } from "./editor-mouse";
+import { scrollEditorBy } from "./editor-scroll";
 import { type BoxLike, scrollContentLinesFor } from "./hit-test";
 import { SelectionPendingState, selectionHintText } from "./selection-state";
 import { type ExpandTarget, expandKeyText, expandTargetAt } from "./tool-box";
@@ -65,6 +77,9 @@ const MOTION_BIT = 32;
 const WHEEL_BIT = 64;
 
 type MouseEventLike = { button: number; x: number; y: number; release?: boolean };
+
+/** `parseWheelEvent`'s output (`tui-alt-screen.js:345`): -1 is up, 1 is down. */
+type WheelEventLike = { direction: number; x: number; y: number };
 
 type SelectionPoint = { scrollView?: unknown; row: number; col: number; boundary?: boolean };
 type SelectionBounds = { start: SelectionPoint; end: SelectionPoint };
@@ -86,6 +101,12 @@ type MouseCapablePrototype = {
 	getSelectionSourceLine(this: unknown, point: SelectionPoint): string;
 	hasOverlay(this: unknown): boolean;
 	/**
+	 * `TuiAltScreen.routeWheel(event)` (`tui-alt-screen.js:375`). `event` is
+	 * `parseWheelEvent`'s output — `{ direction: -1 | 1, x, y }`, zero-based —
+	 * and the method returns nothing.
+	 */
+	routeWheel(this: unknown, event: WheelEventLike): void;
+	/**
 	 * `TuiBase.requestRender(force = false)` (`tui.js:495`), inherited by
 	 * `TuiAltScreen` and public. The only method here this module calls rather
 	 * than patches — see `capabilities.ts`.
@@ -95,6 +116,14 @@ type MouseCapablePrototype = {
 	// Not probed capabilities (see capabilities.ts): plain instance fields
 	// this module only ever reads.
 	currentLayout?: { root: BoxLike };
+	/** `TuiBase.terminal` (`tui.js:101`); `rows` is a getter on it. */
+	terminal?: { rows?: number };
+	/**
+	 * How many lines one notch moves, `max(1, options.wheelScrollLines ?? 1)`
+	 * (`tui-alt-screen.js:73`). Read so the editor scrolls by the same amount
+	 * the transcript would have.
+	 */
+	wheelScrollLines?: number;
 };
 
 /**
@@ -413,6 +442,103 @@ function installClickToExpandTools(
 }
 
 /**
+ * The shape `parseWheelEvent` produces, checked rather than assumed — this runs
+ * on whatever Pi hands `routeWheel`, and anything unrecognised must fall
+ * through to Pi's own routing, never throw.
+ */
+function isWheelEvent(event: unknown): event is WheelEventLike {
+	if (typeof event !== "object" || event === null) return false;
+	const candidate = event as Partial<WheelEventLike>;
+	return (
+		typeof candidate.direction === "number" &&
+		typeof candidate.x === "number" &&
+		typeof candidate.y === "number"
+	);
+}
+
+/**
+ * Scrolls the input box for this notch, or reports that the notch was not the
+ * input box's — in which case Pi routes it as it always did.
+ *
+ * Pi does not scroll the editor: the editor's `scrollOffset` is re-derived from
+ * the caret on every render, pulled back whenever the caret would fall outside
+ * the visible window (`components/editor.js:392-401`). So a scroll here is an
+ * offset *and* a caret move, which is what `scrollEditorBy` does — the same
+ * function the fixed-editor compositor already drives its own wheel with, so a
+ * notch behaves the same in both editor modes.
+ *
+ * The window it scrolls within is Pi's own `max(5, rows * 0.3)`, taken from the
+ * terminal rather than from the box's rect: the rect includes Starline's border
+ * and metadata rows, and guessing how many of those there are would put the
+ * boundary in the wrong place. Without a row count there is nothing to compute
+ * it from, so the notch falls through.
+ */
+function scrollEditorForWheel(
+	receiver: MouseCapablePrototype,
+	event: unknown,
+	deps: InstallMouseDeps,
+): boolean {
+	try {
+		if (!deps.getConfig().mouse.wheelRouting) return false;
+		if (!isWheelEvent(event)) return false;
+		// An overlay is composited over a layout that still contains the editor,
+		// so the box is still "under" a pointer aimed at the dialog on top of it.
+		if (receiver.hasOverlay()) return false;
+		const editor = activeEditor();
+		if (!editor) return false;
+		const rows = receiver.terminal?.rows;
+		if (typeof rows !== "number") return false;
+		if (
+			wheelTarget(receiver.currentLayout?.root, editor.component, event.x, event.y) !== "editor"
+		) {
+			return false;
+		}
+		const lines = event.direction * Math.max(1, receiver.wheelScrollLines ?? 1);
+		return scrollEditorBy(editor.scrollable, lines, rows);
+	} catch {
+		// Routing is a best-effort read of Pi's internals and of an editor this
+		// module did not necessarily build. Anything it trips over means this
+		// notch was the transcript's.
+		return false;
+	}
+}
+
+/**
+ * Installs `editorWheelScroll` on `routeWheel`.
+ *
+ * A thin wrapper with one job: a notch that landed on a draft taller than the
+ * input box scrolls the box and is consumed; everything else calls through and
+ * scrolls the transcript exactly as before. "Everything else" includes a notch
+ * over the transcript, a notch over an overlay, a draft that fits entirely, an
+ * editor this module cannot read, and `mouse.wheelRouting` being off.
+ *
+ * Reaching the top or bottom of a draft that *does* scroll is deliberately not
+ * in that list: the notch stays with the box. Chaining on to the transcript at
+ * the boundary would make the box feel like it slipped out from under the
+ * pointer — see `editor-scroll.ts`.
+ */
+function installEditorWheelScroll(
+	prototype: MouseCapablePrototype,
+	deps: InstallMouseDeps,
+): () => void {
+	return installPrototypePatch(
+		prototype,
+		"routeWheel",
+		"mouse-wheel",
+		({ predecessor, receiver, args }) => {
+			const typedReceiver = receiver as MouseCapablePrototype;
+			if (!scrollEditorForWheel(typedReceiver, args[0], deps)) {
+				return Reflect.apply(predecessor, receiver, args);
+			}
+			// Pi's own `routeWheel` repaints at the end of every notch; consuming
+			// the event means reaching that repaint is now this wrapper's job.
+			typedReceiver.requestRender();
+			return undefined;
+		},
+	);
+}
+
+/**
  * Probes Pi, warns once about whatever this build cannot support, and
  * installs the mouse features that are available. Returns a disposer that
  * removes every patch this call installed.
@@ -450,6 +576,9 @@ export function installMouse(prototype: object, deps: InstallMouseDeps): () => v
 	}
 	if (enabled.has("clickToExpandTools")) {
 		cleanups.push(installClickToExpandTools(typedPrototype, deps));
+	}
+	if (enabled.has("editorWheelScroll")) {
+		cleanups.push(installEditorWheelScroll(typedPrototype, deps));
 	}
 
 	if (cleanups.length === 0) return () => {};

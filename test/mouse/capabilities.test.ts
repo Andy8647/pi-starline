@@ -127,6 +127,10 @@ describe("enabledFeatures", () => {
 		const features = enabledFeatures(probeCapabilities(prototypeWith(without)));
 		expect(features.has("selectionPendingMode")).toBe(false);
 		expect(features.has("clickToExpandTools")).toBe(false);
+		// The wheel patch consumes the notch, so Pi never reaches the repaint at
+		// the end of its own `routeWheel`: without one of its own, the box would
+		// scroll and not be redrawn.
+		expect(features.has("editorWheelScroll")).toBe(false);
 		// Word selection returns a range and lets Pi repaint on its own path.
 		expect(features.has("pathAwareWords")).toBe(true);
 	});
@@ -138,6 +142,9 @@ describe("enabledFeatures", () => {
 		const without = ALL.filter((name) => name !== "hasOverlay");
 		const features = enabledFeatures(probeCapabilities(prototypeWith(without)));
 		expect(features.has("clickToExpandTools")).toBe(false);
+		// An overlay is composited over a layout that still contains the editor,
+		// so without this the wheel would scroll a draft hidden behind a dialog.
+		expect(features.has("editorWheelScroll")).toBe(false);
 		expect(features.has("selectionPendingMode")).toBe(true);
 	});
 

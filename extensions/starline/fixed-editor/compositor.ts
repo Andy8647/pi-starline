@@ -12,9 +12,8 @@
  */
 
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-
+import { scrollEditorBy } from "../mouse/editor-scroll";
 import { isBlankRow, renderCluster } from "./cluster";
-import { scrollEditorBy } from "./editor-scroll";
 import { resolveEditorInternals } from "./editor-text-cursor";
 import { toggleExpanded } from "./expandable";
 import { frameContentSpan } from "./frame";

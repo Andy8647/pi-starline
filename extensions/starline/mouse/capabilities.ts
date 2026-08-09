@@ -87,7 +87,14 @@ const REQUIREMENTS: Record<MouseFeature, readonly MouseCapability[]> = {
 	// repaint for that event: `requestRender` is the only thing that draws the
 	// box it just toggled.
 	clickToExpandTools: ["handleSelectionMouseEvent", "hasOverlay", "requestRender"],
-	editorWheelScroll: ["routeWheel"],
+	// The notch arrives through `routeWheel`, which it consumes on an editor hit
+	// rather than calling through — so Pi never reaches its own repaint for that
+	// event and `requestRender` is the only thing that draws the scrolled box. It
+	// asks `hasOverlay` for the same reason click-to-expand does: an overlay is
+	// composited on top of a layout that still contains the editor
+	// (`tui.js:123`), so without it a notch aimed at a dialog would scroll the
+	// draft hidden behind it.
+	editorWheelScroll: ["routeWheel", "hasOverlay", "requestRender"],
 	editorClickToCaret: ["handleSelectionMouseEvent"],
 	editorBufferCopy: ["copySelectionToClipboard"],
 };

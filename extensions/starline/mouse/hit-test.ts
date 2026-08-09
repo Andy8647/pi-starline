@@ -62,13 +62,30 @@ export function boxesAt(root: BoxLike, x: number, y: number, options?: HitTestOp
 	return path;
 }
 
-export function boxFor(root: BoxLike, component: unknown): BoxLike | undefined {
-	if (root.component === component) return root;
+/**
+ * The first box, depth first, whose component satisfies `predicate`.
+ *
+ * `boxFor` asks "which box is this component's", which is the question when
+ * the component is itself a layout node. It is not always: a component with no
+ * `LAYOUT_NODE` is folded into its parent's leaf box, so the box that *covers*
+ * it belongs to an ancestor and the only way to recognise it is through that
+ * ancestor. `editor-mouse.ts` is the caller that needs the looser question.
+ */
+export function boxMatching(
+	root: BoxLike | undefined,
+	predicate: (component: unknown) => boolean,
+): BoxLike | undefined {
+	if (!root) return undefined;
+	if (predicate(root.component)) return root;
 	for (const child of root.children ?? []) {
-		const found = boxFor(child, component);
+		const found = boxMatching(child, predicate);
 		if (found) return found;
 	}
 	return undefined;
+}
+
+export function boxFor(root: BoxLike, component: unknown): BoxLike | undefined {
+	return boxMatching(root, (candidate) => candidate === component);
 }
 
 export type ScrollBoxLike = BoxLike & {

@@ -12,8 +12,10 @@
  * leaving a patched shared prototype behind would poison every test that
  * runs after this file.
  */
-import { TuiAltScreen } from "@earendil-works/pi-tui";
+import { Container, ScrollView, Text, TuiAltScreen, VStack } from "@earendil-works/pi-tui";
+import { renderLayoutFrame } from "@earendil-works/pi-tui/dist/layout.js";
 import { afterEach, describe, expect, it } from "vitest";
+import { setActiveEditor } from "../../extensions/starline/mouse/editor-mouse";
 import { activeSelectionHintText, installMouse } from "../../extensions/starline/mouse/index";
 
 // `copySelectionToClipboard`/`handleViewportInput` are typed `private` in
@@ -26,6 +28,7 @@ type TuiAltScreenPrototype = {
 	handleViewportInput: (data: string) => { consume: boolean } | undefined;
 	handleSelectionMouseEvent: (event: unknown) => void;
 	getWordSelection: (point: unknown) => unknown;
+	routeWheel: (event: unknown) => void;
 };
 const prototype = TuiAltScreen.prototype as unknown as TuiAltScreenPrototype;
 
@@ -33,6 +36,7 @@ const originalCopy = prototype.copySelectionToClipboard;
 const originalViewportInput = prototype.handleViewportInput;
 const originalMouseEvent = prototype.handleSelectionMouseEvent;
 const originalWordSelection = prototype.getWordSelection;
+const originalRouteWheel = prototype.routeWheel;
 
 type RealReceiver = {
 	selectionAnchor: { row: number; col: number } | undefined;
@@ -90,6 +94,8 @@ describe("mouse patches against the real TuiAltScreen.prototype", () => {
 			// exercises: the real prototype is shared with every other test file.
 			expect(prototype.handleSelectionMouseEvent).toBe(originalMouseEvent);
 			expect(prototype.getWordSelection).toBe(originalWordSelection);
+			expect(prototype.routeWheel).toBe(originalRouteWheel);
+			setActiveEditor(undefined);
 		}
 	});
 
@@ -144,5 +150,125 @@ describe("mouse patches against the real TuiAltScreen.prototype", () => {
 		// what keeps interrupt working.
 		expect(result).toBeUndefined();
 		expect(written).toEqual([]);
+	});
+});
+
+/**
+ * The wheel path, driven the way a terminal drives it: a raw SGR sequence into
+ * the real `handleViewportInput`, which runs Pi's own `parseWheelEvent` and
+ * hands the result to the patched `routeWheel`. Nothing about the event shape
+ * is asserted from the plan here — if `parseWheelEvent`'s output ever stops
+ * matching what the patch reads, these go red.
+ */
+const WIDTH = 40;
+const HEIGHT = 12;
+const EDITOR_ROWS = 5;
+
+/** A scrollable draft, and enough of Pi's `Editor` to be laid out and scrolled. */
+class FakeEditor {
+	readonly state = {
+		lines: Array.from({ length: 20 }, (_value, index) => `draft ${index}`),
+		cursorLine: 0,
+		cursorCol: 0,
+	};
+	scrollOffset = 0;
+	lastWidth = WIDTH;
+	preferredVisualCol: number | null = null;
+	snappedFromCursorCol: number | null = null;
+
+	buildVisualLineMap(_width: number) {
+		return this.state.lines.map((line, index) => ({
+			logicalLine: index,
+			startCol: 0,
+			length: line.length,
+		}));
+	}
+
+	render(_width: number): string[] {
+		const window = this.state.lines.slice(this.scrollOffset, this.scrollOffset + EDITOR_ROWS);
+		while (window.length < EDITOR_ROWS) window.push("");
+		return window;
+	}
+
+	invalidate(): void {}
+}
+
+/** `\x1b[<65;col;rowM` — bit 64 is a wheel report, direction bit 1 is down. */
+function wheelDown(x: number, y: number): string {
+	return `\x1b[<65;${x + 1};${y + 1}M`;
+}
+
+function makeWheelReceiver() {
+	const editor = new FakeEditor();
+	const container = new Container();
+	container.addChild(editor as unknown as Parameters<Container["addChild"]>[0]);
+	const transcript = new Text(Array.from({ length: 40 }, (_v, i) => `line ${i}`).join("\n"), 0, 0);
+	const scroll = new ScrollView(transcript, { primary: true, follow: "end" });
+	const root = new VStack([
+		{ component: scroll, basis: 0, grow: 1, shrink: 1, minSize: 1 },
+		{
+			component: new VStack([{ component: container, shrink: 1, minSize: 3 }]),
+			basis: "auto",
+			grow: 0,
+			shrink: 1,
+			minSize: 1,
+		},
+	]);
+	const instance = Object.create(TuiAltScreen.prototype) as Record<string, unknown> & {
+		handleViewportInput: (data: string) => { consume: boolean } | undefined;
+	};
+	instance.currentLayout = renderLayoutFrame(root, WIDTH, HEIGHT, () => {});
+	instance.terminal = { rows: HEIGHT, columns: WIDTH, write: () => {} };
+	instance.wheelScrollLines = 3;
+	instance.overlayStack = [];
+	instance.scrollbarHover = undefined;
+	instance.scrollbarDrag = undefined;
+	instance.stopped = true;
+	setActiveEditor({ component: editor, scrollable: editor });
+	return { instance, editor, scroll };
+}
+
+describe("the wheel patch against the real TuiAltScreen.prototype", () => {
+	let dispose: (() => void) | undefined;
+
+	afterEach(() => {
+		try {
+			dispose?.();
+		} finally {
+			dispose = undefined;
+			setActiveEditor(undefined);
+			expect(prototype.routeWheel).toBe(originalRouteWheel);
+		}
+	});
+
+	function install() {
+		dispose = installMouse(prototype, {
+			getConfig: () => ({ mouse: { wheelRouting: true, copyOnSelect: true } }) as never,
+		});
+	}
+
+	it("scrolls the input box for a notch Pi parsed out of a real SGR sequence", () => {
+		const { instance, editor, scroll } = makeWheelReceiver();
+		// Parked at the top, so a notch that leaked through to Pi's routing would
+		// move it and be caught below rather than being absorbed by the end stop.
+		scroll.scrollTo(0);
+		install();
+
+		const result = instance.handleViewportInput(wheelDown(10, HEIGHT - 1));
+
+		expect(result).toEqual({ consume: true });
+		expect(editor.scrollOffset).toBe(3);
+		expect(scroll.scrollTop).toBe(0);
+	});
+
+	it("leaves a notch over the transcript to Pi's own routing", () => {
+		const { instance, editor, scroll } = makeWheelReceiver();
+		scroll.scrollTo(0);
+		install();
+
+		instance.handleViewportInput(wheelDown(10, 0));
+
+		expect(editor.scrollOffset).toBe(0);
+		expect(scroll.scrollTop).toBeGreaterThan(0);
 	});
 });

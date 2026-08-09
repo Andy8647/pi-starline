@@ -4,7 +4,7 @@ import {
 	editorVisibleLines,
 	scrollEditorBy,
 	scrollEditorWindow,
-} from "../extensions/starline/fixed-editor/editor-scroll";
+} from "../extensions/starline/mouse/editor-scroll";
 
 /** Rows whose 30% window is exactly 6 visual lines. */
 const ROWS = 20;

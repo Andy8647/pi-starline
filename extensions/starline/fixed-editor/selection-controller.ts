@@ -11,9 +11,8 @@
 
 import { copyToClipboard } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
-
+import { scrollEditorWindow } from "../mouse/editor-scroll";
 import { type EditorBoxGeometry, findEditorBox, hitTestEditorBox } from "./editor-hit-test";
-import { scrollEditorWindow } from "./editor-scroll";
 import {
 	editorScrollOffset,
 	editorVisualRowText,

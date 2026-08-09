@@ -49,6 +49,7 @@ import { buildSessionDurationLabel, invalidateUsageTotalsCache } from "./format"
 import { emptyGitStatus, readGitHost, readGitStatus } from "./git";
 import { LiveContextController } from "./live-context";
 import { installMouse } from "./mouse";
+import { setActiveEditor } from "./mouse/editor-mouse";
 import { readPackageVersionResult } from "./package-version";
 import {
 	createProjectRefreshScheduler,
@@ -318,6 +319,11 @@ export default function (pi: ExtensionAPI) {
 				getThinkingLevel,
 			);
 			applyPasteCollapse(editor);
+			// Nothing on Pi's renderer points at the live editor, and the
+			// extension API hands out the factory rather than what it built — so
+			// the mouse patches learn about it here, from the one place in the
+			// process that has it. See `mouse/editor-mouse.ts`.
+			setActiveEditor({ component: editor, scrollable: editor });
 			return editor;
 		}) as EditorFactory;
 		return markEditorFactory(factory);
@@ -332,7 +338,7 @@ export default function (pi: ExtensionAPI) {
 			syncHardwareCursor(tui);
 			const base = baseFactory(tui, theme, keybindings);
 			applyPasteCollapse(base);
-			return new WrappedPolishedEditor(
+			const wrapped = new WrappedPolishedEditor(
 				base,
 				sessionTheme,
 				getCurrentConfig,
@@ -345,6 +351,11 @@ export default function (pi: ExtensionAPI) {
 				}),
 				getThinkingLevel,
 			);
+			// Two references, because these are two different objects here: the
+			// wrapper is what gets mounted and hit-tested, while the draft's
+			// visual lines live on the base editor it delegates to.
+			setActiveEditor({ component: wrapped, scrollable: base });
+			return wrapped;
 		}) as EditorFactory;
 		return markEditorFactory(factory, baseFactory);
 	};
@@ -395,6 +406,10 @@ export default function (pi: ExtensionAPI) {
 		installedEditorFactory = undefined;
 		editorInstallMode = "none";
 		editorInstalled = false;
+		// Pi rebuilds the editor from whatever factory is now in place, and that
+		// one is not ours. Leaving the old instance registered would point the
+		// wheel patch at an editor no longer on screen.
+		setActiveEditor(undefined);
 		return true;
 	};
 
