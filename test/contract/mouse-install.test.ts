@@ -42,6 +42,11 @@ type RealReceiver = {
 	flashes: { flash: (message: string) => void };
 	copySelectionToClipboard: () => void;
 	handleViewportInput: (data: string) => { consume: boolean } | undefined;
+	// `TuiBase.requestRender` is inherited, not stubbed: the patches call it on
+	// the receiver, so this file exercises Pi's real one.
+	requestRender: (force?: boolean) => void;
+	renderRequested: boolean;
+	stopped: boolean;
 };
 
 function makeReceiver(previousScreen: string[]): { instance: RealReceiver; written: string[] } {
@@ -52,6 +57,12 @@ function makeReceiver(previousScreen: string[]): { instance: RealReceiver; writt
 	instance.previousScreen = previousScreen;
 	instance.terminal = { write: (data: string) => written.push(data) };
 	instance.flashes = { flash: () => {} };
+	instance.renderRequested = false;
+	// `requestRender` defers the actual frame to `scheduleRender` on the next
+	// tick, which returns immediately when the TUI is stopped. This keeps the
+	// real method's observable effect (`renderRequested`) without letting a
+	// detached receiver try to paint a terminal it does not have.
+	instance.stopped = true;
 	return { instance, written };
 }
 
@@ -85,7 +96,6 @@ describe("mouse patches against the real TuiAltScreen.prototype", () => {
 	it("installs on the real prototype and restores it on dispose", () => {
 		dispose = installMouse(prototype, {
 			getConfig: () => ({ mouse: { copyOnSelect: false, copyNotice: true } }) as never,
-			requestRender: () => {},
 		});
 
 		expect(prototype.copySelectionToClipboard).not.toBe(originalCopy);
@@ -95,7 +105,6 @@ describe("mouse patches against the real TuiAltScreen.prototype", () => {
 	it("withholds the real copy on release, then performs it byte-exact on ctrl+c", () => {
 		dispose = installMouse(prototype, {
 			getConfig: () => ({ mouse: { copyOnSelect: false, copyNotice: true } }) as never,
-			requestRender: () => {},
 		});
 
 		const { instance, written } = makeReceiver([
@@ -124,7 +133,6 @@ describe("mouse patches against the real TuiAltScreen.prototype", () => {
 	it("falls through to Pi's real ctrl+c handling when nothing is pending", () => {
 		dispose = installMouse(prototype, {
 			getConfig: () => ({ mouse: { copyOnSelect: false, copyNotice: true } }) as never,
-			requestRender: () => {},
 		});
 
 		const { instance, written } = makeReceiver(["hello"]);

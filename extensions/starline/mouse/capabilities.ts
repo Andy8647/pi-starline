@@ -6,6 +6,14 @@
  * the method exists, is a function, and can be replaced and put back. Signature
  * drift is caught by `test/contract/pi-tui-contract.test.ts` in CI rather than
  * guessed at here: default parameters make `fn.length` a liar.
+ *
+ * `requestRender` is the one entry a feature only ever *calls* on the receiver,
+ * never patches. It is probed all the same, and by the same structural test: a
+ * feature that installs and then cannot ask for a repaint leaves its own state
+ * on screen a frame late or not at all, which is precisely the half-working
+ * install this table exists to prevent. The check being stricter than a plain
+ * call needs (it also demands writable and configurable) costs nothing, because
+ * a class method declared the ordinary way is both.
  */
 
 export type MouseCapability =
@@ -18,7 +26,8 @@ export type MouseCapability =
 	| "getSelectionBounds"
 	| "getSelectionColumns"
 	| "flash"
-	| "hasOverlay";
+	| "hasOverlay"
+	| "requestRender";
 
 export type MouseFeature =
 	| "selectionPendingMode"
@@ -39,6 +48,7 @@ const CAPABILITIES: readonly MouseCapability[] = [
 	"getSelectionColumns",
 	"flash",
 	"hasOverlay",
+	"requestRender",
 ];
 
 /**
@@ -54,13 +64,16 @@ const REQUIREMENTS: Record<MouseFeature, readonly MouseCapability[]> = {
 	// cannot copy, which is worse than copy-on-release. It also reads the
 	// selection directly (`getSelectionBounds`, `getSelectionColumns`) to build
 	// an exact character count, and raises its own notice (`flash`), so all
-	// three must be reachable too.
+	// three must be reachable too. `requestRender` is what puts the pending hint
+	// on screen the moment the button comes up: arming without it would leave
+	// the user staring at a highlight with nothing telling them ctrl+c copies it.
 	selectionPendingMode: [
 		"copySelectionToClipboard",
 		"handleViewportInput",
 		"getSelectionBounds",
 		"getSelectionColumns",
 		"flash",
+		"requestRender",
 	],
 	// Also reads the line under the pointer through the receiver's own
 	// `getSelectionSourceLine`, so the patch has a real line to hand
@@ -69,8 +82,11 @@ const REQUIREMENTS: Record<MouseFeature, readonly MouseCapability[]> = {
 	// The press it acts on arrives through `handleSelectionMouseEvent`, and it
 	// asks `hasOverlay` the same question Pi's own press path asks before
 	// resolving a scroll view (`tui-alt-screen.js:684`) — without it, a click on
-	// a dialog would toggle whatever tool box happens to sit behind it.
-	clickToExpandTools: ["handleSelectionMouseEvent", "hasOverlay"],
+	// a dialog would toggle whatever tool box happens to sit behind it. It
+	// consumes the press rather than calling through, so Pi never reaches its own
+	// repaint for that event: `requestRender` is the only thing that draws the
+	// box it just toggled.
+	clickToExpandTools: ["handleSelectionMouseEvent", "hasOverlay", "requestRender"],
 	editorWheelScroll: ["routeWheel"],
 	editorClickToCaret: ["handleSelectionMouseEvent"],
 	editorBufferCopy: ["copySelectionToClipboard"],

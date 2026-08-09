@@ -22,6 +22,7 @@ const ALL = [
 	"getSelectionColumns",
 	"flash",
 	"hasOverlay",
+	"requestRender",
 ];
 
 describe("probeCapabilities", () => {
@@ -115,6 +116,19 @@ describe("enabledFeatures", () => {
 			"pathAwareWords",
 			"selectionPendingMode",
 		]);
+	});
+
+	it("disables both repainting features when the renderer cannot be asked to repaint", () => {
+		// `requestRender` is the one capability these features only ever *call*.
+		// Installing without it leaves the pending hint and a toggled tool box off
+		// screen until some unrelated frame arrives, which is the half-working
+		// install this table exists to prevent.
+		const without = ALL.filter((name) => name !== "requestRender");
+		const features = enabledFeatures(probeCapabilities(prototypeWith(without)));
+		expect(features.has("selectionPendingMode")).toBe(false);
+		expect(features.has("clickToExpandTools")).toBe(false);
+		// Word selection returns a range and lets Pi repaint on its own path.
+		expect(features.has("pathAwareWords")).toBe(true);
 	});
 
 	it("disables click-to-expand when overlays cannot be detected", () => {

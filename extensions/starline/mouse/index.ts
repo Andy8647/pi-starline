@@ -85,15 +85,31 @@ type MouseCapablePrototype = {
 	getWordSelection(this: unknown, point: SelectionPoint): SelectionBounds | undefined;
 	getSelectionSourceLine(this: unknown, point: SelectionPoint): string;
 	hasOverlay(this: unknown): boolean;
+	/**
+	 * `TuiBase.requestRender(force = false)` (`tui.js:495`), inherited by
+	 * `TuiAltScreen` and public. The only method here this module calls rather
+	 * than patches — see `capabilities.ts`.
+	 */
+	requestRender(this: unknown, force?: boolean): void;
 	previousScreen?: readonly string[];
 	// Not probed capabilities (see capabilities.ts): plain instance fields
 	// this module only ever reads.
 	currentLayout?: { root: BoxLike };
 };
 
+/**
+ * Repaints go through the receiver, not through a callback the caller supplies.
+ *
+ * The renderer these patches run inside is the thing that needs to repaint, and
+ * `TuiAltScreen` calls `this.requestRender()` all through its own mouse handling
+ * for exactly this. Routing it back out to the extension instead made the hint
+ * depend on whatever repaint path the extension happened to own — which, until
+ * this was fixed, was the footer's, so with `features.statusLine` off the
+ * pending hint never appeared until some unrelated frame came along. The hint
+ * lives in the editor's metadata row; it was never the footer's to schedule.
+ */
 export type InstallMouseDeps = {
 	getConfig: () => PolishedTuiConfig;
-	requestRender: () => void;
 };
 
 /** Logged at most once per process — see `disabledFeatureWarning`. */
@@ -220,12 +236,12 @@ function installSelectionPendingMode(
 				// key for a no-op copy instead of falling through to interrupt.
 				if (state.pending) {
 					state.clear();
-					deps.requestRender();
+					typedReceiver.requestRender();
 				}
 				return undefined;
 			}
 			state.arm(selectionText(typedReceiver, bounds).length);
-			deps.requestRender();
+			typedReceiver.requestRender();
 			return undefined;
 		},
 	);
@@ -247,7 +263,7 @@ function installSelectionPendingMode(
 				// nothing.
 				if (!typedReceiver.getSelectionBounds()) {
 					state.clear();
-					deps.requestRender();
+					typedReceiver.requestRender();
 					return Reflect.apply(predecessor, receiver, args);
 				}
 				performingRealCopy = true;
@@ -257,7 +273,7 @@ function installSelectionPendingMode(
 					performingRealCopy = false;
 				}
 				state.clear();
-				deps.requestRender();
+				typedReceiver.requestRender();
 				return { consume: true };
 			}
 			return Reflect.apply(predecessor, receiver, args);
@@ -386,10 +402,11 @@ function installClickToExpandTools(
 		"handleSelectionMouseEvent",
 		"mouse-selection-event",
 		({ predecessor, receiver, args }) => {
-			const target = pressExpandTarget(receiver as MouseCapablePrototype, args[0], deps);
+			const typedReceiver = receiver as MouseCapablePrototype;
+			const target = pressExpandTarget(typedReceiver, args[0], deps);
 			if (!target) return Reflect.apply(predecessor, receiver, args);
 			target.component.setExpanded(target.expanded);
-			deps.requestRender();
+			typedReceiver.requestRender();
 			return undefined;
 		},
 	);

@@ -13,8 +13,10 @@
  */
 import { TuiAltScreen } from "@earendil-works/pi-tui";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { activeSelectionHintText } from "../../extensions/starline/mouse/index";
 
 let mouseEnabled = true;
+let copyOnSelect = false;
 
 vi.mock("../../extensions/starline/config", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("../../extensions/starline/config")>();
@@ -24,8 +26,10 @@ vi.mock("../../extensions/starline/config", async (importOriginal) => {
 		loadConfig: () => ({
 			...actual.defaultConfig,
 			projectRefreshIntervalMs: 0,
+			// `statusLine: false` is load-bearing, not incidental — see the
+			// repaint test at the bottom of this file.
 			features: { ...actual.defaultConfig.features, editor: false, statusLine: false },
-			mouse: { ...actual.defaultConfig.mouse, enabled: mouseEnabled },
+			mouse: { ...actual.defaultConfig.mouse, enabled: mouseEnabled, copyOnSelect },
 		}),
 	};
 });
@@ -108,55 +112,116 @@ function makeCtx(overrides: { hasUI?: boolean; mode?: string } = {}) {
 }
 
 describe("extension wiring of installMouse", () => {
-	afterEach(() => {
-		mouseEnabled = true;
-		expectRestored();
+	// The session a test opened, so teardown can close it even when an assertion
+	// throws first. A patch left on this shared prototype would poison every test
+	// file that runs after this one, invisibly and depending on run order.
+	let open: { handlers: Map<string, Handler[]>; ctx: unknown } | undefined;
+
+	async function startSession(ctx = makeCtx()) {
+		const handlers = loadExtension();
+		open = { handlers, ctx };
+		await emit(handlers, "session_start", ctx);
+		return { handlers, ctx };
+	}
+
+	async function endSession() {
+		if (!open) return;
+		const { handlers, ctx } = open;
+		open = undefined;
+		await emit(handlers, "session_shutdown", ctx);
+	}
+
+	afterEach(async () => {
+		try {
+			await endSession();
+		} finally {
+			mouseEnabled = true;
+			copyOnSelect = false;
+			expectRestored();
+		}
 	});
 
 	it("patches the real TuiAltScreen prototype on session_start", async () => {
-		const handlers = loadExtension();
-		const ctx = makeCtx();
+		await startSession();
 
-		await emit(handlers, "session_start", ctx);
 		expect(prototype.copySelectionToClipboard).not.toBe(originals.copySelectionToClipboard);
 		expect(prototype.handleViewportInput).not.toBe(originals.handleViewportInput);
 		expect(prototype.handleSelectionMouseEvent).not.toBe(originals.handleSelectionMouseEvent);
 		expect(prototype.getWordSelection).not.toBe(originals.getWordSelection);
-
-		await emit(handlers, "session_shutdown", ctx);
 	});
 
 	it("installs nothing when mouse.enabled is false", async () => {
 		mouseEnabled = false;
-		const handlers = loadExtension();
-		const ctx = makeCtx();
+		await startSession();
 
-		await emit(handlers, "session_start", ctx);
 		expectRestored();
-
-		await emit(handlers, "session_shutdown", ctx);
 	});
 
 	it("leaves the prototype clean after two session_starts and one shutdown", async () => {
 		// A second session_start must not stack a second set of patches whose
-		// disposer nobody holds: the shutdown below has to fully undo both.
-		const handlers = loadExtension();
-		const ctx = makeCtx();
+		// disposer nobody holds: the one shutdown in teardown has to undo both.
+		const { handlers, ctx } = await startSession();
+		await emit(handlers, "session_start", ctx);
 
-		await emit(handlers, "session_start", ctx);
-		await emit(handlers, "session_start", ctx);
 		expect(prototype.handleViewportInput).not.toBe(originals.handleViewportInput);
+	});
 
-		await emit(handlers, "session_shutdown", ctx);
+	/**
+	 * The gap this file did not catch the first time.
+	 *
+	 * The wiring originally passed the extension's own `refresh` as the patches'
+	 * repaint callback. `refresh` calls `requestFooterRender`, which is only ever
+	 * set inside `installStatusLine` — so with `features.statusLine` off (exactly
+	 * what this file's config mock configures) arming a selection asked nobody to
+	 * repaint, and the pending hint sat invisible until some unrelated frame
+	 * arrived. The hint lives in the editor's metadata row, so the footer was
+	 * never the right thing to depend on.
+	 *
+	 * This asserts the real effect rather than that a stub was called: a real
+	 * receiver off the real prototype, Pi's own inherited `requestRender`, and
+	 * `renderRequested` — the flag Pi's own method sets — flipping on release.
+	 */
+	it("asks the renderer to repaint on release even with the statusline off", async () => {
+		await startSession();
+
+		const receiver = Object.create(TuiAltScreen.prototype) as {
+			selectionAnchor: { row: number; col: number } | undefined;
+			selectionFocus: { row: number; col: number } | undefined;
+			previousScreen: string[];
+			terminal: { write: (data: string) => void };
+			flashes: { flash: (message: string) => void };
+			copySelectionToClipboard: () => void;
+			renderRequested: boolean;
+			stopped: boolean;
+		};
+		const written: string[] = [];
+		receiver.previousScreen = ["hello world"];
+		receiver.terminal = { write: (data: string) => written.push(data) };
+		receiver.flashes = { flash: () => {} };
+		receiver.selectionAnchor = { row: 0, col: 0 };
+		receiver.selectionFocus = { row: 0, col: 5 };
+		receiver.renderRequested = false;
+		// `requestRender` defers the frame itself to `scheduleRender` on the next
+		// tick, which returns immediately while stopped. That leaves the real
+		// method's observable effect without a detached receiver trying to paint.
+		receiver.stopped = true;
+
+		// The release. Pi calls this itself when the button comes up.
+		receiver.copySelectionToClipboard();
+
+		expect(written).toEqual([]); // armed, not copied
+		expect(activeSelectionHintText()).toBe("5 characters selected, ctrl+c to copy");
+		// Pi's own `requestRender` ran, with no footer installed anywhere. Under
+		// the original wiring this stayed false.
+		expect(receiver.renderRequested).toBe(true);
+
+		await endSession();
+		expect(activeSelectionHintText()).toBeNull();
 	});
 
 	it("stays out of a non-TUI context", async () => {
-		const handlers = loadExtension();
-		const ctx = makeCtx({ hasUI: false });
+		await startSession(makeCtx({ hasUI: false }));
 
-		await emit(handlers, "session_start", ctx);
 		expectRestored();
-
-		await emit(handlers, "session_shutdown", ctx);
 	});
 });

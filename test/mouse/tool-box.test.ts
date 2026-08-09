@@ -21,7 +21,7 @@ import {
 	VStack,
 } from "@earendil-works/pi-tui";
 import { renderLayoutFrame } from "@earendil-works/pi-tui/dist/layout.js";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import type { PolishedTuiConfig } from "../../extensions/starline/config";
 import type { BoxLike } from "../../extensions/starline/mouse/hit-test";
 import { installMouse } from "../../extensions/starline/mouse/index";
@@ -261,12 +261,18 @@ function makeConfig(clickToExpandTools: boolean): () => PolishedTuiConfig {
 function makeInstallScene(options?: { overlay?: boolean; height?: number }) {
 	const scene = makeScene(options?.height ?? 24);
 	const throughCalls: FakeMouseEvent[] = [];
+	const renders: string[] = [];
 	const prototype = {
 		handleSelectionMouseEvent(event: FakeMouseEvent) {
 			throughCalls.push(event);
 		},
 		hasOverlay() {
 			return options?.overlay === true;
+		},
+		// The feature consumes the press, so Pi never reaches its own repaint for
+		// it; asking the receiver is the only thing that draws the toggled box.
+		requestRender() {
+			renders.push("render");
 		},
 		currentLayout: { root: undefined as BoxLike | undefined },
 	};
@@ -281,7 +287,7 @@ function makeInstallScene(options?: { overlay?: boolean; height?: number }) {
 		prototype.currentLayout.root = root;
 		return (needle: string) => originY + rowContaining(lines, needle);
 	};
-	return { scene, prototype, throughCalls, relayout };
+	return { scene, prototype, throughCalls, renders, relayout };
 }
 
 describe("installMouse clickToExpandTools", () => {
@@ -298,12 +304,7 @@ describe("installMouse clickToExpandTools", () => {
 		setKeybindings(
 			new KeybindingsManager({ "app.tools.expand": { defaultKeys: "ctrl+o" } }) as never,
 		);
-		const requestRender = vi.fn();
-		dispose = installMouse(scene.prototype, {
-			getConfig: makeConfig(enabled),
-			requestRender,
-		});
-		return requestRender;
+		dispose = installMouse(scene.prototype, { getConfig: makeConfig(enabled) });
 	}
 
 	function press(scene: ReturnType<typeof makeInstallScene>, y: number, button = PRESS): void {
@@ -314,13 +315,13 @@ describe("installMouse clickToExpandTools", () => {
 
 	it("expands the clicked box and swallows the press", () => {
 		const scene = makeInstallScene();
-		const requestRender = install(scene);
+		install(scene);
 		const screenY = scene.relayout();
 
 		press(scene, screenY("to expand)"));
 
 		expect(scene.scene.tool.expanded).toBe(true);
-		expect(requestRender).toHaveBeenCalled();
+		expect(scene.renders).toEqual(["render"]);
 		// The press must not also start a selection.
 		expect(scene.throughCalls).toEqual([]);
 	});

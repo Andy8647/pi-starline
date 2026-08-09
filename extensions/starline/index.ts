@@ -259,12 +259,11 @@ export default function (pi: ExtensionAPI) {
 	const installMousePatches = () => {
 		uninstallMouse();
 		if (!getCurrentConfig().mouse.enabled) return;
-		disposeMouse = installMouse(TuiAltScreen.prototype, {
-			getConfig: getCurrentConfig,
-			// The extension's one repaint path: the footer hands it the live `tui`,
-			// and it is a no-op once the session it belongs to is gone.
-			requestRender: refresh,
-		});
+		// Repaints are not wired from here: each patch asks its own receiver —
+		// the live renderer it is running inside — to render. Handing it the
+		// extension's `refresh` instead tied the pending hint to the footer's
+		// existence, and the hint is in the editor.
+		disposeMouse = installMouse(TuiAltScreen.prototype, { getConfig: getCurrentConfig });
 	};
 
 	/**

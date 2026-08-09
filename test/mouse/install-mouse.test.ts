@@ -1,5 +1,5 @@
 import { Container, Text } from "@earendil-works/pi-tui";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { PolishedTuiConfig } from "../../extensions/starline/config";
 import { activeSelectionHintText, installMouse } from "../../extensions/starline/mouse/index";
 import { FramedToolComponent } from "./component-graph";
@@ -22,6 +22,7 @@ type FakeAltScreen = {
 	handleSelectionMouseEvent(): void;
 	applySelection(): void;
 	getWordSelection(): void;
+	requestRender(): void;
 };
 
 /**
@@ -41,8 +42,11 @@ function fakeSelectionColumns(
 	};
 }
 
-function makePrototype(): { prototype: FakeAltScreen; calls: string[] } {
+function makePrototype(): { prototype: FakeAltScreen; calls: string[]; renders: string[] } {
 	const calls: string[] = [];
+	// Kept out of `calls` so the exact-sequence assertions below stay about what
+	// Pi's own methods did, not about repaints.
+	const renders: string[] = [];
 	const prototype: FakeAltScreen = {
 		selectionBounds: { start: { row: 0, col: 0 }, end: { row: 0, col: 5 } },
 		previousScreen: ["hello world"],
@@ -65,8 +69,11 @@ function makePrototype(): { prototype: FakeAltScreen; calls: string[] } {
 		handleSelectionMouseEvent() {},
 		applySelection() {},
 		getWordSelection() {},
+		requestRender() {
+			renders.push("render");
+		},
 	};
-	return { prototype, calls };
+	return { prototype, calls, renders };
 }
 
 function makeConfig(copyOnSelect: boolean, copyNotice: boolean): () => PolishedTuiConfig {
@@ -84,24 +91,19 @@ function makeConfig(copyOnSelect: boolean, copyNotice: boolean): () => PolishedT
 }
 
 describe("installMouse selectionPendingMode", () => {
-	let requestRender: () => void;
-
-	beforeEach(() => {
-		requestRender = vi.fn();
-	});
-
 	it("arms instead of copying on release when copyOnSelect is false", () => {
-		const { prototype, calls } = makePrototype();
+		const { prototype, calls, renders } = makePrototype();
 		const dispose = installMouse(prototype, {
 			getConfig: makeConfig(false, true),
-			requestRender,
 		});
 
 		prototype.copySelectionToClipboard();
 
 		expect(calls).toEqual([]); // no real copy happened
 		expect(activeSelectionHintText()).toBe("5 characters selected, ctrl+c to copy");
-		expect(requestRender).toHaveBeenCalled();
+		// Asked its own receiver to repaint, so the hint reaches the screen now
+		// rather than waiting for an unrelated frame.
+		expect(renders).toEqual(["render"]);
 		dispose();
 	});
 
@@ -109,7 +111,6 @@ describe("installMouse selectionPendingMode", () => {
 		const { prototype, calls } = makePrototype();
 		const dispose = installMouse(prototype, {
 			getConfig: makeConfig(true, true),
-			requestRender,
 		});
 
 		prototype.copySelectionToClipboard();
@@ -122,7 +123,6 @@ describe("installMouse selectionPendingMode", () => {
 		const { prototype, calls } = makePrototype();
 		const dispose = installMouse(prototype, {
 			getConfig: makeConfig(false, true),
-			requestRender,
 		});
 
 		prototype.copySelectionToClipboard(); // arms
@@ -138,7 +138,6 @@ describe("installMouse selectionPendingMode", () => {
 		const { prototype, calls } = makePrototype();
 		const dispose = installMouse(prototype, {
 			getConfig: makeConfig(false, true),
-			requestRender,
 		});
 
 		const result = prototype.handleViewportInput("\x03");
@@ -152,7 +151,6 @@ describe("installMouse selectionPendingMode", () => {
 		const { prototype, calls } = makePrototype();
 		const dispose = installMouse(prototype, {
 			getConfig: makeConfig(false, false),
-			requestRender,
 		});
 
 		prototype.copySelectionToClipboard(); // arms
@@ -166,7 +164,6 @@ describe("installMouse selectionPendingMode", () => {
 		const { prototype, calls } = makePrototype();
 		const dispose = installMouse(prototype, {
 			getConfig: makeConfig(false, true),
-			requestRender,
 		});
 
 		prototype.copySelectionToClipboard(); // release #1: real bounds, arms
@@ -200,7 +197,6 @@ describe("installMouse selectionPendingMode", () => {
 		const { prototype, calls } = makePrototype();
 		const dispose = installMouse(prototype, {
 			getConfig: makeConfig(false, true),
-			requestRender,
 		});
 
 		prototype.copySelectionToClipboard(); // arms
@@ -222,7 +218,6 @@ describe("installMouse selectionPendingMode", () => {
 		const original = prototype.copySelectionToClipboard;
 		const dispose = installMouse(prototype, {
 			getConfig: makeConfig(false, true),
-			requestRender,
 		});
 		dispose();
 		expect(prototype.copySelectionToClipboard).toBe(original);
@@ -291,6 +286,10 @@ function makeTranscriptFixture() {
 			},
 		},
 		terminal: { write: (data: string) => written.push(data) },
+		renders: [] as string[],
+		requestRender() {
+			this.renders.push("render");
+		},
 		getSelectionBounds() {
 			return this.selectionBounds;
 		},
@@ -329,12 +328,6 @@ function makeTranscriptFixture() {
 }
 
 describe("installMouse over a real framed transcript", () => {
-	let requestRender: () => void;
-
-	beforeEach(() => {
-		requestRender = vi.fn();
-	});
-
 	it("arms with the exact character count of the text Pi itself would copy", () => {
 		// The hint promises "N characters selected"; N has to be what ctrl+c
 		// actually puts on the clipboard. Starline no longer rewrites that text,
@@ -343,7 +336,6 @@ describe("installMouse over a real framed transcript", () => {
 		const { prototype, written, piCopyText } = makeTranscriptFixture();
 		const dispose = installMouse(prototype, {
 			getConfig: makeConfig(false, true),
-			requestRender,
 		});
 
 		prototype.copySelectionToClipboard(); // release: arms, copies nothing
@@ -366,7 +358,6 @@ describe("installMouse over a real framed transcript", () => {
 		const { prototype, written, lines, piCopyText } = makeTranscriptFixture();
 		const dispose = installMouse(prototype, {
 			getConfig: makeConfig(true, true),
-			requestRender,
 		});
 
 		prototype.copySelectionToClipboard();
@@ -393,7 +384,6 @@ describe("installMouse over a real framed transcript", () => {
 
 		const dispose = installMouse(withoutViewportInput, {
 			getConfig: makeConfig(false, true),
-			requestRender,
 		});
 
 		expect(withoutViewportInput.copySelectionToClipboard).toBe(original);
@@ -444,17 +434,10 @@ function makeWordSelectionPrototype(): WordSelectionPrototype {
 }
 
 describe("installMouse pathAwareWords", () => {
-	let requestRender: () => void;
-
-	beforeEach(() => {
-		requestRender = vi.fn();
-	});
-
 	it("keeps a path whole where predecessor would have split it", () => {
 		const prototype = makeWordSelectionPrototype();
 		const dispose = installMouse(prototype, {
 			getConfig: makeConfig(false, true),
-			requestRender,
 		});
 
 		// Column 9 is inside "fixed" (of "src/fixed-editor/a.ts"). Predecessor's
@@ -482,7 +465,6 @@ describe("installMouse pathAwareWords", () => {
 						pathAwareWords: false,
 					},
 				}) as PolishedTuiConfig,
-			requestRender,
 		});
 
 		const range = prototype.getWordSelection({ row: 0, col: 9 });
@@ -496,7 +478,6 @@ describe("installMouse pathAwareWords", () => {
 		const prototype = makeWordSelectionPrototype();
 		const dispose = installMouse(prototype, {
 			getConfig: makeConfig(false, true),
-			requestRender,
 		});
 
 		const range = prototype.getWordSelection({ row: 0, col: 999 });
@@ -510,7 +491,6 @@ describe("installMouse pathAwareWords", () => {
 
 		const dispose = installMouse(withoutSourceLine, {
 			getConfig: makeConfig(false, true),
-			requestRender,
 		});
 
 		expect(withoutSourceLine.getWordSelection).toBe(original);
@@ -522,7 +502,6 @@ describe("installMouse pathAwareWords", () => {
 		const original = prototype.getWordSelection;
 		const dispose = installMouse(prototype, {
 			getConfig: makeConfig(false, true),
-			requestRender,
 		});
 
 		dispose();
