@@ -319,6 +319,125 @@ function setEditorCaret(value: unknown, position: CaretPosition): boolean {
 }
 
 /**
+ * The slice of Pi's `Editor` the range delete drives.
+ *
+ * Every entry is a real method on `Editor`
+ * (`node_modules/@earendil-works/pi-tui/dist/components/editor.js`), probed
+ * before use because the editor may be somebody else's.
+ */
+type EditableEditor = {
+	state?: { lines?: string[]; cursorLine?: number; cursorCol?: number };
+	snappedFromCursorCol?: number | null;
+	/** `getText()` (editor.js:826) — the join of `state.lines`. */
+	getText?: () => string;
+	/** `setCursorCol(col)` (editor.js:1158); also clears `preferredVisualCol`. */
+	setCursorCol?: (col: number) => void;
+	/** `handleForwardDelete()` (editor.js:1410) — one grapheme, or one line join. */
+	handleForwardDelete?: () => void;
+	/** `pushUndoSnapshot()` (editor.js:1702). */
+	pushUndoSnapshot?: () => void;
+};
+
+/**
+ * Delete a buffer range through the editor's own editing methods.
+ *
+ * ## Why `handleForwardDelete` in a loop
+ *
+ * Pi's `Editor` has no range delete. Its editing surface is
+ * `handleBackspace`, `handleForwardDelete`, `deleteToStartOfLine`,
+ * `deleteToEndOfLine`, `deleteWordBackwards` and `deleteWordForward`, and none
+ * of them takes two positions. So a range is deleted by putting the caret at
+ * its start and deleting forward until the range's worth of characters is gone.
+ *
+ * `handleForwardDelete` is the right one of the six. It is grapheme-aware, so a
+ * flag or a combining sequence goes in one piece; it joins the next line when
+ * the caret is at the end of one, so a multi-line range needs no special case;
+ * and — unlike the `deleteTo…` and `deleteWord…` family — it does **not** push
+ * to the kill ring, so deleting a selection cannot silently clobber what the
+ * user has yanked.
+ *
+ * ## Why one undo snapshot
+ *
+ * Each of those calls would push its own snapshot, leaving `ctrl+z` to walk the
+ * range back a letter at a time. So one snapshot is pushed up front through the
+ * editor's own `pushUndoSnapshot`, and the editor's own is shadowed for the
+ * duration of the loop and put back in a `finally` — the same shadow-and-restore
+ * shape `copyWithNotice` uses on `flash` and `installPasteCollapse` uses on
+ * `handlePaste`. This is a plain assignment on Starline's own editor instance,
+ * never on anything reached through Pi's renderer Proxy.
+ *
+ * The loop is bounded twice over: by the character count of the range, and by a
+ * no-progress check, so an editor that stops deleting cannot spin.
+ */
+function deleteEditorRange(value: unknown, start: CaretPosition, length: number): boolean {
+	if (typeof value !== "object" || value === null) return false;
+	const editor = value as EditableEditor;
+	const lines = editor.state?.lines;
+	if (!editor.state || !Array.isArray(lines)) return false;
+	if (typeof editor.getText !== "function") return false;
+	if (typeof editor.setCursorCol !== "function") return false;
+	if (typeof editor.handleForwardDelete !== "function") return false;
+	if (start.line < 0 || start.line >= lines.length) return false;
+
+	const target = editor.getText().length - length;
+	editor.pushUndoSnapshot?.call(editor);
+
+	const hadOwnSnapshot = Object.hasOwn(editor, "pushUndoSnapshot");
+	const ownSnapshot = editor.pushUndoSnapshot;
+	editor.pushUndoSnapshot = () => {};
+	try {
+		editor.state.cursorLine = start.line;
+		editor.setCursorCol.call(editor, clamp(start.column, 0, (lines[start.line] ?? "").length));
+		// The sticky column belongs to wherever the caret used to be.
+		editor.snappedFromCursorCol = null;
+
+		let guard = length + 1;
+		while (guard-- > 0) {
+			const before = editor.getText().length;
+			if (before <= target) break;
+			editor.handleForwardDelete.call(editor);
+			// Nothing left to delete forward (the end of the last line) — stop
+			// rather than spin.
+			if (editor.getText().length >= before) break;
+		}
+	} finally {
+		if (hadOwnSnapshot) editor.pushUndoSnapshot = ownSnapshot;
+		else delete editor.pushUndoSnapshot;
+	}
+	return true;
+}
+
+/**
+ * Delete the draft text a screen selection covers, and report whether it did.
+ *
+ * `false` means the selection was not the editor's to delete — a selection in
+ * the transcript, one reaching outside the text rows, one over an editor this
+ * module cannot drive, or one that resolves to no characters. Every one of those
+ * has to leave the key to Pi, so an ordinary backspace goes on deleting one
+ * character.
+ */
+export function deleteEditorSelection(
+	receiver: CaretReceiver,
+	config: PolishedTuiConfig,
+	bounds: SelectionBoundsLike,
+): boolean {
+	try {
+		const resolved = activeEditorViewport(receiver, config);
+		if (!resolved) return false;
+		const range = editorSelectionRange(resolved.editor, resolved.viewport, bounds);
+		if (!range) return false;
+		const text = editorSelectionText(resolved.editor, range.from, range.to);
+		if (text.length === 0) return false;
+		const start = comparePositions(range.from, range.to) <= 0 ? range.from : range.to;
+		return deleteEditorRange(resolved.editor, start, text.length);
+	} catch {
+		// Driving somebody else's editor is best effort. Anything this trips over
+		// leaves the key to Pi.
+		return false;
+	}
+}
+
+/**
  * The draft's own text for a selection that lies inside the input box, or
  * undefined when the selection is somebody else's.
  *

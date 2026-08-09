@@ -95,18 +95,33 @@ const REQUIREMENTS: Record<MouseFeature, readonly MouseCapability[]> = {
 	// (`tui.js:123`), so without it a notch aimed at a dialog would scroll the
 	// draft hidden behind it.
 	editorWheelScroll: ["routeWheel", "hasOverlay", "requestRender"],
-	// The press arrives through `handleSelectionMouseEvent`, and it asks
-	// `hasOverlay` for the same reason the two features above do: an overlay is
-	// composited over a layout that still contains the editor, so a click on a
-	// dialog would otherwise move the caret in the box behind it.
+	// Two behaviours, one feature. The press arrives through
+	// `handleSelectionMouseEvent`; backspace and delete over a live selection
+	// arrive through `handleViewportInput`, which is why that is listed even
+	// though the caret alone would not need it. Range delete then reads the
+	// selection through `getSelectionBounds` to find out whether it is the
+	// editor's, and — because it *consumes* the key, so Pi's `handleInput` never
+	// reaches its own `requestImmediateRender` (`tui.js:620`) — `requestRender`
+	// is the only thing that draws the shortened draft.
 	//
-	// `requestRender` is deliberately *not* here, unlike click-to-expand's entry.
-	// This feature never consumes the press — it moves the caret and calls
-	// through — and Pi's own press branch ends in `this.requestRender()`
-	// unconditionally (`tui-alt-screen.js:699`), so the moved caret is on screen
-	// by the time the call returns. Listing it would disable a feature that works
-	// without it, which is the same class of error as claiming one that does not.
-	editorClickToCaret: ["handleSelectionMouseEvent", "hasOverlay"],
+	// `hasOverlay` for the same reason the features above ask it: an overlay is
+	// composited over a layout that still contains the editor, so without it a
+	// click on a dialog would move the caret in the box behind it, and a
+	// backspace would delete from it.
+	//
+	// The consequence of listing `handleViewportInput` is deliberate and worth
+	// naming: a Pi that has moved that method loses click-to-caret entirely, not
+	// just the range delete. That is this table's rule — never install half a
+	// feature — and the alternative, a caret that installs while its delete
+	// silently does not, is exactly the half-working install the rule exists to
+	// prevent.
+	editorClickToCaret: [
+		"handleSelectionMouseEvent",
+		"handleViewportInput",
+		"getSelectionBounds",
+		"hasOverlay",
+		"requestRender",
+	],
 	// It wraps `copySelectionToClipboard`, reads the selection through
 	// `getSelectionBounds` to find out whether it is the editor's, and raises
 	// Pi's own "Copied!" through `flash` when it answers the copy itself.

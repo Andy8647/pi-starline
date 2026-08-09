@@ -34,13 +34,16 @@ import {
 	sliceByColumn,
 	stripTerminalSequences,
 	Text,
+	TUI_KEYBINDINGS,
 	VStack,
 } from "@earendil-works/pi-tui";
 import { renderLayoutFrame } from "@earendil-works/pi-tui/dist/layout.js";
 import { afterEach, describe, expect, it } from "vitest";
 import { defaultConfig, type PolishedTuiConfig } from "../../extensions/starline/config";
 import {
+	activeEditorViewport,
 	caretPositionAt,
+	deleteEditorSelection,
 	editorSelectionRange,
 	editorSelectionText,
 	editorViewport,
@@ -372,6 +375,18 @@ describe("editorSelectionRange", () => {
 /** SGR bits `parseSgrMouseEvent` produces for a plain left-button press. */
 const PRESS = 0;
 
+/**
+ * The bytes a terminal sends for backspace and delete — `tui.editor
+ * .deleteCharBackward` and `.deleteCharForward` as Pi's registry binds them by
+ * default. Spelled out rather than derived, so a change to either default is a
+ * failing test rather than a silently skipped branch.
+ */
+const BACKSPACE = "\x7f";
+const DELETE = "\x1b[3~";
+
+/** Captured once, so the coexistence case can put the registry back. */
+const originalKeybindingsForCoexistence = getKeybindings();
+
 type FakeMouseEvent = { button: number; x: number; y: number; release?: boolean };
 
 type SelectionPoint = { row: number; col: number; scrollView?: unknown; boundary?: boolean };
@@ -414,6 +429,7 @@ function makeScene(draft: string, config = makeConfig()) {
 
 	const written: string[] = [];
 	const throughCalls: FakeMouseEvent[] = [];
+	const viewportCalls: string[] = [];
 	const renders: string[] = [];
 	const flashes: string[] = [];
 	let previousScreen: string[] = [];
@@ -464,7 +480,12 @@ function makeScene(draft: string, config = makeConfig()) {
 				end: row === selection.end.row ? selection.end.col + 1 : line.length,
 			};
 		},
+		selectionAnchor: {} as unknown,
+		selectionFocus: {} as unknown,
 		handleViewportInput(data: string) {
+			// Pi's own: it consumes what it recognises and lets ctrl+c through to
+			// the focused component, which is what makes the interrupt work.
+			viewportCalls.push(data);
 			return data === "\x03" ? undefined : { consume: true };
 		},
 		flash(message: string) {
@@ -517,7 +538,18 @@ function makeScene(draft: string, config = makeConfig()) {
 		};
 	};
 
-	return { editor, tool, prototype, written, throughCalls, renders, flashes, relayout, config };
+	return {
+		editor,
+		tool,
+		prototype,
+		written,
+		throughCalls,
+		viewportCalls,
+		renders,
+		flashes,
+		relayout,
+		config,
+	};
 }
 
 describe("the two features that share handleSelectionMouseEvent", () => {
@@ -823,5 +855,392 @@ describe("the overlay guard is asked by both halves of the copy patch", () => {
 		expect(armed).toBe(`${copied.length} characters selected, ctrl+c to copy`);
 		// And it is Pi's screen text, not the draft's, because a dialog is up.
 		expect(copied).not.toBe("line 5\nline 6");
+	});
+});
+
+describe("deleteEditorSelection", () => {
+	afterEach(() => setActiveEditor(undefined));
+
+	/** Pi's own bounds for a screen selection over the input box's text rows. */
+	function boundsOver(
+		viewport: { contentTop: number },
+		fromRow: number,
+		fromCol: number,
+		toRow: number,
+		toCol: number,
+	) {
+		return {
+			start: { row: viewport.contentTop + fromRow, col: fromCol },
+			end: { row: viewport.contentTop + toRow, col: toCol },
+		};
+	}
+
+	function receiverFor(scene: { prototype: { currentLayout: { root: BoxLike | undefined } } }) {
+		return scene.prototype as unknown as {
+			currentLayout?: { root: BoxLike };
+			terminal?: { rows?: number };
+		};
+	}
+
+	it("removes a range spanning two logical lines", () => {
+		const scene = makeScene("alpha beta\ngamma delta\nepsilon");
+		setActiveEditor({ component: scene.editor, scrollable: scene.editor });
+		scene.relayout();
+		const resolved = activeEditorViewport(receiverFor(scene), scene.config);
+		if (!resolved) throw new Error("no viewport");
+
+		// "beta" on the first line through "gamma " on the second: Pi's end column
+		// is inclusive, so col 5 covers the space after "gamma".
+		const deleted = deleteEditorSelection(
+			receiverFor(scene),
+			scene.config,
+			boundsOver(resolved.viewport, 0, TEXT_COLUMN + 6, 1, TEXT_COLUMN + 5),
+		);
+
+		expect(deleted).toBe(true);
+		expect(scene.editor.getLines()).toEqual(["alpha delta", "epsilon"]);
+		// The caret lands where the range started, which is where typing resumes.
+		expect(scene.editor.getCursor()).toEqual({ line: 0, col: 6 });
+	});
+
+	it("removes a range inside one line", () => {
+		const scene = makeScene("alpha beta gamma");
+		setActiveEditor({ component: scene.editor, scrollable: scene.editor });
+		scene.relayout();
+		const resolved = activeEditorViewport(receiverFor(scene), scene.config);
+		if (!resolved) throw new Error("no viewport");
+
+		deleteEditorSelection(
+			receiverFor(scene),
+			scene.config,
+			boundsOver(resolved.viewport, 0, TEXT_COLUMN + 6, 0, TEXT_COLUMN + 10),
+		);
+
+		expect(scene.editor.getLines()).toEqual(["alpha gamma"]);
+	});
+
+	it("is one undo step, not one per character", () => {
+		// Deleting through `handleForwardDelete` would otherwise push a snapshot
+		// per grapheme and leave ctrl+z walking the range back one letter at a
+		// time. One press has to put the whole thing back.
+		const scene = makeScene("alpha beta\ngamma delta");
+		setActiveEditor({ component: scene.editor, scrollable: scene.editor });
+		scene.relayout();
+		const resolved = activeEditorViewport(receiverFor(scene), scene.config);
+		if (!resolved) throw new Error("no viewport");
+
+		deleteEditorSelection(
+			receiverFor(scene),
+			scene.config,
+			boundsOver(resolved.viewport, 0, TEXT_COLUMN + 6, 1, TEXT_COLUMN + 5),
+		);
+		expect(scene.editor.getLines()).toEqual(["alpha delta"]);
+
+		// `undo` is private on Pi's `Editor`; a user reaches it with ctrl+z, and a
+		// test reaches it the same way the class does.
+		(scene.editor as unknown as { undo(): void }).undo();
+
+		expect(scene.editor.getLines()).toEqual(["alpha beta", "gamma delta"]);
+	});
+
+	it("declines a selection anchored in a scroll view", () => {
+		const scene = makeScene("alpha beta");
+		setActiveEditor({ component: scene.editor, scrollable: scene.editor });
+		scene.relayout();
+		const resolved = activeEditorViewport(receiverFor(scene), scene.config);
+		if (!resolved) throw new Error("no viewport");
+		const bounds = boundsOver(resolved.viewport, 0, TEXT_COLUMN, 0, TEXT_COLUMN + 4);
+
+		const deleted = deleteEditorSelection(receiverFor(scene), scene.config, {
+			start: { ...bounds.start, scrollView: {} },
+			end: { ...bounds.end, scrollView: {} },
+		});
+
+		expect(deleted).toBe(false);
+		expect(scene.editor.getLines()).toEqual(["alpha beta"]);
+	});
+
+	it("declines a selection that reaches outside the text rows", () => {
+		const scene = makeScene("alpha beta");
+		setActiveEditor({ component: scene.editor, scrollable: scene.editor });
+		scene.relayout();
+		const resolved = activeEditorViewport(receiverFor(scene), scene.config);
+		if (!resolved) throw new Error("no viewport");
+
+		const deleted = deleteEditorSelection(receiverFor(scene), scene.config, {
+			start: { row: resolved.viewport.contentTop - 1, col: 0 },
+			end: { row: resolved.viewport.contentTop, col: TEXT_COLUMN + 4 },
+		});
+
+		expect(deleted).toBe(false);
+		expect(scene.editor.getLines()).toEqual(["alpha beta"]);
+	});
+
+	it("declines an empty range rather than reporting a delete", () => {
+		const scene = makeScene("alpha beta");
+		setActiveEditor({ component: scene.editor, scrollable: scene.editor });
+		scene.relayout();
+		const resolved = activeEditorViewport(receiverFor(scene), scene.config);
+		if (!resolved) throw new Error("no viewport");
+
+		// Pi never produces a collapsed selection (`getSelectionBounds` returns
+		// undefined for one), but a range that resolves to no characters must not
+		// consume the key either.
+		const deleted = deleteEditorSelection(receiverFor(scene), scene.config, {
+			start: { row: resolved.viewport.contentTop, col: 0 },
+			end: { row: resolved.viewport.contentTop, col: 0, boundary: true },
+		});
+
+		expect(deleted).toBe(false);
+		expect(scene.editor.getLines()).toEqual(["alpha beta"]);
+	});
+
+	it("keeps a wrapped logical line one line", () => {
+		// The range is expressed in buffer positions, so deleting across a wrap
+		// must not leave a newline where the screen happened to break the row.
+		const line = "x".repeat(50);
+		const scene = makeScene(line);
+		setActiveEditor({ component: scene.editor, scrollable: scene.editor });
+		scene.relayout();
+		const resolved = activeEditorViewport(receiverFor(scene), scene.config);
+		if (!resolved) throw new Error("no viewport");
+		expect(resolved.viewport.contentRows).toBe(2);
+
+		deleteEditorSelection(
+			receiverFor(scene),
+			scene.config,
+			boundsOver(resolved.viewport, 0, TEXT_COLUMN, 1, WIDTH - 1),
+		);
+
+		expect(scene.editor.getLines()).toEqual([""]);
+	});
+});
+
+describe("the two features that share handleViewportInput", () => {
+	let dispose: (() => void) | undefined;
+
+	afterEach(() => {
+		dispose?.();
+		dispose = undefined;
+		setActiveEditor(undefined);
+	});
+
+	function install(scene: ReturnType<typeof makeScene>) {
+		setActiveEditor({ component: scene.editor, scrollable: scene.editor });
+		dispose = installMouse(scene.prototype, { getConfig: () => scene.config });
+	}
+
+	/** A selection over the first two text rows of the input box. */
+	function selectFirstRows(scene: ReturnType<typeof makeScene>, textY: (i: number) => number) {
+		scene.prototype.selectionBounds = {
+			start: { row: textY(0), col: TEXT_COLUMN },
+			end: { row: textY(1), col: WIDTH - 1 },
+		};
+	}
+
+	it("BACKSPACE over a live editor selection removes the whole range", () => {
+		const scene = makeScene("alpha beta\ngamma delta\nepsilon zeta");
+		install(scene);
+		const { textY } = scene.relayout();
+		scene.prototype.selectionBounds = {
+			start: { row: textY(0), col: TEXT_COLUMN + 6 },
+			end: { row: textY(1), col: TEXT_COLUMN + 5 },
+		};
+
+		const result = scene.prototype.handleViewportInput(BACKSPACE);
+
+		expect(result).toEqual({ consume: true });
+		expect(scene.editor.getLines()).toEqual(["alpha delta", "epsilon zeta"]);
+		// The highlight described text that no longer exists.
+		expect(scene.prototype.selectionAnchor).toBeUndefined();
+		expect(scene.prototype.selectionFocus).toBeUndefined();
+	});
+
+	it("DELETE over a live editor selection removes the whole range too", () => {
+		const scene = makeScene("alpha beta\ngamma delta");
+		install(scene);
+		const { textY } = scene.relayout();
+		scene.prototype.selectionBounds = {
+			start: { row: textY(0), col: TEXT_COLUMN + 6 },
+			end: { row: textY(1), col: TEXT_COLUMN + 5 },
+		};
+
+		const result = scene.prototype.handleViewportInput(DELETE);
+
+		expect(result).toEqual({ consume: true });
+		expect(scene.editor.getLines()).toEqual(["alpha delta"]);
+	});
+
+	it("leaves an ordinary backspace to Pi when nothing is selected", () => {
+		// The behaviour that must not break: with no selection the key falls
+		// through and the editor deletes one character, as it always has.
+		const scene = makeScene("alpha beta");
+		install(scene);
+		scene.relayout();
+		scene.prototype.selectionBounds = undefined;
+
+		const result = scene.prototype.handleViewportInput(BACKSPACE);
+
+		expect(result).toEqual({ consume: true }); // predecessor's answer, not ours
+		expect(scene.viewportCalls).toEqual([BACKSPACE]);
+		expect(scene.editor.getLines()).toEqual(["alpha beta"]);
+	});
+
+	it("leaves backspace to Pi when the selection is the transcript's", () => {
+		const scene = makeScene("alpha beta");
+		install(scene);
+		scene.relayout();
+		scene.prototype.selectionBounds = {
+			start: { row: 0, col: 0, scrollView: {} },
+			end: { row: 0, col: 4, scrollView: {} },
+		};
+
+		scene.prototype.handleViewportInput(BACKSPACE);
+
+		expect(scene.viewportCalls).toEqual([BACKSPACE]);
+		expect(scene.editor.getLines()).toEqual(["alpha beta"]);
+	});
+
+	it("NEVER swallows ctrl+c with nothing pending, even with a live selection", () => {
+		// The single outcome that could block this release. Range delete shares
+		// this method with the pending mode, and `tui.editor.deleteCharForward`
+		// binds ctrl+d by default — so both interrupt chords are refused outright
+		// by `isRangeDeleteKey`, before any selection is even looked at.
+		const scene = makeScene("alpha beta\ngamma delta");
+		install(scene);
+		const { textY } = scene.relayout();
+		selectFirstRows(scene, textY); // a live, editor-local selection
+
+		scene.viewportCalls.length = 0;
+		const ctrlC = scene.prototype.handleViewportInput("\x03");
+		scene.prototype.handleViewportInput("\x04");
+
+		// Both reached Pi. Neither was consumed by range delete.
+		expect(scene.viewportCalls).toEqual(["\x03", "\x04"]);
+		// Pi's own handler returns undefined for ctrl+c, which is exactly what
+		// lets it fall through to the focused component and interrupt.
+		expect(ctrlC).toBeUndefined();
+		expect(scene.editor.getLines()).toEqual(["alpha beta", "gamma delta"]);
+	});
+
+	it("still copies on ctrl+c when a selection is pending", () => {
+		// The pending mode is not shadowed by range delete sharing its patch.
+		const scene = makeScene(
+			"alpha beta\ngamma delta",
+			makeConfig({ mouse: { ...defaultConfig.mouse, copyOnSelect: false } }),
+		);
+		install(scene);
+		const { textY } = scene.relayout();
+		selectFirstRows(scene, textY);
+
+		scene.prototype.copySelectionToClipboard(); // release: arms
+		expect(activeSelectionHintText()).not.toBeNull();
+		scene.prototype.handleViewportInput("\x03");
+
+		expect(decodeOsc52(scene.written[0] ?? "")).toBe("alpha beta\ngamma delta");
+		expect(activeSelectionHintText()).toBeNull();
+		// And the draft is untouched — ctrl+c copied, it did not delete.
+		expect(scene.editor.getLines()).toEqual(["alpha beta", "gamma delta"]);
+	});
+
+	it("clears a pending arm when the range it described is deleted", () => {
+		const scene = makeScene(
+			"alpha beta\ngamma delta",
+			makeConfig({ mouse: { ...defaultConfig.mouse, copyOnSelect: false } }),
+		);
+		install(scene);
+		const { textY } = scene.relayout();
+		selectFirstRows(scene, textY);
+		scene.prototype.copySelectionToClipboard(); // arms
+		expect(activeSelectionHintText()).not.toBeNull();
+
+		scene.prototype.handleViewportInput(BACKSPACE);
+
+		// A hint offering to copy text that has been deleted would be a lie, and
+		// a stale arm makes the next ctrl+c consume an interrupt for a no-op copy.
+		expect(activeSelectionHintText()).toBeNull();
+	});
+
+	it("leaves the range alone when editorClickCursor is off", () => {
+		const scene = makeScene("alpha beta\ngamma delta", makeConfig({ editorClickCursor: false }));
+		install(scene);
+		const { textY } = scene.relayout();
+		selectFirstRows(scene, textY);
+
+		scene.prototype.handleViewportInput(BACKSPACE);
+
+		expect(scene.viewportCalls).toEqual([BACKSPACE]);
+		expect(scene.editor.getLines()).toEqual(["alpha beta", "gamma delta"]);
+	});
+
+	it("leaves the range alone for a backspace while a dialog is up", () => {
+		const scene = makeScene("alpha beta\ngamma delta");
+		install(scene);
+		const { textY } = scene.relayout();
+		selectFirstRows(scene, textY);
+		scene.prototype.overlay = true;
+
+		scene.prototype.handleViewportInput(BACKSPACE);
+
+		expect(scene.editor.getLines()).toEqual(["alpha beta", "gamma delta"]);
+	});
+
+	it("all six features coexist: expand, caret, copy and range delete", () => {
+		// Every feature installed at once, exercising all three shared patches in
+		// one session. Reproducing any adapter-key collision turns this red.
+		const scene = makeScene("alpha beta\ngamma delta\nepsilon zeta");
+		// Pi's real defaults plus the expand binding: this case needs the editor's
+		// own delete bindings present as well as `app.tools.expand`, because both
+		// shared patches are exercised in the one session.
+		setKeybindings(
+			new KeybindingsManager({
+				...TUI_KEYBINDINGS,
+				"app.tools.expand": { defaultKeys: "ctrl+o" },
+			}) as never,
+		);
+		install(scene);
+		const first = scene.relayout();
+
+		// mouse-selection-event, behaviour 1: click-to-expand.
+		scene.prototype.handleSelectionMouseEvent({
+			button: 0,
+			x: 4,
+			y: first.hintY("to expand"),
+			release: false,
+		});
+		expect(scene.tool.expanded).toBe(true);
+
+		// mouse-selection-event, behaviour 2: click-to-caret.
+		const second = scene.relayout();
+		scene.prototype.handleSelectionMouseEvent({
+			button: 0,
+			x: TEXT_COLUMN + 6,
+			y: second.textY(0),
+			release: false,
+		});
+		expect(scene.editor.getCursor()).toEqual({ line: 0, col: 6 });
+
+		// mouse-copy: the draft's own text, not the rendered rows.
+		scene.prototype.selectionBounds = {
+			start: { row: second.textY(0), col: TEXT_COLUMN },
+			end: { row: second.textY(1), col: WIDTH - 1 },
+		};
+		scene.prototype.copySelectionToClipboard();
+		expect(decodeOsc52(scene.written[0] ?? "")).toBe("alpha beta\ngamma delta");
+
+		// mouse-viewport-input, behaviour 2: range delete.
+		scene.prototype.selectionBounds = {
+			start: { row: second.textY(0), col: TEXT_COLUMN + 6 },
+			end: { row: second.textY(1), col: TEXT_COLUMN + 5 },
+		};
+		scene.prototype.handleViewportInput(BACKSPACE);
+		expect(scene.editor.getLines()).toEqual(["alpha delta", "epsilon zeta"]);
+
+		// mouse-viewport-input, behaviour 1: ctrl+c still reaches Pi.
+		scene.viewportCalls.length = 0;
+		scene.prototype.handleViewportInput("\x03");
+		expect(scene.viewportCalls).toEqual(["\x03"]);
+
+		setKeybindings(originalKeybindingsForCoexistence);
 	});
 });

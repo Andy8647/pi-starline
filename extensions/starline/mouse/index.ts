@@ -5,10 +5,10 @@
  * what it would do to it. `installMouse` probes what the running Pi build
  * exposes, logs once if something is missing, and installs each feature gated
  * on exactly its own declared requirement (`capabilities.ts`). Today that is
- * six features across five patches — two methods carry two features each, and
- * in both cases the two share a single patch, because the patch registry holds
- * one behaviour per adapter key and a second registration would silently
- * replace the first:
+ * six features across five patches. Three of those methods carry two features
+ * each, and in every case the two share a single patch, because the patch
+ * registry holds one behaviour per adapter key and a second registration would
+ * silently replace the first:
  *
  * `selectionPendingMode`, across two patches:
  * - `copySelectionToClipboard` — the method Pi calls itself on mouse
@@ -51,12 +51,18 @@
  *   notch behaves the same in both editor modes. Every other notch calls
  *   through.
  *
- * `editorClickToCaret`, sharing the `handleSelectionMouseEvent` patch:
- * - A left-button press inside the input box moves the caret to the character
- *   under it, then calls through, so Pi still drops its selection anchor there
- *   and a drag from that point still selects and highlights as it always did.
- *   `editor-caret.ts` carries the screen-to-buffer arithmetic and why the box's
- *   rectangle is not the text.
+ * `editorClickToCaret`, across two shared patches:
+ * - `handleSelectionMouseEvent` — a left-button press inside the input box moves
+ *   the caret to the character under it, then calls through, so Pi still drops
+ *   its selection anchor there and a drag from that point still selects and
+ *   highlights as it always did. `editor-caret.ts` carries the screen-to-buffer
+ *   arithmetic and why the box's rectangle is not the text.
+ * - `handleViewportInput` — backspace or delete over a live selection inside the
+ *   input box removes the whole range instead of one character, through the
+ *   editor's own `handleForwardDelete` under a single undo snapshot. It runs
+ *   *after* the ctrl+c branch and refuses ctrl+c and ctrl+d outright, so the
+ *   interrupt and exit chords cannot be swallowed by it from either direction.
+ *   Every backspace it does not act on falls through and deletes one character.
  *
  * `editorBufferCopy`, sharing the `copySelectionToClipboard` patch:
  * - A selection lying inside the input box is copied from the *draft* rather
@@ -69,7 +75,7 @@
  * `copySelectionToClipboard` puts there — see `installMouse` for why frame-free
  * selection is not part of this.
  */
-import { sliceByColumn, stripTerminalSequences } from "@earendil-works/pi-tui";
+import { getKeybindings, sliceByColumn, stripTerminalSequences } from "@earendil-works/pi-tui";
 import type { PolishedTuiConfig } from "../config";
 import { installPrototypePatch } from "../prototype-patch-registry";
 import {
@@ -78,7 +84,7 @@ import {
 	type MouseFeature,
 	probeCapabilities,
 } from "./capabilities";
-import { editorSelectionTextFor, moveEditorCaretTo } from "./editor-caret";
+import { deleteEditorSelection, editorSelectionTextFor, moveEditorCaretTo } from "./editor-caret";
 import { activeEditor, wheelTarget } from "./editor-mouse";
 import { scrollEditorBy } from "./editor-scroll";
 import { type BoxLike, scrollContentLinesFor } from "./hit-test";
@@ -87,6 +93,8 @@ import { type ExpandTarget, expandKeyText, expandTargetAt } from "./tool-box";
 import { wordRangeAt } from "./word-select";
 
 const CTRL_C = "\x03";
+/** Pi's exit chord, and `tui.editor.deleteCharForward`'s second default key. */
+const CTRL_D = "\x04";
 
 /**
  * SGR mouse bits, as `parseSgrMouseEvent` decodes them
@@ -139,6 +147,14 @@ type MouseCapablePrototype = {
 	// Not probed capabilities (see capabilities.ts): plain instance fields
 	// this module only ever reads.
 	currentLayout?: { root: BoxLike };
+	/**
+	 * `TuiAltScreen.selectionAnchor` / `.selectionFocus` (`tui-alt-screen.js:45`).
+	 * Plain instance fields, which Pi assigns and clears throughout its own
+	 * selection handling; the range delete clears them the same way once the text
+	 * they described is gone.
+	 */
+	selectionAnchor?: unknown;
+	selectionFocus?: unknown;
 	/**
 	 * `TuiBase.terminal` (`tui.js:101`); `rows` is a getter on it, and `write` is
 	 * how `copySelectionToClipboard` reaches the clipboard — it emits OSC 52
@@ -308,6 +324,69 @@ function copyEditorSelection(receiver: MouseCapablePrototype, config: PolishedTu
 }
 
 /**
+ * Whether `data` is the backspace or delete the range delete acts on.
+ *
+ * The question is asked of Pi's own keybinding registry, against the two
+ * bindings Pi's editor itself dispatches on (`editor.js:599-606`), so a user who
+ * has rebound either gets the key they bound rather than a hardcoded byte. A
+ * registry that disagrees — this repo has two copies of pi-tui, though
+ * production resolves both to Pi's, see `expandKeyText` in `tool-box.ts` — makes
+ * this return false, which falls through to Pi's own one-character delete. That
+ * is the safe direction to be wrong in.
+ *
+ * ctrl+c and ctrl+d are refused outright, before the registry is consulted at
+ * all. `tui.editor.deleteCharForward` binds `ctrl+d` by default, and ctrl+c and
+ * ctrl+d are Pi's interrupt and exit chords; consuming either because a
+ * selection happens to be live would break a global key to save a keystroke.
+ * The ctrl+c branch above already returns before this is reached, but stating
+ * it here means the guarantee does not depend on branch order.
+ */
+function isRangeDeleteKey(data: unknown): boolean {
+	if (typeof data !== "string" || data.length === 0) return false;
+	if (data === CTRL_C || data === CTRL_D) return false;
+	try {
+		const keybindings = getKeybindings();
+		return (
+			keybindings.matches(data, "tui.editor.deleteCharBackward") ||
+			keybindings.matches(data, "tui.editor.deleteCharForward")
+		);
+	} catch {
+		// A build that has moved the registry is one where backspace keeps its
+		// ordinary meaning; it is never a reason to break a keystroke.
+		return false;
+	}
+}
+
+/**
+ * Removes the draft text a live editor selection covers, and clears the
+ * selection that described it.
+ *
+ * Returns false for every selection that is not the input box's, which leaves
+ * the key to Pi and an ordinary backspace deleting one character.
+ */
+function deleteSelectedRange(receiver: MouseCapablePrototype, config: PolishedTuiConfig): boolean {
+	try {
+		if (!config.editorClickCursor) return false;
+		// The same overlay question the rest of this feature asks: a selection
+		// dropped on a dialog must not delete the draft behind it.
+		if (receiver.hasOverlay()) return false;
+		const bounds = receiver.getSelectionBounds();
+		if (!bounds) return false;
+		if (!deleteEditorSelection(receiver, config, bounds)) return false;
+		// The highlight described text that is gone. Pi clears these two fields
+		// itself all through its own selection handling; leaving them set would
+		// paint a selection over whatever moved up to fill the gap.
+		receiver.selectionAnchor = undefined;
+		receiver.selectionFocus = undefined;
+		return true;
+	} catch {
+		// Driving the editor is best effort. Anything this trips over means the
+		// key was an ordinary backspace.
+		return false;
+	}
+}
+
+/**
  * The text a copy of this selection would put on the clipboard, for the pending
  * hint's character count.
  *
@@ -351,6 +430,7 @@ function installCopying(
 	features: ReadonlySet<MouseFeature>,
 ): () => void {
 	const bufferCopy = features.has("editorBufferCopy");
+	const rangeDelete = features.has("editorClickToCaret");
 	const state = features.has("selectionPendingMode") ? new SelectionPendingState() : undefined;
 	const previousState = activeState;
 	if (state) activeState = state;
@@ -398,7 +478,7 @@ function installCopying(
 		),
 	);
 
-	if (!state) {
+	if (!state && !rangeDelete) {
 		return () => {
 			for (const cleanup of cleanups) cleanup();
 		};
@@ -411,7 +491,16 @@ function installCopying(
 			"mouse-viewport-input",
 			({ predecessor, receiver, args }) => {
 				const data = args[0];
-				if (data === CTRL_C && state.pending) {
+				// ---- Branch 1: ctrl+c, `selectionPendingMode`'s. ----------------
+				//
+				// This branch is FIRST, and deliberately so. The one outcome that
+				// must never regress is a bare ctrl+c with nothing pending reaching
+				// Pi and interrupting; evaluating its branch before any other means
+				// no feature added to this method later can intercept it by being
+				// installed in a different order. `isRangeDeleteKey` refuses ctrl+c
+				// and ctrl+d outright as well, so the guarantee holds structurally
+				// from both directions rather than by ordering alone.
+				if (state && data === CTRL_C && state.pending) {
 					const typedReceiver = receiver as MouseCapablePrototype;
 					// `state.pending` can be stale: Pi clears its own selection
 					// through paths this module never sees (e.g. starting a new
@@ -434,6 +523,25 @@ function installCopying(
 					state.clear();
 					typedReceiver.requestRender();
 					return { consume: true };
+				}
+				// ---- Branch 2: backspace and delete, `editorClickToCaret`'s. ----
+				//
+				// The two branches key off disjoint input — ctrl+c above, backspace
+				// and delete here — so they compose rather than compete. Range
+				// delete consumes the key only when it really removed something;
+				// every other backspace falls through and goes on deleting one
+				// character, which is the behaviour it must not break.
+				if (rangeDelete && isRangeDeleteKey(data)) {
+					const typedReceiver = receiver as MouseCapablePrototype;
+					if (deleteSelectedRange(typedReceiver, deps.getConfig())) {
+						// Pi's `handleInput` returns as soon as a listener consumes,
+						// so the focused editor never sees the key and Pi never
+						// reaches its own `requestImmediateRender` (`tui.js:620`).
+						// Redrawing the changed draft is this branch's job.
+						state?.clear();
+						typedReceiver.requestRender();
+						return { consume: true };
+					}
 				}
 				return Reflect.apply(predecessor, receiver, args);
 			},

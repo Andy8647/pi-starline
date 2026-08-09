@@ -133,9 +133,11 @@ describe("enabledFeatures", () => {
 		expect(features.has("editorWheelScroll")).toBe(false);
 		// Word selection returns a range and lets Pi repaint on its own path.
 		expect(features.has("pathAwareWords")).toBe(true);
-		// So does click-to-caret: it never consumes the press, and Pi's own press
-		// branch repaints unconditionally at the end of it.
-		expect(features.has("editorClickToCaret")).toBe(true);
+		// Click-to-caret needs it too, but only because of its *second* half: the
+		// caret alone calls through and rides Pi's own repaint, while the range
+		// delete consumes the key, so Pi never reaches `requestImmediateRender`
+		// and the shortened draft would stay on screen unchanged.
+		expect(features.has("editorClickToCaret")).toBe(false);
 	});
 
 	it("disables click-to-expand when overlays cannot be detected", () => {
@@ -170,9 +172,24 @@ describe("enabledFeatures", () => {
 			const without = ALL.filter((name) => name !== capability);
 			const features = enabledFeatures(probeCapabilities(prototypeWith(without)));
 			expect(features.has("editorBufferCopy")).toBe(false);
-			// The caret needs neither, and must survive both.
-			expect(features.has("editorClickToCaret")).toBe(true);
 		}
+	});
+
+	it("disables click-to-caret without the key path its range delete needs", () => {
+		// Backspace and delete over a live selection arrive through
+		// `handleViewportInput`, and the branch reads `getSelectionBounds` to find
+		// out whether the selection is the editor's. Losing either would leave a
+		// caret that installs while its delete silently did not.
+		for (const capability of ["handleViewportInput", "getSelectionBounds"] as const) {
+			const without = ALL.filter((name) => name !== capability);
+			const features = enabledFeatures(probeCapabilities(prototypeWith(without)));
+			expect(features.has("editorClickToCaret")).toBe(false);
+		}
+		// `flash` is the buffer copy's, not the caret's.
+		const withoutFlash = ALL.filter((name) => name !== "flash");
+		expect(
+			enabledFeatures(probeCapabilities(prototypeWith(withoutFlash))).has("editorClickToCaret"),
+		).toBe(true);
 	});
 });
 
