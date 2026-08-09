@@ -4,7 +4,7 @@ import type {
 	KeybindingsManager,
 	Theme,
 } from "@earendil-works/pi-coding-agent";
-import type { EditorTheme, TUI } from "@earendil-works/pi-tui";
+import { type EditorTheme, type TUI, TuiAltScreen } from "@earendil-works/pi-tui";
 import {
 	type ColorSourcesConfig,
 	type ContextStyle,
@@ -48,6 +48,7 @@ import { installFooter } from "./footer";
 import { buildSessionDurationLabel, invalidateUsageTotalsCache } from "./format";
 import { emptyGitStatus, readGitHost, readGitStatus } from "./git";
 import { LiveContextController } from "./live-context";
+import { installMouse } from "./mouse";
 import { readPackageVersionResult } from "./package-version";
 import {
 	createProjectRefreshScheduler,
@@ -101,6 +102,7 @@ export default function (pi: ExtensionAPI) {
 	let lastDurationLabel = "";
 	let lastProjectCwd: string | undefined;
 	let disposePasteCollapse: (() => void) | undefined;
+	let disposeMouse: (() => void) | undefined;
 
 	const refresh = () => {
 		if (sessionLifecycle.isCurrent()) requestFooterRender?.();
@@ -230,6 +232,39 @@ export default function (pi: ExtensionAPI) {
 		cleanupPrototypePatches();
 		cleanupPrototypePatches = () => {};
 		prototypePatchesInstalled = false;
+	};
+
+	const uninstallMouse = () => {
+		disposeMouse?.();
+		disposeMouse = undefined;
+	};
+
+	/**
+	 * Install the mouse features on `TuiAltScreen.prototype`.
+	 *
+	 * The prototype, not an instance: from 0.84 Pi hands extensions a Proxy over
+	 * the live renderer and swaps the renderer itself when the TUI mode changes,
+	 * so an instance captured at session start is not necessarily the one drawing
+	 * later. The shared prototype survives both.
+	 *
+	 * Reinstalling is already safe — `installPrototypePatch` keeps one wrapper per
+	 * adapter and only swaps the behaviour behind it — but disposing first keeps
+	 * exactly one live registration, so the disposer held here always removes
+	 * everything this extension put on the prototype.
+	 *
+	 * `mouse.enabled` is read here rather than captured, and every sub-option is
+	 * read inside the patches themselves, so `/starline` toggles apply without a
+	 * restart.
+	 */
+	const installMousePatches = () => {
+		uninstallMouse();
+		if (!getCurrentConfig().mouse.enabled) return;
+		disposeMouse = installMouse(TuiAltScreen.prototype, {
+			getConfig: getCurrentConfig,
+			// The extension's one repaint path: the footer hands it the live `tui`,
+			// and it is a no-op once the session it belongs to is gone.
+			requestRender: refresh,
+		});
 	};
 
 	/**
@@ -428,6 +463,7 @@ export default function (pi: ExtensionAPI) {
 		syncFooterState(ctx);
 		stopProjectRefresh();
 		applyConfiguredUi(ctx);
+		installMousePatches();
 		if (currentConfig.mouse?.enabled) {
 			installFixedEditorProbe(ctx, getCurrentConfig, sessionLifecycle);
 		}
@@ -451,6 +487,7 @@ export default function (pi: ExtensionAPI) {
 		try {
 			disposeFixedEditor(ctx);
 			if (isTuiContext(ctx)) removeFixedEditorProbe(ctx);
+			uninstallMouse();
 			uninstallPrototypePatches();
 			stopSessionTimer();
 			stopProjectRefresh();
@@ -545,8 +582,10 @@ export default function (pi: ExtensionAPI) {
 		setFixedEditor(patch: Partial<MouseConfig>, ctx: ExtensionContext) {
 			currentConfig = saveMousePatch(patch);
 			if (patch.enabled === true) {
+				installMousePatches();
 				installFixedEditorProbe(ctx, getCurrentConfig, sessionLifecycle);
 			} else if (patch.enabled === false) {
+				uninstallMouse();
 				disposeFixedEditor(ctx);
 			}
 			refresh();
