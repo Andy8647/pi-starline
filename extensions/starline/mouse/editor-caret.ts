@@ -59,6 +59,9 @@ export type EditorViewport = {
 	textColumn: number;
 	/** The absolute visual row drawn at `contentTop`. */
 	scrollOffset: number;
+	/** Screen rows the box itself occupies, borders and metadata included. */
+	boxTop: number;
+	boxBottom: number;
 };
 
 export type EditorViewportOptions = {
@@ -98,6 +101,8 @@ export function editorViewport(
 		left: box.rect.x,
 		textColumn: Math.max(0, options.textColumn),
 		scrollOffset,
+		boxTop: box.rect.y,
+		boxBottom: box.rect.y + box.rect.height - 1,
 	};
 }
 
@@ -188,13 +193,15 @@ export type SelectionBoundsLike = {
 };
 
 /**
- * The buffer range a screen selection covers, or undefined when the selection
- * is not the editor's to interpret.
- *
- * "Not the editor's" is three things, and each has to fall through to Pi
- * untouched: a selection anchored in a scroll view (the transcript owns those),
- * one whose rows reach outside the text rows (the frame, the footer, anything
- * above the box), and one over an editor this module cannot read.
+ * The buffer position for one end of a screen selection, with one concession
+ * `caretPositionAt` does not make: a drag that ran off the text rows but is
+ * still inside the box clamps to the text instead of declining. Releasing on
+ * the bottom border (or the metadata row) means "through the end of the
+ * visible text", and releasing on the top border means "from its start" —
+ * the column on a border row selects no text, so it is discarded. A row
+ * outside the box altogether — the transcript above, the footer below —
+ * still declines: that selection is not purely the editor's, and Pi copies
+ * it as screen text exactly as before.
  *
  * The end column follows Pi's own rule in `getSelectionColumns`: a character
  * selection covers the glyph under `end.col`, so the exclusive end is one
@@ -205,16 +212,44 @@ export type SelectionBoundsLike = {
  * after a two-cell glyph lands after the glyph, exactly as
  * `getGraphemeCellRange` would.
  */
+function selectionEndPosition(
+	editor: unknown,
+	viewport: EditorViewport,
+	point: { row: number; col: number; boundary?: boolean },
+	isEnd: boolean,
+): CaretPosition | undefined {
+	const lastRow = viewport.contentTop + viewport.contentRows - 1;
+	let row = point.row;
+	let col = isEnd ? (point.boundary ? point.col : point.col + 1) : point.col;
+	if (row < viewport.contentTop) {
+		if (row < viewport.boxTop) return undefined;
+		row = viewport.contentTop;
+		col = 0;
+	} else if (row > lastRow) {
+		if (row > viewport.boxBottom) return undefined;
+		row = lastRow;
+		col = viewport.left + viewport.textColumn + Number.MAX_SAFE_INTEGER;
+	}
+	return caretPositionAt(editor, viewport, col, row);
+}
+
+/**
+ * The buffer range a screen selection covers, or undefined when the selection
+ * is not the editor's to interpret. "Not the editor's" is: a selection
+ * anchored in a scroll view (the transcript owns those), one reaching outside
+ * the box itself (see `selectionEndPosition` for the clamp applied inside
+ * it), or one over an editor this module cannot read. Each falls through to
+ * Pi untouched.
+ */
 export function editorSelectionRange(
 	editor: unknown,
 	viewport: EditorViewport,
 	bounds: SelectionBoundsLike,
 ): { from: CaretPosition; to: CaretPosition } | undefined {
 	if (bounds.start.scrollView || bounds.end.scrollView) return undefined;
-	const from = caretPositionAt(editor, viewport, bounds.start.col, bounds.start.row);
+	const from = selectionEndPosition(editor, viewport, bounds.start, false);
 	if (!from) return undefined;
-	const endColumn = bounds.end.boundary ? bounds.end.col : bounds.end.col + 1;
-	const to = caretPositionAt(editor, viewport, endColumn, bounds.end.row);
+	const to = selectionEndPosition(editor, viewport, bounds.end, true);
 	if (!to) return undefined;
 	return { from, to };
 }

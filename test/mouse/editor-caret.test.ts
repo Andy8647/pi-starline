@@ -131,7 +131,7 @@ afterEach(() => {
 
 describe("editorViewport", () => {
 	it("finds the text rows inside the frame the editor actually drew", () => {
-		const { viewport } = arrange(numbered(12));
+		const { viewport, box } = arrange(numbered(12));
 
 		expect(viewport).toEqual({
 			contentTop: CONTENT_TOP,
@@ -141,6 +141,8 @@ describe("editorViewport", () => {
 			// The caret is on the last line, so the box is scrolled to the end:
 			// 12 visual lines, 7 of them showing.
 			scrollOffset: 5,
+			boxTop: box.rect.y,
+			boxBottom: box.rect.y + box.rect.height - 1,
 		});
 	});
 
@@ -311,23 +313,84 @@ describe("editorSelectionRange", () => {
 		).toBeUndefined();
 	});
 
-	it("declines a selection that reaches out of the text rows", () => {
+	it("declines a selection that reaches outside the box itself", () => {
 		const { editor, viewport } = arrange(numbered(12));
 
 		expect(
 			editorSelectionRange(
 				editor,
 				viewport,
-				bounds({ row: CONTENT_TOP - 1, col: 2 }, { row: CONTENT_TOP + 1, col: 5 }),
+				bounds({ row: viewport.boxTop - 1, col: 2 }, { row: CONTENT_TOP + 1, col: 5 }),
 			),
 		).toBeUndefined();
 		expect(
 			editorSelectionRange(
 				editor,
 				viewport,
-				bounds({ row: CONTENT_TOP, col: 2 }, { row: CONTENT_TOP + VISIBLE, col: 5 }),
+				bounds({ row: CONTENT_TOP, col: 2 }, { row: viewport.boxBottom + 1, col: 5 }),
 			),
 		).toBeUndefined();
+	});
+
+	it("clamps a drag that ran off the text rows but stayed in the box", () => {
+		// Releasing on the top border means "from the start of the visible
+		// text"; releasing on the bottom border means "through its end". The
+		// column on a border row selects no text, so it is discarded either way.
+		const { editor, viewport } = arrange(numbered(12));
+
+		const fromTopBorder = editorSelectionRange(
+			editor,
+			viewport,
+			bounds({ row: viewport.boxTop, col: 30 }, { row: CONTENT_TOP + 1, col: 5 }),
+		);
+		expect(fromTopBorder?.from).toEqual({ line: 5, column: 0 });
+		// End col 5 is a screen column; non-boundary covers the glyph under it,
+		// so the exclusive end is one cell further, minus the text column.
+		expect(fromTopBorder?.to).toEqual({ line: 6, column: 4 });
+
+		const toBottomBorder = editorSelectionRange(
+			editor,
+			viewport,
+			bounds({ row: CONTENT_TOP, col: 2 }, { row: viewport.boxBottom, col: 3 }),
+		);
+		// The draft has 12 lines, 7 showing from scroll offset 5: the last
+		// visible line is "line 11", and the clamp selects through its end.
+		expect(toBottomBorder?.to).toEqual({ line: 11, column: "line 11".length });
+	});
+
+	it("clamps both ends of a border-only drag to the same point", () => {
+		// A drag that never touched a text row — released on the border it
+		// started on, say — resolves to an empty range. The copy path consumes
+		// it without a clipboard write (the selection covered no text, which is
+		// what Pi's own empty-text guard does too) and the delete path falls
+		// through to an ordinary backspace.
+		const { editor, viewport } = arrange(numbered(12));
+
+		const range = editorSelectionRange(
+			editor,
+			viewport,
+			bounds({ row: viewport.boxBottom, col: 2 }, { row: viewport.boxBottom, col: 8 }),
+		);
+
+		expect(range).toBeDefined();
+		expect(range?.from).toEqual(range?.to);
+		if (range) expect(editorSelectionText(editor, range.from, range.to)).toBe("");
+	});
+
+	it("clamps both ends of a one-row window to that row", () => {
+		// `contentRows == 1`: the first and last text row are the same row, so a
+		// start clamped from above and an end clamped from below meet on it.
+		const { editor, viewport } = arrange(numbered(1));
+		expect(viewport.contentRows).toBe(1);
+
+		const range = editorSelectionRange(
+			editor,
+			viewport,
+			bounds({ row: viewport.boxTop, col: 30 }, { row: viewport.boxBottom, col: 3 }),
+		);
+
+		expect(range?.from).toEqual({ line: 0, column: 0 });
+		expect(range?.to).toEqual({ line: 0, column: "line 0".length });
 	});
 
 	it("keeps a wrapped logical line whole instead of breaking it at the wrap", () => {
@@ -960,7 +1023,7 @@ describe("deleteEditorSelection", () => {
 		expect(scene.editor.getLines()).toEqual(["alpha beta"]);
 	});
 
-	it("declines a selection that reaches outside the text rows", () => {
+	it("declines a selection that reaches outside the box itself", () => {
 		const scene = makeScene("alpha beta");
 		setActiveEditor({ component: scene.editor, scrollable: scene.editor });
 		scene.relayout();
@@ -968,12 +1031,32 @@ describe("deleteEditorSelection", () => {
 		if (!resolved) throw new Error("no viewport");
 
 		const deleted = deleteEditorSelection(receiverFor(scene), scene.config, {
-			start: { row: resolved.viewport.contentTop - 1, col: 0 },
+			start: { row: resolved.viewport.boxTop - 1, col: 0 },
 			end: { row: resolved.viewport.contentTop, col: TEXT_COLUMN + 4 },
 		});
 
 		expect(deleted).toBe(false);
 		expect(scene.editor.getLines()).toEqual(["alpha beta"]);
+	});
+
+	it("deletes through the end of the text when the drag ends on the bottom border", () => {
+		// The reported bug: a multi-line drag released at the bottom edge of the
+		// box — border or metadata row, both outside the text rows — fell
+		// through to Pi and deleted one character. The clamp makes it the range
+		// delete the highlight promised.
+		const scene = makeScene("alpha beta\ngamma delta\nepsilon");
+		setActiveEditor({ component: scene.editor, scrollable: scene.editor });
+		scene.relayout();
+		const resolved = activeEditorViewport(receiverFor(scene), scene.config);
+		if (!resolved) throw new Error("no viewport");
+
+		const deleted = deleteEditorSelection(receiverFor(scene), scene.config, {
+			start: { row: resolved.viewport.contentTop, col: TEXT_COLUMN + 6 },
+			end: { row: resolved.viewport.boxBottom, col: 1 },
+		});
+
+		expect(deleted).toBe(true);
+		expect(scene.editor.getLines()).toEqual(["alpha "]);
 	});
 
 	it("declines an empty range rather than reporting a delete", () => {
