@@ -181,14 +181,23 @@ export function expandHintAction(line: string, keyText: string): "expand" | "col
  * rule at all" rather than as a wildcard.
  */
 export function expandKeyText(): string {
+	return keyTextFor(KEYBINDING);
+}
+
+/**
+ * `keyText(keybinding)` with the registry fallback, shared by every feature
+ * that quotes a key on screen. See `expandKeyText` for why the primary route
+ * is pi-coding-agent's own function rather than this repo's registry.
+ */
+export function keyTextFor(keybinding: string): string {
 	try {
-		const rendered = keyText(KEYBINDING as never);
+		const rendered = keyText(keybinding as never);
 		if (typeof rendered === "string" && rendered.length > 0) return rendered;
 	} catch {
-		// A Pi build that has moved this function is one where clicking a hint
-		// simply does nothing; it is never a reason to break a mouse press.
+		// A Pi build that has moved this function is one where quoting the key
+		// simply shows nothing; it is never a reason to break a mouse feature.
 	}
-	return fallbackKeyText();
+	return fallbackKeyText(keybinding);
 }
 
 /**
@@ -196,9 +205,9 @@ export function expandKeyText(): string {
  * shown as `option` on macOS, matching `formatKeyText` in
  * `keybinding-hints.js`.
  */
-function fallbackKeyText(): string {
+function fallbackKeyText(keybinding: string): string {
 	try {
-		const bound: unknown = getKeybindings().getKeys(KEYBINDING as never);
+		const bound: unknown = getKeybindings().getKeys(keybinding as never);
 		if (!Array.isArray(bound) || bound.length === 0) return "";
 		const keys = bound.filter((key): key is string => typeof key === "string");
 		return keys

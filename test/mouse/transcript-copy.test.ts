@@ -153,12 +153,7 @@ describe("cleanTranscriptRows", () => {
 		// rail — so no rule pair forms and the whole box copies as Pi rendered
 		// it. This pins that: a table in bash output must never lose a border
 		// to cleaning (the failure the cut frame-free task kept producing).
-		const lines = [
-			"─".repeat(20),
-			" $ ls",
-			" │ a │ b │",
-			"─".repeat(20),
-		];
+		const lines = ["─".repeat(20), " $ ls", " │ a │ b │", "─".repeat(20)];
 		const { rows, changed } = cleanTranscriptRows(lines, 0, 3, "│");
 		expect(changed).toBe(false);
 		expect(rows.map((row) => row?.text)).toEqual(lines);

@@ -27,6 +27,17 @@ describe("SelectionPendingState", () => {
 		state.clear();
 		expect(state.pending).toBeUndefined();
 	});
+
+	it("keeps the external-editor key only while armed", () => {
+		const state = new SelectionPendingState();
+		state.arm(5, "ctrl+g");
+		expect(state.pending).toEqual({ characters: 5, externalEditorKey: "ctrl+g" });
+		state.clear();
+		expect(state.pending).toBeUndefined();
+		// A zero-length arm drops the key with the count.
+		state.arm(0, "ctrl+g");
+		expect(state.pending).toBeUndefined();
+	});
 });
 
 describe("selectionHintText", () => {
@@ -39,6 +50,19 @@ describe("selectionHintText", () => {
 		state.arm(1);
 		expect(selectionHintText(state)).toBe("1 character selected, ctrl+c to copy");
 		state.arm(5);
+		expect(selectionHintText(state)).toBe("5 characters selected, ctrl+c to copy");
+	});
+
+	it("points an editor selection at the external editor", () => {
+		// Editor selections cannot grow past the visible window (no drag-scroll),
+		// so the hint carries the way to act on the whole draft.
+		const state = new SelectionPendingState();
+		state.arm(5, "ctrl+g");
+		expect(selectionHintText(state)).toBe(
+			"5 characters selected, ctrl+c to copy ⋅ ctrl+g to edit in $EDITOR",
+		);
+		// An empty key (unbound) shows no suffix.
+		state.arm(5, "");
 		expect(selectionHintText(state)).toBe("5 characters selected, ctrl+c to copy");
 	});
 });

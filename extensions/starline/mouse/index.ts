@@ -98,13 +98,16 @@ import { activeEditor, wheelTarget } from "./editor-mouse";
 import { scrollEditorBy } from "./editor-scroll";
 import { type BoxLike, scrollContentLinesFor } from "./hit-test";
 import { SelectionPendingState, selectionHintText } from "./selection-state";
-import { type ExpandTarget, expandKeyText, expandTargetAt } from "./tool-box";
+import { type ExpandTarget, expandKeyText, expandTargetAt, keyTextFor } from "./tool-box";
 import { cleanTranscriptRows } from "./transcript-copy";
 import { wordRangeAt } from "./word-select";
 
 const CTRL_C = "\x03";
 /** Pi's exit chord, and `tui.editor.deleteCharForward`'s second default key. */
 const CTRL_D = "\x04";
+
+/** Opens the draft in `$EDITOR` — the hint an editor selection's hint carries. */
+const EXTERNAL_EDITOR_KEYBINDING = "app.editor.external";
 
 /**
  * SGR mouse bits, as `parseSgrMouseEvent` decodes them
@@ -512,21 +515,21 @@ function pendingSelectionText(
 	bounds: SelectionBounds,
 	bufferCopy: boolean,
 	cleanCopy: boolean,
-): string {
+): { text: string; inEditor: boolean } {
 	const buffered = bufferCopy ? editorTextForSelection(receiver, config, bounds) : undefined;
-	if (buffered !== undefined) return buffered;
+	if (buffered !== undefined) return { text: buffered, inEditor: true };
 	// The count the hint shows must be the number ctrl+c actually delivers, so
 	// a selection the copy would clean is counted after cleaning.
 	if (cleanCopy && config.mouse.transcriptCleanCopy) {
 		try {
 			const cleaned = transcriptSelectionText(receiver, config, bounds);
-			if (cleaned !== undefined) return cleaned;
+			if (cleaned !== undefined) return { text: cleaned, inEditor: false };
 		} catch {
 			// A cleaning failure falls back to the verbatim count, which is what
 			// the copy itself falls back to as well.
 		}
 	}
-	return selectionText(receiver, bounds);
+	return { text: selectionText(receiver, bounds), inEditor: false };
 }
 
 /**
@@ -610,8 +613,20 @@ function installCopying(
 						}
 						return undefined;
 					}
+					const pendingText = pendingSelectionText(
+						typedReceiver,
+						config,
+						bounds,
+						bufferCopy,
+						cleanCopy,
+					);
 					state.arm(
-						pendingSelectionText(typedReceiver, config, bounds, bufferCopy, cleanCopy).length,
+						pendingText.text.length,
+						// An editor selection cannot grow past the visible window —
+						// there is no drag-scroll — so the hint for one points at the
+						// external editor, the way to act on the whole draft. ""
+						// (unbound) simply shows no suffix.
+						pendingText.inEditor ? keyTextFor(EXTERNAL_EDITOR_KEYBINDING) : undefined,
 					);
 					typedReceiver.requestRender();
 					return undefined;

@@ -1244,6 +1244,48 @@ describe("the two features that share handleViewportInput", () => {
 		expect(activeSelectionHintText()).toBeNull();
 	});
 
+	it("arms an editor selection with the external-editor hint, a transcript one without", () => {
+		// The editor selection cannot grow past the visible window — there is no
+		// drag-scroll — so its pending hint points at `app.editor.external`,
+		// spelled the way this session has it bound. A transcript selection can
+		// scroll and needs no such pointer.
+		const original = getKeybindings();
+		setKeybindings(
+			new KeybindingsManager({ "app.editor.external": { defaultKeys: "ctrl+g" } }) as never,
+		);
+		try {
+			const scene = makeScene(
+				"alpha beta\ngamma delta",
+				makeConfig({ mouse: { ...defaultConfig.mouse, copyOnSelect: false } }),
+			);
+			install(scene);
+			const { textY } = scene.relayout();
+			selectFirstRows(scene, textY);
+
+			scene.prototype.copySelectionToClipboard(); // release: arms
+
+			expect(activeSelectionHintText()).toMatch(
+				/characters selected, ctrl\+c to copy ⋅ ctrl\+g to edit in \$EDITOR$/,
+			);
+
+			// A transcript selection arms the plain hint.
+			scene.prototype.handleViewportInput("\x03"); // copies and clears
+			const scrollView = (
+				scene.prototype.currentLayout.root?.children?.[0] as { scrollView?: unknown }
+			)?.scrollView;
+			scene.prototype.selectionBounds = {
+				start: { row: 0, col: 0, scrollView },
+				end: { row: 0, col: 4, scrollView },
+			};
+			scene.prototype.copySelectionToClipboard();
+			const hint = activeSelectionHintText();
+			expect(hint).not.toBeNull();
+			expect(hint).not.toContain("$EDITOR");
+		} finally {
+			setKeybindings(original);
+		}
+	});
+
 	it("leaves the range alone when editorClickCursor is off", () => {
 		const scene = makeScene("alpha beta\ngamma delta", makeConfig({ editorClickCursor: false }));
 		install(scene);

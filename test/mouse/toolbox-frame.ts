@@ -31,7 +31,10 @@ function padToWidth(line: string, width: number): string {
 	return truncateToWidth(line, width);
 }
 
-/** `drawFrame`: a rounded frame `width` cells wide around `lines`. */export function drawToolboxFrame(lines: readonly string[], width: number): string[] {
+/** `drawFrame`: a rounded frame `width` cells wide around `lines`. */ export function drawToolboxFrame(
+	lines: readonly string[],
+	width: number,
+): string[] {
 	const inner = Math.max(2, width - 2);
 	const out = [`╭${"─".repeat(inner)}╮`];
 	for (const line of lines) out.push(`│${padToWidth(line, inner)}│`);

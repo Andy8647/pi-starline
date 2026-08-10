@@ -30,8 +30,12 @@ import {
 	expandKeyText,
 	expandTargetAt,
 } from "../../extensions/starline/mouse/tool-box";
-import { EXPAND_KEY_TEXT, expandHintLine, HintedToolComponent } from "./component-graph";
-import { AnchoredFramedToolComponent } from "./component-graph";
+import {
+	AnchoredFramedToolComponent,
+	EXPAND_KEY_TEXT,
+	expandHintLine,
+	HintedToolComponent,
+} from "./component-graph";
 
 const WIDTH = 60;
 
@@ -43,17 +47,13 @@ const WIDTH = 60;
  * no `setExpanded` — which is what makes it inert, and why the rule is asked
  * of the resolved component rather than of the screen.
  */
-function makeScene(
-	height = 24,
-	toolOverride?: HintedToolComponent | AnchoredFramedToolComponent,
-) {
+function makeScene(height = 24, toolOverride?: HintedToolComponent | AnchoredFramedToolComponent) {
 	const document = new Container();
 	const chat = new Container();
 	document.addChild(chat);
 	chat.addChild(new Text("first message", 0, 0));
 	const tool =
-		toolOverride ??
-		new HintedToolComponent("bash echo hi", ["out one", "out two", "out three"], 1);
+		toolOverride ?? new HintedToolComponent("bash echo hi", ["out one", "out two", "out three"], 1);
 	chat.addChild(tool);
 	const prose = new Text(`press (${EXPAND_KEY_TEXT} to expand) for the rest`, 0, 0);
 	chat.addChild(prose);

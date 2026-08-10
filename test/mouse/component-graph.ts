@@ -129,11 +129,7 @@ export class AnchoredFramedToolComponent extends Container {
 		for (const line of shown) this.addChild(new Text(line, 0, 0));
 		if (!this.expanded) {
 			this.addChild(
-				new Text(
-					expandHintLine(this.keyText, false, this.output.length - this.previewLines),
-					0,
-					0,
-				),
+				new Text(expandHintLine(this.keyText, false, this.output.length - this.previewLines), 0, 0),
 			);
 		}
 	}
