@@ -509,3 +509,38 @@ describe("installMouse pathAwareWords", () => {
 		expect(prototype.getWordSelection).toBe(original);
 	});
 });
+
+describe("installMouse gating for editorClickToCaret", () => {
+	it("patches handleViewportInput when editorClickToCaret is the only editor feature enabled", () => {
+		// A Pi build that has moved copySelectionToClipboard disables
+		// selectionPendingMode and editorBufferCopy (both require it), but NOT
+		// editorClickToCaret. The range-delete half of editorClickToCaret lives
+		// on the handleViewportInput patch inside installCopying, so the gating
+		// must install it even when those two features are off — otherwise the
+		// caret installs while its delete silently never exists, exactly the
+		// half-working install the capability table's rule forbids.
+		const { prototype, calls } = makePrototype();
+		const extended = prototype as FakeAltScreen & {
+			hasOverlay: () => boolean;
+		};
+		extended.hasOverlay = () => false;
+		// The capability probe looks at the object itself and its prototype
+		// chain; removing the method makes isPatchable report it missing.
+		delete (extended as Partial<FakeAltScreen>).copySelectionToClipboard;
+
+		const originalViewportInput = prototype.handleViewportInput;
+		const dispose = installMouse(prototype, {
+			getConfig: makeConfig(false, true),
+		});
+
+		// handleViewportInput is patched: backspace with no selection still
+		// falls through to Pi's own handler (the wrapper calls predecessor).
+		expect(prototype.handleViewportInput).not.toBe(originalViewportInput);
+		calls.length = 0;
+		prototype.handleViewportInput("\x7f");
+		expect(calls).toEqual(["viewport:\x7f"]);
+		dispose();
+		// dispose removes the patch again.
+		expect(prototype.handleViewportInput).toBe(originalViewportInput);
+	});
+});

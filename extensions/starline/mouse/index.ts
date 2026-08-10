@@ -431,7 +431,8 @@ function installCopying(
 ): () => void {
 	const bufferCopy = features.has("editorBufferCopy");
 	const rangeDelete = features.has("editorClickToCaret");
-	const state = features.has("selectionPendingMode") ? new SelectionPendingState() : undefined;
+	const pendingMode = features.has("selectionPendingMode");
+	const state = pendingMode ? new SelectionPendingState() : undefined;
 	const previousState = activeState;
 	if (state) activeState = state;
 
@@ -442,11 +443,15 @@ function installCopying(
 
 	const cleanups: Array<() => void> = [];
 
-	cleanups.push(
-		installPrototypePatch(
-			prototype,
-			"copySelectionToClipboard",
-			"mouse-copy",
+	// Only installed when a feature that answers `copySelectionToClipboard` is
+	// on. With just `editorClickToCaret` the method is not ours to touch, and a
+	// Pi that has moved it must not make this install throw.
+	if (pendingMode || bufferCopy) {
+		cleanups.push(
+			installPrototypePatch(
+				prototype,
+				"copySelectionToClipboard",
+				"mouse-copy",
 			({ predecessor, receiver, args }) => {
 				const typedReceiver = receiver as MouseCapablePrototype;
 				const config = deps.getConfig();
@@ -477,6 +482,7 @@ function installCopying(
 			},
 		),
 	);
+	}
 
 	if (!state && !rangeDelete) {
 		return () => {
@@ -856,7 +862,11 @@ export function installMouse(prototype: object, deps: InstallMouseDeps): () => v
 	// What would bring it back: `pi-toolbox` publishing its frame geometry —
 	// which rows it drew a border on, at which columns — so Starline reads a
 	// fact instead of inferring one. Nothing short of that.
-	if (enabled.has("selectionPendingMode") || enabled.has("editorBufferCopy")) {
+	if (
+		enabled.has("selectionPendingMode") ||
+		enabled.has("editorBufferCopy") ||
+		enabled.has("editorClickToCaret")
+	) {
 		cleanups.push(installCopying(typedPrototype, deps, enabled));
 	}
 	if (enabled.has("pathAwareWords")) {
