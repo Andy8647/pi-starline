@@ -11,9 +11,9 @@ import {
 import type { PolishedTuiConfig } from "./config";
 import { applyEditorCursorStyleToLines } from "./editor-cursor";
 import { renderEditorMetadataFormat } from "./editor-metadata-format";
-import { pasteExpandHintText } from "./fixed-editor/paste-collapse";
 import { activeSelectionHintText } from "./mouse";
 import { composeHints } from "./mouse/hint";
+import { pasteExpandHintText } from "./paste-collapse";
 import {
 	EDITOR_ACCENT_FALLBACK,
 	EDITOR_BORDER_FALLBACK,

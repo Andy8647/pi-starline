@@ -81,9 +81,10 @@ async function emit(handlers: Map<string, Handler[]>, name: string, ctx: unknown
 }
 
 /**
- * A TUI context with no `setWidget`, so `installFixedEditorProbe` returns
- * before touching anything — this file is about the mouse wiring, and the
- * compositor is Task 11's to remove.
+ * A minimal TUI context for exercising the real `session_start` /
+ * `session_shutdown` handlers: the mouse installer probes for the editor
+ * shape and degrades cleanly when it is absent, so a bare context is enough
+ * to prove the wiring and its restoration.
  */
 function makeCtx(overrides: { hasUI?: boolean; mode?: string } = {}) {
 	let editorFactory: unknown;

@@ -1,10 +1,7 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
 import { defaultConfig, type PolishedTuiConfig } from "../extensions/starline/config";
-import {
-	installPasteCollapse,
-	pasteExpandHintText,
-} from "../extensions/starline/fixed-editor/paste-collapse";
+import { installPasteCollapse, pasteExpandHintText } from "../extensions/starline/paste-collapse";
 import { PolishedEditor } from "../extensions/starline/ui";
 
 /**

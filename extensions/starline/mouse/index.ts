@@ -47,9 +47,8 @@
  *   on the input box scrolls the *draft* instead, when the draft is taller than
  *   the box. `editor-mouse.ts` carries how the box is located (not where the
  *   plan for this said it would be) and how the live editor is reached; the
- *   scroll itself is `editor-scroll.ts`, shared with the fixed editor so a
- *   notch behaves the same in both editor modes. Every other notch calls
- *   through.
+ *   scroll itself is `editor-scroll.ts` — see its header for why it lives in
+ *   its own module. Every other notch calls through.
  *
  * `editorClickToCaret`, across two shared patches:
  * - `handleSelectionMouseEvent` — a left-button press inside the input box moves
@@ -203,7 +202,7 @@ let hasWarned = false;
 /**
  * Reader for the pending-selection state of whichever `installMouse` call is
  * currently active, mirroring `pasteExpandHintText`'s pattern in
- * `fixed-editor/paste-collapse.ts`. `ui.ts` composes this with the paste hint
+ * `../paste-collapse.ts`. `ui.ts` composes this with the paste hint
  * on every render; there is nothing to wire when no mouse install is active.
  */
 let activeState: SelectionPendingState | undefined;
@@ -909,8 +908,8 @@ function isWheelEvent(event: unknown): event is WheelEventLike {
  * the caret on every render, pulled back whenever the caret would fall outside
  * the visible window (`components/editor.js:392-401`). So a scroll here is an
  * offset *and* a caret move, which is what `scrollEditorBy` does — the same
- * function the fixed-editor compositor already drives its own wheel with, so a
- * notch behaves the same in both editor modes.
+ * function that has been in daily use since pi-powerline-footer, so a notch
+ * behaves the way it always has.
  *
  * The window it scrolls within is Pi's own `max(5, rows * 0.3)`, taken from the
  * terminal rather than from the box's rect: the rect includes Starline's border

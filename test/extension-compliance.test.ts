@@ -2305,7 +2305,7 @@ describe("Pi docs compliance", () => {
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
-				setFixedEditor() {},
+				setMouseConfig() {},
 				requestRender() {},
 			},
 		);
@@ -2351,7 +2351,7 @@ describe("Pi docs compliance", () => {
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
-				setFixedEditor() {},
+				setMouseConfig() {},
 				requestRender() {},
 			},
 		);
@@ -2400,7 +2400,7 @@ describe("Pi docs compliance", () => {
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
-				setFixedEditor() {},
+				setMouseConfig() {},
 				requestRender() {
 					renderRequests += 1;
 				},
@@ -2449,7 +2449,7 @@ describe("Pi docs compliance", () => {
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
-				setFixedEditor() {},
+				setMouseConfig() {},
 				requestRender() {},
 			},
 		);
@@ -2488,7 +2488,7 @@ describe("Pi docs compliance", () => {
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
-				setFixedEditor() {},
+				setMouseConfig() {},
 				requestRender() {},
 			},
 		);
@@ -2535,7 +2535,7 @@ describe("Pi docs compliance", () => {
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
-				setFixedEditor() {},
+				setMouseConfig() {},
 				requestRender() {},
 			},
 		);
@@ -2591,7 +2591,7 @@ describe("Pi docs compliance", () => {
 					getActiveExtensionStatuses: () => new Map<string, string>(),
 					setExtensionStatusPlacement() {},
 					setExtensionStatusColorMode() {},
-					setFixedEditor() {},
+					setMouseConfig() {},
 					requestRender() {},
 					settingsListTheme: {
 						label: (text) => text,
@@ -2658,7 +2658,7 @@ describe("Pi docs compliance", () => {
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
-				setFixedEditor() {},
+				setMouseConfig() {},
 				requestRender() {},
 				settingsListTheme: {
 					label: (text) => text,
@@ -2730,7 +2730,7 @@ describe("Pi docs compliance", () => {
 					getActiveExtensionStatuses: () => new Map<string, string>(),
 					setExtensionStatusPlacement() {},
 					setExtensionStatusColorMode() {},
-					setFixedEditor() {},
+					setMouseConfig() {},
 					requestRender() {},
 					settingsListTheme: {
 						label: (text) => text,
@@ -2797,7 +2797,7 @@ describe("Pi docs compliance", () => {
 					getActiveExtensionStatuses: () => new Map<string, string>(),
 					setExtensionStatusPlacement() {},
 					setExtensionStatusColorMode() {},
-					setFixedEditor() {},
+					setMouseConfig() {},
 					requestRender() {},
 					settingsListTheme: {
 						label: (text) => text,
@@ -2872,7 +2872,7 @@ describe("Pi docs compliance", () => {
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
-				setFixedEditor() {},
+				setMouseConfig() {},
 				requestRender() {},
 				settingsListTheme: {
 					label: (text) => text,
@@ -2932,7 +2932,7 @@ describe("Pi docs compliance", () => {
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
-				setFixedEditor() {},
+				setMouseConfig() {},
 				requestRender() {
 					dependencyRenderRequests += 1;
 				},
@@ -3014,7 +3014,7 @@ describe("Pi docs compliance", () => {
 					getActiveExtensionStatuses: () => new Map<string, string>(),
 					setExtensionStatusPlacement() {},
 					setExtensionStatusColorMode() {},
-					setFixedEditor() {},
+					setMouseConfig() {},
 					requestRender() {},
 					settingsListTheme: {
 						label: (text) => text,
@@ -3079,7 +3079,7 @@ describe("Pi docs compliance", () => {
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
-				setFixedEditor() {},
+				setMouseConfig() {},
 				requestRender() {
 					dependencyRenderRequests += 1;
 				},
@@ -3152,7 +3152,7 @@ describe("Pi docs compliance", () => {
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
-				setFixedEditor() {},
+				setMouseConfig() {},
 				requestRender() {},
 				settingsListTheme: {
 					label: (text) => text,
@@ -3220,7 +3220,7 @@ describe("Pi docs compliance", () => {
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
-				setFixedEditor() {},
+				setMouseConfig() {},
 				requestRender() {},
 				settingsListTheme: {
 					label: (text) => text,
@@ -3283,7 +3283,7 @@ describe("Pi docs compliance", () => {
 					]),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
-				setFixedEditor() {},
+				setMouseConfig() {},
 				requestRender() {},
 				settingsListTheme: {
 					label: (text) => text,
@@ -3345,7 +3345,7 @@ describe("Pi docs compliance", () => {
 					placements.push({ key, placement });
 				},
 				setExtensionStatusColorMode() {},
-				setFixedEditor() {},
+				setMouseConfig() {},
 				requestRender() {},
 				settingsListTheme: {
 					label: (text) => text,
@@ -3409,7 +3409,7 @@ describe("Pi docs compliance", () => {
 					placements.push({ key, placement });
 				},
 				setExtensionStatusColorMode() {},
-				setFixedEditor() {},
+				setMouseConfig() {},
 				requestRender() {
 					dependencyRenderRequests += 1;
 				},
@@ -3479,7 +3479,7 @@ describe("Pi docs compliance", () => {
 				getActiveExtensionStatuses: () => new Map<string, string>([["active", "ok"]]),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
-				setFixedEditor() {},
+				setMouseConfig() {},
 				requestRender() {},
 				settingsListTheme: {
 					label: (text) => text,

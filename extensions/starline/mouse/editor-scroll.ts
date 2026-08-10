@@ -12,11 +12,8 @@
  * editor is not the shape we expect, this reports failure and the wheel falls
  * back to scrolling the transcript.
  *
- * Two callers drive this, which is why it lives here rather than under
- * `fixed-editor/`: the fixed-editor compositor's own wheel handling, and the
- * `editorWheelScroll` patch in `mouse/index.ts`. Sharing it is what makes a
- * notch over the input box behave the same in both editor modes, and it is the
- * half that outlives the compositor when that is eventually deleted.
+ * The `editorWheelScroll` patch in `mouse/index.ts` drives it; it lives in its
+ * own module because `editor-caret.ts` shares the visual-line map it builds.
  *
  * @internal
  */

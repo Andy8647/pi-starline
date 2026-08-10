@@ -38,12 +38,6 @@ import {
 	isStarlineEditorFactory,
 	markEditorFactory,
 } from "./editor-factory-marker";
-import {
-	disposeFixedEditor,
-	installFixedEditorProbe,
-	removeFixedEditorProbe,
-} from "./fixed-editor";
-import { installPasteCollapse } from "./fixed-editor/paste-collapse";
 import { installFooter } from "./footer";
 import { buildSessionDurationLabel, invalidateUsageTotalsCache } from "./format";
 import { emptyGitStatus, readGitHost, readGitStatus } from "./git";
@@ -51,6 +45,7 @@ import { LiveContextController } from "./live-context";
 import { installMouse } from "./mouse";
 import { setActiveEditor } from "./mouse/editor-mouse";
 import { readPackageVersionResult } from "./package-version";
+import { installPasteCollapse } from "./paste-collapse";
 import {
 	createProjectRefreshScheduler,
 	type ScheduleProjectRefreshOptions,
@@ -269,10 +264,10 @@ export default function (pi: ExtensionAPI) {
 
 	/**
 	 * `editorCursor: "terminal"` hides the software cursor so the real one shows
-	 * through, which needs the hardware cursor to actually be on. The fixed-editor
-	 * compositor emits it itself; without the compositor it follows a Pi-level
-	 * setting, so turn it on here — the user asking for the terminal cursor is
-	 * exactly the intent. Nothing is touched in the other modes.
+	 * through, which needs the hardware cursor to actually be on. Pi re-applies
+	 * its own setting at several points, so an extension cannot turn it on
+	 * reliably everywhere — set it here for the user asking for the terminal
+	 * cursor, which is exactly the intent. Nothing is touched in other modes.
 	 */
 	const syncHardwareCursor = (tui: TUI) => {
 		if (getCurrentConfig().editorCursor !== "terminal") return;
@@ -478,9 +473,6 @@ export default function (pi: ExtensionAPI) {
 		stopProjectRefresh();
 		applyConfiguredUi(ctx);
 		installMousePatches();
-		if (currentConfig.mouse?.enabled) {
-			installFixedEditorProbe(ctx, getCurrentConfig, sessionLifecycle);
-		}
 		refresh();
 	};
 
@@ -499,8 +491,6 @@ export default function (pi: ExtensionAPI) {
 		if (!ctx || !sessionLifecycle.isCurrent()) return;
 		sessionLifecycle.shutdown();
 		try {
-			disposeFixedEditor(ctx);
-			if (isTuiContext(ctx)) removeFixedEditorProbe(ctx);
 			uninstallMouse();
 			uninstallPrototypePatches();
 			stopSessionTimer();
@@ -593,14 +583,12 @@ export default function (pi: ExtensionAPI) {
 		setExtensionStatusColorMode(key: string, colorMode: ExtensionStatusColorMode) {
 			currentConfig = saveExtensionStatusColorMode(key, colorMode);
 		},
-		setFixedEditor(patch: Partial<MouseConfig>, ctx: ExtensionContext) {
+		setMouseConfig(patch: Partial<MouseConfig>, _ctx: ExtensionContext) {
 			currentConfig = saveMousePatch(patch);
 			if (patch.enabled === true) {
 				installMousePatches();
-				installFixedEditorProbe(ctx, getCurrentConfig, sessionLifecycle);
 			} else if (patch.enabled === false) {
 				uninstallMouse();
-				disposeFixedEditor(ctx);
 			}
 			refresh();
 		},

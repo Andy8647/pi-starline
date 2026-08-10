@@ -91,7 +91,7 @@ type SettingsCommandDeps = {
 	getActiveExtensionStatuses: () => ReadonlyMap<string, string>;
 	setExtensionStatusPlacement: (key: string, placement: ExtensionStatusPlacement) => void;
 	setExtensionStatusColorMode: (key: string, colorMode: ExtensionStatusColorMode) => void;
-	setFixedEditor: (patch: Partial<MouseConfig>, ctx: ExtensionContext) => void;
+	setMouseConfig: (patch: Partial<MouseConfig>, ctx: ExtensionContext) => void;
 	requestRender: () => void;
 	settingsListTheme?: SettingsListTheme;
 };
@@ -666,7 +666,7 @@ export function registerStarlineSettingsCommand(pi: ExtensionAPI, deps: Settings
 			const mouseCommand = parseMouseCommand(args, deps.getConfig());
 			if (mouseCommand) {
 				try {
-					deps.setFixedEditor({ enabled: mouseCommand.enabled }, ctx);
+					deps.setMouseConfig({ enabled: mouseCommand.enabled }, ctx);
 					deps.requestRender();
 					if (ctx.hasUI) {
 						ctx.ui.notify(`Mouse: ${featureValue(mouseCommand.enabled)}`, "info");
@@ -807,7 +807,7 @@ export function registerStarlineSettingsCommand(pi: ExtensionAPI, deps: Settings
 								}
 
 								if (id === "mouse" && isFeatureState(newValue)) {
-									deps.setFixedEditor({ enabled: newValue === "enabled" }, ctx);
+									deps.setMouseConfig({ enabled: newValue === "enabled" }, ctx);
 									settingsList = makeSettingsList();
 									deps.requestRender();
 									ctx.ui.notify(`Mouse: ${newValue}`, "info");
@@ -815,7 +815,7 @@ export function registerStarlineSettingsCommand(pi: ExtensionAPI, deps: Settings
 									return;
 								}
 								if (id === "mouseWheelRouting" && isFeatureState(newValue)) {
-									deps.setFixedEditor({ wheelRouting: newValue === "enabled" }, ctx);
+									deps.setMouseConfig({ wheelRouting: newValue === "enabled" }, ctx);
 									settingsList.updateValue(id, newValue);
 									deps.requestRender();
 									ctx.ui.notify(`Wheel routing: ${newValue}`, "info");
@@ -823,7 +823,7 @@ export function registerStarlineSettingsCommand(pi: ExtensionAPI, deps: Settings
 									return;
 								}
 								if (id === "mouseCopyNotice" && isFeatureState(newValue)) {
-									deps.setFixedEditor({ copyNotice: newValue === "enabled" }, ctx);
+									deps.setMouseConfig({ copyNotice: newValue === "enabled" }, ctx);
 									settingsList.updateValue(id, newValue);
 									deps.requestRender();
 									ctx.ui.notify(`Copy notice: ${newValue}`, "info");
@@ -831,7 +831,7 @@ export function registerStarlineSettingsCommand(pi: ExtensionAPI, deps: Settings
 									return;
 								}
 								if (id === "mouseClickToExpandTools" && isFeatureState(newValue)) {
-									deps.setFixedEditor({ clickToExpandTools: newValue === "enabled" }, ctx);
+									deps.setMouseConfig({ clickToExpandTools: newValue === "enabled" }, ctx);
 									settingsList.updateValue(id, newValue);
 									deps.requestRender();
 									ctx.ui.notify(`Click to expand tools: ${newValue}`, "info");

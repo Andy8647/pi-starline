@@ -5,7 +5,7 @@ import {
 	pasteExpandHintText,
 	shouldCollapse,
 	supportsPasteCollapse,
-} from "../extensions/starline/fixed-editor/paste-collapse";
+} from "../extensions/starline/paste-collapse";
 
 const lines = (count: number) => Array.from({ length: count }, (_, i) => `line ${i}`).join("\n");
 
