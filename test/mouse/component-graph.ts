@@ -91,6 +91,62 @@ export class FixedLines implements Component {
 }
 
 /**
+ * A tool box the way `pi-toolbox` renders it after the collapse-anchor
+ * change: the frame from `FramedToolComponent`, and — when expanded — a
+ * `(ctrl+o to collapse)` row appended as the last line *inside* the frame,
+ * where `frame.ts` pushes it after `trimBlankEdges`. Pi itself only renders
+ * an expand hint while collapsed for the types `ToolExecutionComponent`
+ * covers, so this row is the only thing a click can close the box through.
+ *
+ * Collapsed, the preview and the `to expand` hint are the component's
+ * children (Pi's own rendering); the anchor is not — it is added at render
+ * time, exactly as `pi-toolbox` does, so the component-tree walk meets it as
+ * a row the framed component itself drew.
+ */
+export class AnchoredFramedToolComponent extends Container {
+	expanded = false;
+
+	constructor(
+		private readonly title: string,
+		private readonly output: readonly string[],
+		private readonly previewLines = 1,
+		private readonly keyText = EXPAND_KEY_TEXT,
+	) {
+		super();
+		this.rebuild();
+	}
+
+	setExpanded(expanded: boolean): void {
+		if (this.expanded === expanded) return;
+		this.expanded = expanded;
+		this.rebuild();
+	}
+
+	private rebuild(): void {
+		this.clear();
+		this.addChild(new Text(this.title, 0, 0));
+		const shown = this.expanded ? this.output : this.output.slice(0, this.previewLines);
+		for (const line of shown) this.addChild(new Text(line, 0, 0));
+		if (!this.expanded) {
+			this.addChild(
+				new Text(
+					expandHintLine(this.keyText, false, this.output.length - this.previewLines),
+					0,
+					0,
+				),
+			);
+		}
+	}
+
+	override render(width: number): string[] {
+		const content = super.render(width - 2);
+		if (content.length === 0) return [];
+		if (this.expanded) content.push(expandHintLine(this.keyText, true));
+		return ["", ...drawToolboxFrame(content, width)];
+	}
+}
+
+/**
  * An expandable component that draws no frame — what Pi's own message
  * components are without `pi-toolbox` patching them (`tool-execution.js`'s
  * default path is `super.render(width)`, a background fill and no border

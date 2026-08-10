@@ -31,6 +31,7 @@ import {
 	expandTargetAt,
 } from "../../extensions/starline/mouse/tool-box";
 import { EXPAND_KEY_TEXT, expandHintLine, HintedToolComponent } from "./component-graph";
+import { AnchoredFramedToolComponent } from "./component-graph";
 
 const WIDTH = 60;
 
@@ -42,12 +43,17 @@ const WIDTH = 60;
  * no `setExpanded` — which is what makes it inert, and why the rule is asked
  * of the resolved component rather than of the screen.
  */
-function makeScene(height = 24) {
+function makeScene(
+	height = 24,
+	toolOverride?: HintedToolComponent | AnchoredFramedToolComponent,
+) {
 	const document = new Container();
 	const chat = new Container();
 	document.addChild(chat);
 	chat.addChild(new Text("first message", 0, 0));
-	const tool = new HintedToolComponent("bash echo hi", ["out one", "out two", "out three"], 1);
+	const tool =
+		toolOverride ??
+		new HintedToolComponent("bash echo hi", ["out one", "out two", "out three"], 1);
 	chat.addChild(tool);
 	const prose = new Text(`press (${EXPAND_KEY_TEXT} to expand) for the rest`, 0, 0);
 	chat.addChild(prose);
@@ -199,6 +205,26 @@ describe("expandTargetAt", () => {
 		expect(target?.expanded).toBe(false);
 	});
 
+	it("asks to collapse from the anchor pi-toolbox draws inside the frame", () => {
+		// For the tool types `ToolExecutionComponent` covers, Pi renders no
+		// hint at all once expanded — the collapse anchor is a row pi-toolbox
+		// appends inside the frame. It is the component's own rendered row, so
+		// the same hint rule resolves it.
+		const tool = new AnchoredFramedToolComponent("read file.ts", [
+			"line one",
+			"line two",
+			"line three",
+		]);
+		tool.setExpanded(true);
+		const scene = makeScene(24, tool);
+		const { lookup, screenY } = lookupFor(scene);
+
+		const target = expandTargetAt(lookup, 4, screenY("to collapse)"));
+
+		expect(target?.component).toBe(tool);
+		expect(target?.expanded).toBe(false);
+	});
+
 	it("converts a screen row through the scrolled content origin", () => {
 		// A short viewport, scrolled to the end: content row N is no longer
 		// screen row N, and the box's hint is only reachable through the origin.
@@ -258,8 +284,12 @@ function makeConfig(clickToExpandTools: boolean): () => PolishedTuiConfig {
  * real layout to resolve against. `handleSelectionMouseEvent` records that it
  * was reached, which is how "the press still starts a selection" is asserted.
  */
-function makeInstallScene(options?: { overlay?: boolean; height?: number }) {
-	const scene = makeScene(options?.height ?? 24);
+function makeInstallScene(options?: {
+	overlay?: boolean;
+	height?: number;
+	tool?: HintedToolComponent | AnchoredFramedToolComponent;
+}) {
+	const scene = makeScene(options?.height ?? 24, options?.tool);
 	const throughCalls: FakeMouseEvent[] = [];
 	const renders: string[] = [];
 	const prototype = {
@@ -337,6 +367,27 @@ describe("installMouse clickToExpandTools", () => {
 		press(scene, scene.relayout()("to collapse)"));
 
 		expect(scene.scene.tool.expanded).toBe(false);
+		expect(scene.throughCalls).toEqual([]);
+	});
+
+	it("collapses a framed tool box through pi-toolbox's anchor row", () => {
+		// The end-to-end version of the expandTargetAt case above: expand with
+		// one click on Pi's own hint, then close with one click on the anchor
+		// row pi-toolbox appended inside the frame — the row that did not exist
+		// before the collapse-anchor change.
+		const tool = new AnchoredFramedToolComponent("read file.ts", [
+			"line one",
+			"line two",
+			"line three",
+		]);
+		const scene = makeInstallScene({ tool });
+		install(scene);
+
+		press(scene, scene.relayout()("to expand)"));
+		expect(tool.expanded).toBe(true);
+
+		press(scene, scene.relayout()("to collapse)"));
+		expect(tool.expanded).toBe(false);
 		expect(scene.throughCalls).toEqual([]);
 	});
 

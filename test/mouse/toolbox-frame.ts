@@ -21,13 +21,17 @@
  * hand-typed approximation of it.
  */
 
-/** `padToWidth` from `pi-toolbox/frame.ts`, for plain (unstyled) text. */
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+
+/** `padToWidth` from `pi-toolbox/frame.ts`. */
 function padToWidth(line: string, width: number): string {
-	return line.length < width ? line + " ".repeat(width - line.length) : line.slice(0, width);
+	const w = visibleWidth(line);
+	if (w === width) return line;
+	if (w < width) return line + " ".repeat(width - w);
+	return truncateToWidth(line, width);
 }
 
-/** `drawFrame`: a rounded frame `width` cells wide around `lines`. */
-export function drawToolboxFrame(lines: readonly string[], width: number): string[] {
+/** `drawFrame`: a rounded frame `width` cells wide around `lines`. */export function drawToolboxFrame(lines: readonly string[], width: number): string[] {
 	const inner = Math.max(2, width - 2);
 	const out = [`╭${"─".repeat(inner)}╮`];
 	for (const line of lines) out.push(`│${padToWidth(line, inner)}│`);

@@ -76,11 +76,18 @@
  *   `compaction-summary-message.js:40` build the hint in their `else` branch,
  *   i.e. only when `this.expanded` is false.
  *
- * So for those types a click expands and nothing closes it but `ctrl+o`, which
- * closes everything. This is Pi's rendering, not a gap in the matching rule —
- * there is no row to match, and inventing a second target (the title line, the
- * first output row) would mean guessing at a component's layout, which is the
- * inference this module exists to avoid.
+ * For the first group there is a way back: current `pi-toolbox` appends a
+ * `(ctrl+o to collapse)` anchor row as the last line inside the frame of an
+ * expanded `ToolExecutionComponent` — the same text `bash-execution` renders
+ * natively — and the hint rule above matches it exactly as it matches Pi's
+ * own rows, because it is the component's own rendered row. That closes
+ * `read`/`grep`/`ls`/`write`/`find` boxes with one click. The second group
+ * (skill, branch and compaction summaries) keeps the limitation: no anchor
+ * exists for them, `ctrl+o` (which closes everything) is the way back, and
+ * inventing a second target (the title line, the first output row) would
+ * mean guessing at a component's layout, which is the inference this module
+ * exists to avoid. Without `pi-toolbox` installed the first group keeps the
+ * limitation too — no anchor is rendered, and nothing here invents one.
  *
  * **2. A box's own output can read like its hint.** The component scoping
  * above stops a *different* message from being clickable, but not the box's
