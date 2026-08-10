@@ -11,7 +11,7 @@ import {
 import type { PolishedTuiConfig } from "./config";
 import { applyEditorCursorStyleToLines } from "./editor-cursor";
 import { renderEditorMetadataFormat } from "./editor-metadata-format";
-import { activeSelectionHintText } from "./mouse";
+import { activeSelectionHintText, externalEditorHintText } from "./mouse";
 import { composeHints } from "./mouse/hint";
 import { pasteExpandHintText } from "./paste-collapse";
 import {
@@ -142,7 +142,13 @@ function getEditorChromeWidths(config: PolishedTuiConfig, uiTheme: Theme, reset:
  * so the hint shows up whatever the user has done to that template.
  */
 function composeRightStatus(vimStatus: string | undefined, uiTheme: Theme): string | undefined {
-	const hint = composeHints(pasteExpandHintText(), activeSelectionHintText());
+	// A live selection hint already spells the external editor out ("N
+	// characters selected, ctrl+c to copy ⋅ ctrl+g to edit in $EDITOR"), so it
+	// takes precedence; the always-on hint only speaks when nothing else does.
+	const hint = composeHints(
+		pasteExpandHintText(),
+		activeSelectionHintText() ?? externalEditorHintText(),
+	);
 	if (!hint) return vimStatus;
 	const styled = safeThemeFg(uiTheme, "muted", hint);
 	return vimStatus ? `${vimStatus} ⋅ ${styled}` : styled;

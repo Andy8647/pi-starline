@@ -50,7 +50,11 @@ import {
 } from "../../extensions/starline/mouse/editor-caret";
 import { editorBoxFor, setActiveEditor } from "../../extensions/starline/mouse/editor-mouse";
 import type { BoxLike } from "../../extensions/starline/mouse/hit-test";
-import { activeSelectionHintText, installMouse } from "../../extensions/starline/mouse/index";
+import {
+	activeSelectionHintText,
+	externalEditorHintText,
+	installMouse,
+} from "../../extensions/starline/mouse/index";
 import { PolishedEditor } from "../../extensions/starline/ui";
 import { HintedToolComponent } from "./component-graph";
 
@@ -1323,6 +1327,36 @@ describe("the two features that share handleViewportInput", () => {
 		} finally {
 			setKeybindings(original);
 		}
+	});
+
+	it("offers the external-editor hint once the draft outgrows the box", () => {
+		// No drag-scroll, so a draft taller than the box is partly unreachable by
+		// mouse; that is when the hint points at the external editor, refreshed
+		// by the same input path that sees the draft change.
+		const original = getKeybindings();
+		setKeybindings(
+			new KeybindingsManager({ "app.editor.external": { defaultKeys: "ctrl+g" } }) as never,
+		);
+		try {
+			const scene = makeScene(numbered(12), makeConfig());
+			install(scene);
+			scene.relayout();
+
+			// Nothing has landed on `handleViewportInput` yet, so no refresh.
+			expect(externalEditorHintText()).toBeNull();
+			scene.prototype.handleViewportInput("x");
+			expect(externalEditorHintText()).toBe("ctrl+g to edit in $EDITOR");
+		} finally {
+			setKeybindings(original);
+		}
+	});
+
+	it("stays quiet while the draft fits the box", () => {
+		const scene = makeScene("alpha beta\ngamma delta", makeConfig());
+		install(scene);
+		scene.relayout();
+		scene.prototype.handleViewportInput("x");
+		expect(externalEditorHintText()).toBeNull();
 	});
 
 	it("leaves the range alone when editorClickCursor is off", () => {

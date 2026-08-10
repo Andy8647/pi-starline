@@ -97,9 +97,15 @@ import {
 	type MouseFeature,
 	probeCapabilities,
 } from "./capabilities";
-import { deleteEditorSelection, editorSelectionTextFor, moveEditorCaretTo } from "./editor-caret";
+import {
+	activeEditorViewport,
+	deleteEditorSelection,
+	editorSelectionTextFor,
+	moveEditorCaretTo,
+} from "./editor-caret";
 import { activeEditor, wheelTarget } from "./editor-mouse";
 import { scrollEditorBy } from "./editor-scroll";
+import { editorVisualRowCount } from "./editor-text-cursor";
 import { type BoxLike, scrollContentLinesFor } from "./hit-test";
 import { SelectionPendingState, selectionHintText } from "./selection-state";
 import { type ExpandTarget, expandKeyText, expandTargetAt, keyTextFor } from "./tool-box";
@@ -237,6 +243,41 @@ let activeState: SelectionPendingState | undefined;
 
 export function activeSelectionHintText(): string | null {
 	return activeState ? selectionHintText(activeState) : null;
+}
+
+/**
+ * The "ctrl+g to edit in $EDITOR" hint while the draft outgrows the box.
+ *
+ * An editor selection cannot grow past the visible window — there is no
+ * drag-scroll — so when the draft has more visual rows than the box shows,
+ * some of it is unreachable by mouse no matter how you drag. That is exactly
+ * when the external editor is the way to act on the whole draft, so the hint
+ * is offered whenever the draft outgrows the box, not only while a selection
+ * is live. Refreshed on every `handleViewportInput` call (keystrokes and
+ * mouse events both land there), read by `ui.ts` when nothing else owns the
+ * metadata row's right side.
+ */
+let externalEditorHint: string | null = null;
+
+export function externalEditorHintText(): string | null {
+	return externalEditorHint;
+}
+
+function refreshExternalEditorHint(
+	receiver: MouseCapablePrototype,
+	config: PolishedTuiConfig,
+): void {
+	externalEditorHint = null;
+	try {
+		const viewport = activeEditorViewport(receiver, config);
+		if (!viewport) return;
+		const visualRows = editorVisualRowCount(viewport.editor);
+		if (visualRows > viewport.viewport.contentRows) {
+			externalEditorHint = `${keyTextFor(EXTERNAL_EDITOR_KEYBINDING)} to edit in $EDITOR`;
+		}
+	} catch {
+		// Best effort: an editor this module cannot read offers no hint.
+	}
 }
 
 /**
@@ -675,6 +716,10 @@ function installCopying(
 			"mouse-viewport-input",
 			({ predecessor, receiver, args }) => {
 				const data = args[0];
+				// Keystrokes and mouse events both land here, so this is the one
+				// place that sees every draft change; keep the outgrew-the-box
+				// hint current with it.
+				refreshExternalEditorHint(receiver as MouseCapablePrototype, deps.getConfig());
 				// ---- Branch 1: ctrl+c, `selectionPendingMode`'s. ----------------
 				//
 				// This branch is FIRST, and deliberately so. The one outcome that
@@ -1066,6 +1111,7 @@ export function installMouse(prototype: object, deps: InstallMouseDeps): () => v
 
 	if (cleanups.length === 0) return () => {};
 	return () => {
+		externalEditorHint = null;
 		for (const cleanup of cleanups) cleanup();
 	};
 }
