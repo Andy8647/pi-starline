@@ -35,7 +35,8 @@ export type MouseFeature =
 	| "clickToExpandTools"
 	| "editorWheelScroll"
 	| "editorClickToCaret"
-	| "editorBufferCopy";
+	| "editorBufferCopy"
+	| "transcriptCleanCopy";
 
 const CAPABILITIES: readonly MouseCapability[] = [
 	"handleViewportInput",
@@ -135,6 +136,22 @@ const REQUIREMENTS: Record<MouseFeature, readonly MouseCapability[]> = {
 	// written to makes the copy fall through to Pi rather than disabling the
 	// feature at install time.
 	editorBufferCopy: ["copySelectionToClipboard", "getSelectionBounds", "hasOverlay", "flash"],
+	// Shares the `copySelectionToClipboard` patch with the two features above
+	// it. It reads the selection through `getSelectionBounds` to find the rows,
+	// through `getSelectionColumns` to slice the cleaned text along the same
+	// grapheme-aligned columns Pi would have used, asks `hasOverlay` before
+	// trusting those rows (an overlay is composited over a layout that still
+	// contains the transcript), and raises Pi's own "Copied!" through `flash`
+	// when it answers the copy itself. The clipboard write goes through
+	// `terminal.write`, unlisted for the same reason as editorBufferCopy's — it
+	// is an instance field, checked at the call site instead.
+	transcriptCleanCopy: [
+		"copySelectionToClipboard",
+		"getSelectionBounds",
+		"getSelectionColumns",
+		"hasOverlay",
+		"flash",
+	],
 };
 
 function isPatchable(prototype: object, name: string): boolean {

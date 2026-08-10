@@ -91,7 +91,7 @@ describe("probeCapabilities", () => {
 describe("enabledFeatures", () => {
 	it("enables everything when every capability is present", () => {
 		const features = enabledFeatures(probeCapabilities(prototypeWith(ALL)));
-		expect(features.size).toBe(6);
+		expect(features.size).toBe(7);
 	});
 
 	it("disables the pending mode when ctrl+c cannot be intercepted", () => {
@@ -115,6 +115,7 @@ describe("enabledFeatures", () => {
 			"editorWheelScroll",
 			"pathAwareWords",
 			"selectionPendingMode",
+			"transcriptCleanCopy",
 		]);
 	});
 

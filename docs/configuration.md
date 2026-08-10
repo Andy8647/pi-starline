@@ -215,7 +215,8 @@ Default config values — copy this and change any value you want:
 		"copyNotice": true,
 		"copyOnSelect": true,
 		"clickToExpandTools": true,
-		"pathAwareWords": true
+		"pathAwareWords": true,
+		"transcriptCleanCopy": true
 	}
 }
 ```
@@ -464,7 +465,8 @@ guessing would be silently pasting the wrong thing.
 		"copyNotice": true,
 		"copyOnSelect": true,
 		"clickToExpandTools": true,
-		"pathAwareWords": true
+		"pathAwareWords": true,
+		"transcriptCleanCopy": true
 	}
 }
 ```
@@ -476,7 +478,7 @@ guessing would be silently pasting the wrong thing.
 - `copyNotice` — shows a "Copied to clipboard" flash for a copy **Starline** performs, such as `ctrl+c` in pending selection mode. Pi confirms its own copy-on-release with its own flash regardless of this setting.
 - `copyOnSelect` — copy on mouse release. When `false`, a highlight waits for `ctrl+c` instead (pending selection mode).
 - `clickToExpandTools` — clicking a tool box's `… ctrl+o to expand` hint row expands just that box, instead of `ctrl+o` expanding every box in the transcript. Only the hint row toggles; a press anywhere else in the box still starts a selection, and the row follows whatever key you have bound to `app.tools.expand`. Two things worth knowing before they surprise you:
-  - **Clicking does not always close what it opened.** Pi keeps a hint on screen in both states only for bash boxes and for tool results that still have output left to hide — those show `ctrl+o to collapse` when open, and clicking it closes them. `read`, `grep`, `ls`, `write` and `find` results, skill blocks, branch summaries and compaction summaries drop the hint entirely once expanded, so there is nothing left to click and `ctrl+o` (which closes every box) is the way back. That is how Pi renders those boxes, not something this setting can change.
+  - **Clicking does not always close what it opened.** Bash boxes keep a `ctrl+o to collapse` hint on screen when open, and clicking it closes them. With `pi-toolbox` installed, `read`, `grep`, `ls`, `write` and `find` boxes get the same row appended inside the frame when expanded (pi-toolbox's `collapseAnchor`), so those close with one click too. Skill blocks, branch summaries and compaction summaries still drop the hint entirely once expanded — nothing is left to click, and `ctrl+o` (which closes every box) is the way back.
   - **A box whose output contains the literal text `(ctrl+o to expand)` makes that line clickable too** — printing this page, say, or `cat`-ing a file that documents the keybinding. Pi draws a box's output and its hint the same way, so they cannot be told apart without matching theme colours. Clicking such a line toggles the box it is already inside; nothing else happens.
 - `pathAwareWords` — double/triple-click word selection stops at path separators (`/`, `.`) instead of only at whitespace.
 

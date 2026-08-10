@@ -114,6 +114,7 @@ describe("mergeConfig", () => {
 			copyOnSelect: true,
 			clickToExpandTools: true,
 			pathAwareWords: true,
+			transcriptCleanCopy: true,
 		});
 		expect(defaultConfig.mouse).toEqual({
 			enabled: true,
@@ -122,6 +123,7 @@ describe("mergeConfig", () => {
 			copyOnSelect: true,
 			clickToExpandTools: true,
 			pathAwareWords: true,
+			transcriptCleanCopy: true,
 		});
 	});
 
@@ -133,6 +135,7 @@ describe("mergeConfig", () => {
 			copyOnSelect: true,
 			clickToExpandTools: true,
 			pathAwareWords: true,
+			transcriptCleanCopy: true,
 		});
 	});
 
@@ -144,6 +147,7 @@ describe("mergeConfig", () => {
 			copyOnSelect: true,
 			clickToExpandTools: true,
 			pathAwareWords: true,
+			transcriptCleanCopy: true,
 		});
 	});
 
@@ -1392,6 +1396,7 @@ describe("saveMousePatch", () => {
 				copyOnSelect: true,
 				clickToExpandTools: true,
 				pathAwareWords: true,
+				transcriptCleanCopy: true,
 			});
 		} finally {
 			rmSync(dir, { recursive: true });

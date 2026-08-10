@@ -115,6 +115,8 @@ export type MouseConfig = {
 	clickToExpandTools: boolean;
 	/** Double/triple-click word selection stops at path separators. */
 	pathAwareWords: boolean;
+	/** Copy transcript selections without the painted rails, rules and frames. */
+	transcriptCleanCopy: boolean;
 };
 
 const FIXED_EDITOR_KEY_MAP: Record<string, keyof MouseConfig> = {
@@ -416,6 +418,7 @@ export const defaultConfig: PolishedTuiConfig = {
 		copyOnSelect: true,
 		clickToExpandTools: true,
 		pathAwareWords: true,
+		transcriptCleanCopy: true,
 	},
 };
 
@@ -840,6 +843,10 @@ function normalizeMouseConfig(record: Record<string, unknown>): MouseConfig {
 			typeof record.pathAwareWords === "boolean"
 				? record.pathAwareWords
 				: defaultConfig.mouse.pathAwareWords,
+		transcriptCleanCopy:
+			typeof record.transcriptCleanCopy === "boolean"
+				? record.transcriptCleanCopy
+				: defaultConfig.mouse.transcriptCleanCopy,
 	};
 }
 
@@ -1302,6 +1309,9 @@ export function saveMousePatch(patch: Partial<MouseConfig>, path = configPath): 
 				? { clickToExpandTools: patch.clickToExpandTools }
 				: {}),
 			...(patch.pathAwareWords !== undefined ? { pathAwareWords: patch.pathAwareWords } : {}),
+			...(patch.transcriptCleanCopy !== undefined
+				? { transcriptCleanCopy: patch.transcriptCleanCopy }
+				: {}),
 		};
 	});
 }
