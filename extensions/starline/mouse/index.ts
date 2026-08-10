@@ -83,7 +83,12 @@
  * `copySelectionToClipboard` puts there — see `installMouse` for why frame-free
  * selection is not part of this.
  */
-import { getKeybindings, sliceByColumn, stripTerminalSequences } from "@earendil-works/pi-tui";
+import {
+	getKeybindings,
+	matchesKey,
+	sliceByColumn,
+	stripTerminalSequences,
+} from "@earendil-works/pi-tui";
 import type { PolishedTuiConfig } from "../config";
 import { installPrototypePatch } from "../prototype-patch-registry";
 import {
@@ -104,6 +109,29 @@ import { wordRangeAt } from "./word-select";
 const CTRL_C = "\x03";
 /** Pi's exit chord, and `tui.editor.deleteCharForward`'s second default key. */
 const CTRL_D = "\x04";
+
+/**
+ * Whether `data` is the ctrl+c chord, in whatever encoding the terminal sent
+ * it. Pi 0.84 pushes the Kitty keyboard protocol (and falls back to xterm
+ * modifyOtherKeys) on every capable terminal, and under either protocol the
+ * chord arrives as an escape sequence — `\x1b[99;5u` or `\x1b[27;5;99~` —
+ * never as the bare `\x03` a plain legacy terminal sends. The pending copy
+ * must recognise all three, or ctrl+c falls through to Pi's own binding
+ * (`app.clear`, clear the editor) exactly when it was about to copy. Pi's
+ * own key matcher is the authority here: it parses every protocol this
+ * build negotiates, and its `ctrl+c` arm accepts the raw control character
+ * too, so a legacy terminal keeps working unchanged.
+ */
+function isCtrlC(data: unknown): boolean {
+	if (typeof data !== "string" || data.length === 0) return false;
+	try {
+		return matchesKey(data, "ctrl+c");
+	} catch {
+		// A pi-tui build that has moved `matchesKey` must not break the copy:
+		// fall back to the raw byte, which is what this branch has always read.
+		return data === CTRL_C;
+	}
+}
 
 /** Opens the draft in `$EDITOR` — the hint an editor selection's hint carries. */
 const EXTERNAL_EDITOR_KEYBINDING = "app.editor.external";
@@ -656,7 +684,7 @@ function installCopying(
 				// installed in a different order. `isRangeDeleteKey` refuses ctrl+c
 				// and ctrl+d outright as well, so the guarantee holds structurally
 				// from both directions rather than by ordering alone.
-				if (state && data === CTRL_C && state.pending) {
+				if (state && isCtrlC(data) && state.pending) {
 					const typedReceiver = receiver as MouseCapablePrototype;
 					// `state.pending` can be stale: Pi clears its own selection
 					// through paths this module never sees (e.g. starting a new

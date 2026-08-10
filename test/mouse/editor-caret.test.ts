@@ -1226,6 +1226,45 @@ describe("the two features that share handleViewportInput", () => {
 		expect(scene.editor.getLines()).toEqual(["alpha beta", "gamma delta"]);
 	});
 
+	it("copies on ctrl+c sent as an xterm modifyOtherKeys sequence", () => {
+		// Pi 0.84 negotiates the Kitty keyboard protocol and falls back to
+		// modifyOtherKeys, under which the chord is CSI 27;5;99~ rather than the
+		// bare \x03. The pending copy must recognise the encoded form or ctrl+c
+		// falls through to Pi's `app.clear` exactly when it was about to copy.
+		const scene = makeScene(
+			"alpha beta\ngamma delta",
+			makeConfig({ mouse: { ...defaultConfig.mouse, copyOnSelect: false } }),
+		);
+		install(scene);
+		const { textY } = scene.relayout();
+		selectFirstRows(scene, textY);
+
+		scene.prototype.copySelectionToClipboard(); // release: arms
+		expect(activeSelectionHintText()).not.toBeNull();
+		scene.prototype.handleViewportInput("\x1b[27;5;99~");
+
+		expect(decodeOsc52(scene.written[0] ?? "")).toBe("alpha beta\ngamma delta");
+		expect(activeSelectionHintText()).toBeNull();
+	});
+
+	it("copies on ctrl+c sent as a Kitty keyboard protocol sequence", () => {
+		// The same chord under the Kitty protocol: CSI 99;5u.
+		const scene = makeScene(
+			"alpha beta\ngamma delta",
+			makeConfig({ mouse: { ...defaultConfig.mouse, copyOnSelect: false } }),
+		);
+		install(scene);
+		const { textY } = scene.relayout();
+		selectFirstRows(scene, textY);
+
+		scene.prototype.copySelectionToClipboard(); // release: arms
+		expect(activeSelectionHintText()).not.toBeNull();
+		scene.prototype.handleViewportInput("\x1b[99;5u");
+
+		expect(decodeOsc52(scene.written[0] ?? "")).toBe("alpha beta\ngamma delta");
+		expect(activeSelectionHintText()).toBeNull();
+	});
+
 	it("clears a pending arm when the range it described is deleted", () => {
 		const scene = makeScene(
 			"alpha beta\ngamma delta",
