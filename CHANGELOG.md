@@ -10,7 +10,7 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
-## [Unreleased]
+## [0.3.0] - 2026-08-10
 
 The mouse work: Starline now reads and drives Pi 0.84's own renderer instead of
 running its own editor. The fixed editor is deleted.
@@ -49,7 +49,10 @@ so.
 - **Mouse selection and copy.** Drag to select anywhere — the transcript and
 the input box — with double-click word selection and triple-click line
 selection. Releasing copies; or hold the selection for `ctrl+c` with
-`mouse.copyOnSelect: false`.
+`mouse.copyOnSelect: false` — the same behaviour [Pi #7720][7720] asks for
+upstream (a setting to disable select-to-copy in fullscreen mode). If Pi
+ships its own `fullscreenCopyOnSelect`, Starline should prefer it and let
+both settings agree rather than fight.
 - **Clean copies.** Transcript selections drop Starline's message rails, rule
 rows, and pi-toolbox frame borders before they reach the clipboard; editor
 selections copy the draft's text, not the painted rows. Anything unrecognised
@@ -62,7 +65,13 @@ transcript.
 again through the `(ctrl+o to collapse)` anchor row (pi-toolbox 0.2.2+).
 - **Paths and kebab-case stay whole** on double-click selection.
 - **A pending selection's hint counts the exact characters `ctrl+c` will
-copy**, and an editor selection's hint points at `ctrl+o`'s external editor.
+copy**, and an editor selection's hint names the external editor —
+`ctrl+g to edit in nvim`, with `$EDITOR`/`$VISUAL` resolved (unset, the
+literal `$EDITOR` stays, itself the hint that nothing is configured).
+- **A draft taller than the box keeps the `ctrl+g` hint on screen** — no
+selection needed. There is no drag-scroll, so part of a long draft is
+unreachable by mouse; the hint points at the external editor as the way to
+act on the whole draft.
 
 ### Fixed
 
@@ -75,6 +84,8 @@ falls through to clearing the editor.
 the range is clamped instead of rejected.
 - **Range delete installs even when click-to-caret is the only editor
 feature.**
+
+[7720]: https://github.com/earendil-works/pi/issues/7720
 
 ## [0.2.2] - 2026-08-07
 
