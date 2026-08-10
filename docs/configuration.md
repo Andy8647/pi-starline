@@ -1,6 +1,6 @@
 # Starline configuration
 
-Every option Starline has. For the guide to the pinned editor, see [Fixed editor](fixed-editor.md).
+Every option Starline has.
 
 ## All options
 
@@ -16,7 +16,7 @@ Every option Starline has. For the guide to the pinned editor, see [Fixed editor
 | `segmentOptions` | object | see [Segment display options](#segment-display-options) | Formatting details for the context and tokens segments. |
 | `editorModelLabel` | string | `"id"` | Whether the editor frame shows the model id or its display name. |
 | `editorCursor` | string | `"block"` | Cursor style in the editor, see [Editor cursor](#editor-cursor). |
-| `editorClickCursor` | boolean | `true` | Clicking in the editor text moves the caret there, see [Fixed editor](fixed-editor.md). |
+| `editorClickCursor` | boolean | `true` | Clicking in the editor text moves the caret there, see [Mouse](#mouse). |
 | `pasteCollapseLines` | number | `11` | Line count at which a paste collapses into a marker, see [Paste collapse threshold](#paste-collapse-threshold). |
 | `editorPaddingY` | number | `1` | Blank rows inside the editor box, see [Box height](#box-height). |
 | `userMessagePaddingY` | number | `1` | Blank rows inside the previous-message box, see [Box height](#box-height). |
@@ -50,9 +50,6 @@ Useful slash-command shortcuts:
 /starline copy-friendly enable
 /starline copy-friendly disable
 /starline copy-friendly toggle
-/starline fixed-editor enable
-/starline fixed-editor disable
-/starline fixed-editor toggle
 /starline format "$cwd on branch $git_branch$git_status using $runtime $fill $context"
 /starline format clear
 ```
@@ -442,9 +439,8 @@ place, rather than adding a second one.
 
 That row is drawn whether or not `editorMetadataFormat` has anything in it, so
 blanking the template does not take the hint with it. The hint used to sit on
-the editor's bottom border, drawn there by the
-[fixed editor](fixed-editor.md); it moved so that it no longer depends on a
-feature Pi 0.84 supersedes.
+the editor's bottom border, drawn there by the fixed editor that Pi 0.84
+superseded; it moved so that it no longer depends on that.
 
 This works for both kinds of collapse — the ones lowered by `pasteCollapseLines`
 and the ones Pi does itself above its own threshold — and needs no configuration.
@@ -497,8 +493,6 @@ guessing would be silently pasting the wrong thing.
 ```json
 { "showHardwareCursor": true }
 ```
-
-With the fixed editor running, the compositor also re-asserts the cursor on every frame in this mode. Pi's own output passes through the compositor untouched and may contain a hide-cursor sequence the compositor never sees, so tracking visibility is not enough — that is why the cursor could vanish entirely.
 
 ## Editor Metadata Format
 

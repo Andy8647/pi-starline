@@ -12,6 +12,70 @@ npm.
 
 ## [Unreleased]
 
+The mouse work: Starline now reads and drives Pi 0.84's own renderer instead of
+running its own editor. The fixed editor is deleted.
+
+### Removed
+
+**The fixed editor is gone.** Pi 0.84's fullscreen mode (`tuiMode:
+"fullscreen"` in `/settings`) provides the sticky editor and footer,
+independent transcript scrolling, mouse selection and draggable scrollbars, so
+Starline's own compositor is deleted: the `fixed-editor/` modules, the
+`/starline fixed-editor enable/disable/toggle` commands, and the Fixed editor
+guide. The editor and user-message styling, the statusline and the pill footer
+all keep working exactly as before.
+
+### Changed
+
+**`fixedEditor` settings move to `mouse`.** The old `fixedEditor` config block
+named a compositor that no longer exists. It is migrated automatically the
+first time Starline loads — you do not need to edit anything by hand. The old
+keys and where they land:
+
+| Old (`fixedEditor`) | New (`mouse`) |
+| --- | --- |
+| `enabled` | `enabled` |
+| `mouseScroll` | `wheelRouting` |
+| `copyNotice` | `copyNotice` |
+| `copyOnSelect` | `copyOnSelect` |
+| `clickToExpandTools` | `clickToExpandTools` |
+
+An explicit `mouse` key already in your config wins over the migration. The
+old block is removed and the new one written back once, with a notice saying
+so.
+
+### Added
+
+- **Mouse selection and copy.** Drag to select anywhere — the transcript and
+the input box — with double-click word selection and triple-click line
+selection. Releasing copies; or hold the selection for `ctrl+c` with
+`mouse.copyOnSelect: false`.
+- **Clean copies.** Transcript selections drop Starline's message rails, rule
+rows, and pi-toolbox frame borders before they reach the clipboard; editor
+selections copy the draft's text, not the painted rows. Anything unrecognised
+passes through byte-identical.
+- **Click to move the caret** in the input box; **backspace/delete remove a
+selected range**.
+- **Wheel scrolling over the input box** scrolls the draft instead of the
+transcript.
+- **Click a tool box's hint row to expand just that box**, and collapse it
+again through the `(ctrl+o to collapse)` anchor row (pi-toolbox 0.2.2+).
+- **Paths and kebab-case stay whole** on double-click selection.
+- **A pending selection's hint counts the exact characters `ctrl+c` will
+copy**, and an editor selection's hint points at `ctrl+o`'s external editor.
+
+### Fixed
+
+- **`ctrl+c` copies a pending selection on Pi 0.84 again.** Pi negotiates the
+Kitty keyboard protocol (falling back to xterm modifyOtherKeys) on capable
+terminals, which encodes the chord as an escape sequence rather than the raw
+`\x03`. The pending copy now recognises every encoding, so `ctrl+c` no longer
+falls through to clearing the editor.
+- **Selections that end on a box's border rows no longer fail to select** —
+the range is clamped instead of rejected.
+- **Range delete installs even when click-to-caret is the only editor
+feature.**
+
 ## [0.2.2] - 2026-08-07
 
 Two things the 0.2.1 fallback took with it, put back.

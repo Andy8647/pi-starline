@@ -2,7 +2,7 @@
 
 A Starship-inspired statusline and Opencode-style TUI for [Pi](https://pi.dev).
 
-> Starline is a fork of [pi-zentui](https://github.com/lmilojevicc/pi-zentui) by Luka, renamed and released on its own. It has diverged well past upstream and adds a pill footer style, a colour palette with `$ref` expansion, `model`/`thinking` footer segments, a git host icon, per-segment display options, configurable editor cursor styles, and mouse selection in the fixed editor.
+> Starline is a fork of [pi-zentui](https://github.com/lmilojevicc/pi-zentui) by Luka, renamed and released on its own. It has diverged well past upstream and adds a pill footer style, a colour palette with `$ref` expansion, `model`/`thinking` footer segments, a git host icon, per-segment display options, configurable editor cursor styles, and mouse selection and copying.
 
 ## Screenshots
 
@@ -150,7 +150,7 @@ Settings live in `~/.pi/agent/starline.json`. The file is optional — anything 
 {
 	"footerStyle": "pill",
 	"colors": { "gitBranch": "bold purple" },
-	"fixedEditor": { "enabled": true }
+	"mouse": { "copyOnSelect": false }
 }
 ```
 
@@ -158,17 +158,25 @@ Settings live in `~/.pi/agent/starline.json`. The file is optional — anything 
 
 **[Full configuration reference →](https://github.com/Andy8647/pi-starline/blob/main/docs/configuration.md)** — every option with its default: the pill footer, the colour palette and its `$name` references, footer format templates, per-segment display options, icon overrides, and editor styling.
 
-## Fixed editor (experimental, opt-in)
+## Mouse
 
-**On Pi 0.84 and later, set `tuiMode` to `"fullscreen"` in `/settings` instead.** Pi ships a sticky editor and footer, an independently scrolling transcript, mouse selection and draggable scrollbars of its own on those releases, and Starline's fixed editor cannot reach Pi's renderer there — it detects that and stays out of the way. Everything else in Starline works in both TUI modes. What follows applies to Pi 0.83 and earlier.
+Starline reads and drives Pi 0.84's own renderer, so mouse handling works in
+both TUI modes — use Pi's fullscreen mode (`tuiMode: "fullscreen"`) for the
+sticky editor and footer.
 
-Pins the editor and footer to the bottom of the terminal while the transcript scrolls above, and adds mouse handling Pi has none of: drag to select (the transcript scrolls when the drag reaches an edge), double-click a word, triple-click a line, click to move the caret, click a tool box's border to expand just that box, and a wheel that scrolls whichever of the transcript or the input box the pointer is over.
+- **Select and copy anywhere.** Drag to select in the transcript or the input
+box; double-click a word (paths and kebab-case stay whole), triple-click a
+line. Releasing copies — or hold the selection for `ctrl+c` with
+`mouse.copyOnSelect: false`. Transcript copies drop Starline's rails, rule
+rows and pi-toolbox frame borders.
+- **Click a tool box's hint row to expand just that box**, and collapse it via
+the `(ctrl+o to collapse)` anchor row (pi-toolbox 0.2.2+).
+- **Click to move the caret** in the input box; **backspace/delete remove a
+selected range**; the **wheel scrolls the draft** over the input box.
 
-```text
-/starline fixed-editor enable
-```
-
-**[Fixed editor guide →](https://github.com/Andy8647/pi-starline/blob/main/docs/fixed-editor.md)** — keyboard controls, copy behaviour, and the extensions it cannot run alongside.
+0.2.x's `fixedEditor` config block was renamed to `mouse` (migrated
+automatically, see [the changelog](CHANGELOG.md)); the fixed editor itself is
+gone, superseded by Pi's fullscreen mode.
 
 ## Requirements
 
