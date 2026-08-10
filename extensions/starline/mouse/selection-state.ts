@@ -1,3 +1,5 @@
+import { basename } from "node:path";
+
 /**
  * The one piece of selection state Starline owns.
  *
@@ -33,12 +35,34 @@ export class SelectionPendingState {
 	}
 }
 
-export function selectionHintText(state: SelectionPendingState): string | null {
+export function selectionHintText(
+	state: SelectionPendingState,
+	editorName: string | null = null,
+): string | null {
 	const pending = state.pending;
 	if (!pending) return null;
 	const noun = pending.characters === 1 ? "character" : "characters";
 	const base = `${pending.characters} ${noun} selected, ctrl+c to copy`;
 	return pending.externalEditorKey
-		? `${base} ⋅ ${pending.externalEditorKey} to edit in $EDITOR`
+		? `${base} ⋅ ${pending.externalEditorKey} to edit in ${editorName ?? "$EDITOR"}`
 		: base;
+}
+
+/**
+ * The user's external editor, for the "edit in …" hints.
+ *
+ * `$EDITOR` is a shell variable; the hint must say what it expands to, or a
+ * reader stares at a literal `$EDITOR`. `$VISUAL` outranks `$EDITOR` (the
+ * usual convention: VISUAL is the full-screen one), the first word of the
+ * value is the command, and its basename is what reads well in a hint —
+ * "nvim", not "/opt/homebrew/bin/nvim". Null when neither variable is set;
+ * callers keep the literal `$EDITOR` then, which is itself the hint that
+ * nothing is configured.
+ */
+export function externalEditorName(env: NodeJS.ProcessEnv = process.env): string | null {
+	const value = env.VISUAL || env.EDITOR;
+	if (!value) return null;
+	const command = value.trim().split(/\s+/)[0];
+	if (!command) return null;
+	return basename(command);
 }

@@ -38,7 +38,7 @@ import {
 	VStack,
 } from "@earendil-works/pi-tui";
 import { renderLayoutFrame } from "@earendil-works/pi-tui/dist/layout.js";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { defaultConfig, type PolishedTuiConfig } from "../../extensions/starline/config";
 import {
 	activeEditorViewport,
@@ -130,6 +130,7 @@ const numbered = (count: number) =>
 	Array.from({ length: count }, (_value, index) => `line ${index}`).join("\n");
 
 afterEach(() => {
+	vi.unstubAllEnvs();
 	setActiveEditor(undefined);
 });
 
@@ -1307,8 +1308,15 @@ describe("the two features that share handleViewportInput", () => {
 
 			scene.prototype.copySelectionToClipboard(); // release: arms
 
+			// Unset EDITOR keeps the literal variable name in the hint.
+			vi.stubEnv("EDITOR", "");
 			expect(activeSelectionHintText()).toMatch(
 				/characters selected, ctrl\+c to copy ⋅ ctrl\+g to edit in \$EDITOR$/,
+			);
+			// With $EDITOR set, the hint names the editor it would open.
+			vi.stubEnv("EDITOR", "/usr/bin/nvim");
+			expect(activeSelectionHintText()).toMatch(
+				/characters selected, ctrl\+c to copy ⋅ ctrl\+g to edit in nvim$/,
 			);
 
 			// A transcript selection arms the plain hint.
@@ -1344,8 +1352,14 @@ describe("the two features that share handleViewportInput", () => {
 
 			// Nothing has landed on `handleViewportInput` yet, so no refresh.
 			expect(externalEditorHintText()).toBeNull();
+			// Unset EDITOR keeps the literal variable name in the hint.
+			vi.stubEnv("EDITOR", "");
 			scene.prototype.handleViewportInput("x");
 			expect(externalEditorHintText()).toBe("ctrl+g to edit in $EDITOR");
+			// With $EDITOR set, the hint names the editor it would open.
+			vi.stubEnv("EDITOR", "/opt/homebrew/bin/nvim");
+			scene.prototype.handleViewportInput("x");
+			expect(externalEditorHintText()).toBe("ctrl+g to edit in nvim");
 		} finally {
 			setKeybindings(original);
 		}

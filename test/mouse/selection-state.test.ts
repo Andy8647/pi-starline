@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	externalEditorName,
 	SelectionPendingState,
 	selectionHintText,
 } from "../../extensions/starline/mouse/selection-state";
@@ -58,11 +59,38 @@ describe("selectionHintText", () => {
 		// so the hint carries the way to act on the whole draft.
 		const state = new SelectionPendingState();
 		state.arm(5, "ctrl+g");
+		// The resolved editor name is injected; null keeps the literal $EDITOR,
+		// which is itself the hint that nothing is configured.
+		expect(selectionHintText(state, "nvim")).toBe(
+			"5 characters selected, ctrl+c to copy ⋅ ctrl+g to edit in nvim",
+		);
 		expect(selectionHintText(state)).toBe(
 			"5 characters selected, ctrl+c to copy ⋅ ctrl+g to edit in $EDITOR",
 		);
 		// An empty key (unbound) shows no suffix.
 		state.arm(5, "");
 		expect(selectionHintText(state)).toBe("5 characters selected, ctrl+c to copy");
+	});
+
+	describe("externalEditorName", () => {
+		it("reads VISUAL before EDITOR and strips the path", () => {
+			expect(externalEditorName({ EDITOR: "/opt/homebrew/bin/nvim" } as NodeJS.ProcessEnv)).toBe(
+				"nvim",
+			);
+			expect(
+				externalEditorName({
+					EDITOR: "code",
+					VISUAL: "/usr/bin/vim",
+				} as NodeJS.ProcessEnv),
+			).toBe("vim");
+		});
+
+		it("takes the first word of a compound value", () => {
+			expect(externalEditorName({ EDITOR: "code --wait" } as NodeJS.ProcessEnv)).toBe("code");
+		});
+
+		it("is null when neither variable is set", () => {
+			expect(externalEditorName({} as NodeJS.ProcessEnv)).toBeNull();
+		});
 	});
 });

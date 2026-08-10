@@ -107,7 +107,7 @@ import { activeEditor, wheelTarget } from "./editor-mouse";
 import { scrollEditorBy } from "./editor-scroll";
 import { editorVisualRowCount } from "./editor-text-cursor";
 import { type BoxLike, scrollContentLinesFor } from "./hit-test";
-import { SelectionPendingState, selectionHintText } from "./selection-state";
+import { externalEditorName, SelectionPendingState, selectionHintText } from "./selection-state";
 import { type ExpandTarget, expandKeyText, expandTargetAt, keyTextFor } from "./tool-box";
 import { cleanTranscriptRows } from "./transcript-copy";
 import { wordRangeAt } from "./word-select";
@@ -242,7 +242,7 @@ let hasWarned = false;
 let activeState: SelectionPendingState | undefined;
 
 export function activeSelectionHintText(): string | null {
-	return activeState ? selectionHintText(activeState) : null;
+	return activeState ? selectionHintText(activeState, externalEditorName()) : null;
 }
 
 /**
@@ -273,7 +273,9 @@ function refreshExternalEditorHint(
 		if (!viewport) return;
 		const visualRows = editorVisualRowCount(viewport.editor);
 		if (visualRows > viewport.viewport.contentRows) {
-			externalEditorHint = `${keyTextFor(EXTERNAL_EDITOR_KEYBINDING)} to edit in $EDITOR`;
+			externalEditorHint = `${keyTextFor(EXTERNAL_EDITOR_KEYBINDING)} to edit in ${
+				externalEditorName() ?? "$EDITOR"
+			}`;
 		}
 	} catch {
 		// Best effort: an editor this module cannot read offers no hint.
