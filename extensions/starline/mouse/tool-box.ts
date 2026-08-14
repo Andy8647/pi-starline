@@ -138,7 +138,13 @@ function hintPattern(keyText: string): RegExp {
 	if (cachedPattern && cachedKeyText === keyText) return cachedPattern;
 	// `\([^()]*` is the parenthesis Pi always opens before the hint, with
 	// whatever prefix the call site put inside it ("... 12 more lines, ").
-	cachedPattern = new RegExp(`\\([^()]*${escapeRegExp(keyText)} to (expand|collapse)\\)`);
+	// Case-insensitive: pi-mcp-adapter renders its collapsed-result hint as
+	// `(Ctrl+O to expand)` — capitalized, unlike the `ctrl+o` Pi's own
+	// `keyText` yields — and a case-sensitive match declined the press, so MCP
+	// tool boxes were the one box a click could not open. Widening the match
+	// only reaches rows an expandable component renders about its own key, so
+	// the cost is the same accepted false positive as limitation 2 above.
+	cachedPattern = new RegExp(`\\([^()]*${escapeRegExp(keyText)} to (expand|collapse)\\)`, "i");
 	cachedKeyText = keyText;
 	return cachedPattern;
 }

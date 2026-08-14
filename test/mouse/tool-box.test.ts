@@ -135,6 +135,14 @@ describe("expandHintAction", () => {
 		const framed = `│ ${expandHintLine(EXPAND_KEY_TEXT, false)}   │`;
 		expect(expandHintAction(framed, EXPAND_KEY_TEXT)).toBe("expand");
 	});
+
+	it("matches the capitalized hint pi-mcp-adapter renders", () => {
+		// tool-result-renderer.ts hardcodes `(Ctrl+O to expand)` instead of
+		// asking Pi's `keyText`; a case-sensitive match made MCP boxes the one
+		// box a click could not open.
+		expect(expandHintAction("(Ctrl+O to expand)", EXPAND_KEY_TEXT)).toBe("expand");
+		expect(expandHintAction("(Ctrl+O to collapse)", EXPAND_KEY_TEXT)).toBe("collapse");
+	});
 });
 
 describe("expandKeyText", () => {

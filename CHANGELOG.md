@@ -10,6 +10,15 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [0.3.1] - 2026-08-11
+
+Click-to-expand now works on MCP tool boxes. pi-mcp-adapter renders its
+collapsed-result hint as `(Ctrl+O to expand)` — capitalized, unlike the
+lowercase `ctrl+o` Pi's own keybinding text yields — and Starline's hint
+match was case-sensitive, so a click on an MCP box's hint row silently fell
+through to selection. The match is now case-insensitive; core tool boxes are
+unaffected.
+
 ## [0.3.0] - 2026-08-10
 
 The mouse work: Starline now reads and drives Pi 0.84's own renderer instead of
