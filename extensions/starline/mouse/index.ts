@@ -171,7 +171,7 @@ type MouseCapablePrototype = {
 		row: number,
 		selection: SelectionBounds,
 	): SelectionColumns;
-	copySelectionToClipboard(this: unknown): void;
+	copySelectionToClipboard(this: unknown): Promise<void>;
 	handleViewportInput(this: unknown, data: string): { consume: boolean } | undefined;
 	flash(this: unknown, message: string, durationMs?: number): void;
 	getWordSelection(this: unknown, point: SelectionPoint): SelectionBounds | undefined;
@@ -334,6 +334,14 @@ function selectionText(receiver: MouseCapablePrototype, bounds: SelectionBounds)
  * `receiver` here is Pi's own instance (the wrapper runs inside Pi's own
  * method call, not through the extension-facing Proxy), so a plain
  * assignment is safe.
+ *
+ * 0.84.2 (#8110) boundary: Pi's copy is now async, and when the host injects
+ * a clipboard (`copySelection` — coding-agent does since 0.84.2), the flash
+ * lands after `await`, outside this synchronous shadow. `copyNotice: false`
+ * therefore still suppresses the toast on the OSC 52 fallback path (no host
+ * clipboard) but not on the host-clipboard path. The ctrl+c caller must stay
+ * synchronous — it returns `{ consume: true }` to Pi's `handleInput` — so
+ * awaiting Pi's copy here is not an option.
  */
 function copyWithNotice(receiver: MouseCapablePrototype, showNotice: boolean): void {
 	if (showNotice) {
