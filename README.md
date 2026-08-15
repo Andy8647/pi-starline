@@ -1,6 +1,6 @@
 # Starline
 
-A Starship-inspired statusline and Opencode-style TUI for [Pi](https://pi.dev).
+A Starship-inspired statusline, Opencode-style editor chrome, and fullscreen mouse control for [Pi](https://pi.dev).
 
 > Starline is a fork of [pi-zentui](https://github.com/lmilojevicc/pi-zentui) by Luka, renamed and released on its own. It has diverged well past upstream and adds a pill footer style, a colour palette with `$ref` expansion, `model`/`thinking` footer segments, a git host icon, per-segment display options, configurable editor cursor styles, and mouse selection and copying.
 
@@ -10,10 +10,12 @@ A Starship-inspired statusline and Opencode-style TUI for [Pi](https://pi.dev).
 
 ## What is this?
 
-Starline brings two popular aesthetics to Pi:
+Starline makes Pi's fullscreen mode feel like a finished terminal app — three
+pieces of one product, not a theme:
 
-- **[Starship](https://starship.rs/) footer** — shows your current directory, git branch, git status indicators, and runtime/version detection in a compact, icon-rich format
-- **[Opencode](https://github.com/opencode-ai/opencode) editor** — clean bordered input box with accent rail, copy-friendly mode, and model/provider display inside the editor frame
+- **See the state** — a Starship-inspired statusline and pill footer: current directory, git branch and status, runtime/version detection, context usage and token counts in a compact, icon-rich format
+- **Type comfortably** — Opencode-style editor chrome: a clean bordered input box with accent rail and copy-friendly mode, model and provider inside the frame, paste collapse, and a `ctrl+g` hint pointing at your `$EDITOR` when a draft outgrows the box
+- **Drive with the mouse** — fullscreen mouse control: select and copy anywhere, click a tool box to expand just it, click to move the caret, wheel to scroll the draft — [see Mouse](#mouse-fullscreen-control)
 
 ## Features
 
@@ -37,7 +39,26 @@ Starline brings two popular aesthetics to Pi:
 - Configurable model, provider, and thinking-level indicator colors
 - Prompt-box-style user messages matching the Starline input chrome
 - Copy-friendly mode hides editor and previous-message rail glyphs so terminal selection copies less chrome
-- **Fixed editor** (experimental, opt-in): Pin the editor and footer at the bottom of the terminal while the transcript scrolls above
+
+### Mouse (fullscreen control)
+
+The second half of the product: the statusline tells you where you are, the
+mouse lets you act on what you see. Starline drives Pi 0.84's own renderer
+(`tuiMode: "fullscreen"`) by patching its methods directly — the extension API
+stops at high-level hooks, and pending-copy, click-to-expand and clean-copy all
+need to reach into the renderer itself. That is also why they live in Starline:
+they sit on the same prototype patches the footer and editor already use, and
+Pi keeps its core deliberately minimal — behaviours belong in extensions.
+
+- **Select and copy anywhere.** Drag to select in the transcript or the input box; double-click a word (paths and kebab-case stay whole), triple-click a line. Releasing copies — or hold the selection for `ctrl+c` with `mouse.copyOnSelect: false`, the behaviour [Pi #7720](https://github.com/earendil-works/pi/issues/7720) asks for upstream.
+- **Clean copies.** Transcript selections drop Starline's rails, rule rows and pi-toolbox frame borders before they reach the clipboard; editor selections copy the draft's text, not the painted rows.
+- **Selection hint.** A pending selection shows exactly how many characters `ctrl+c` will copy, and a selection inside the editor names your editor — `ctrl+g to edit in nvim`.
+- **Click to expand one tool box.** A click on a box's hint row expands just that box (MCP boxes included), and the `(ctrl+o to collapse)` anchor row closes it again.
+- **Click to move the caret** in the input box; **backspace/delete remove a selected range**; the **wheel scrolls the draft** over the input box, and a draft taller than the box keeps the `ctrl+g` external-editor hint on screen.
+
+0.2.x's `fixedEditor` config block was renamed to `mouse` (migrated
+automatically, see [the changelog](CHANGELOG.md)); the fixed editor itself is
+gone, superseded by Pi's fullscreen mode.
 
 ### Git Status Icons
 
@@ -157,26 +178,6 @@ Settings live in `~/.pi/agent/starline.json`. The file is optional — anything 
 `/starline` opens an interactive menu for the settings worth changing day to day: colour sources, feature toggles, which built-in segments show, and where third-party extension statuses go. `Tab` and `Shift+Tab` move between its five sections.
 
 **[Full configuration reference →](https://github.com/Andy8647/pi-starline/blob/main/docs/configuration.md)** — every option with its default: the pill footer, the colour palette and its `$name` references, footer format templates, per-segment display options, icon overrides, and editor styling.
-
-## Mouse
-
-Starline reads and drives Pi 0.84's own renderer, so mouse handling works in
-both TUI modes — use Pi's fullscreen mode (`tuiMode: "fullscreen"`) for the
-sticky editor and footer.
-
-- **Select and copy anywhere.** Drag to select in the transcript or the input
-box; double-click a word (paths and kebab-case stay whole), triple-click a
-line. Releasing copies — or hold the selection for `ctrl+c` with
-`mouse.copyOnSelect: false`. Transcript copies drop Starline's rails, rule
-rows and pi-toolbox frame borders.
-- **Click a tool box's hint row to expand just that box**, and collapse it via
-the `(ctrl+o to collapse)` anchor row (pi-toolbox 0.2.2+).
-- **Click to move the caret** in the input box; **backspace/delete remove a
-selected range**; the **wheel scrolls the draft** over the input box.
-
-0.2.x's `fixedEditor` config block was renamed to `mouse` (migrated
-automatically, see [the changelog](CHANGELOG.md)); the fixed editor itself is
-gone, superseded by Pi's fullscreen mode.
 
 ## Requirements
 
