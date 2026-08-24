@@ -255,6 +255,18 @@ export default function (pi: ExtensionAPI) {
 	const installMousePatches = () => {
 		uninstallMouse();
 		if (!getCurrentConfig().mouse.enabled) return;
+		// `TuiAltScreen` only ships with pi-tui >= 0.84.0 (the peer range below
+		// already says so). This guard is for environments that bypass peer
+		// resolution: fail with a readable hint instead of a TypeError on
+		// `TuiAltScreen.prototype`.
+		if (!TuiAltScreen) {
+			console.warn(
+				"starline: mouse support needs @earendil-works/pi-tui >= 0.84.0 (" +
+					"TuiAltScreen is not exported by the installed pi-tui). Upgrade Pi, " +
+					"or wait for your distribution to bundle a newer one.",
+			);
+			return;
+		}
 		// Repaints are not wired from here: each patch asks its own receiver —
 		// the live renderer it is running inside — to render. Handing it the
 		// extension's `refresh` instead tied the pending hint to the footer's
