@@ -10,6 +10,26 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [0.3.2] - 2026-08-24
+
+Fixed a startup crash for environments running an older Pi. Starline needs
+`@earendil-works/pi-tui >= 0.84.0` — that is where its alternate-screen
+renderer (`TuiAltScreen`) and the width helpers ship — but the peer range
+claimed `>= 0.80.3`. Distributions that bundle an older `pi-coding-agent`
+(e.g. outfitter, locked to `^0.80.3`) resolved an old pi-tui, so the
+named import came back `undefined` and the extension died on
+`TuiAltScreen.prototype`.
+
+- Peer ranges for `@earendil-works/pi-ai`, `pi-coding-agent`, and `pi-tui`
+  raised to `>= 0.84.0`, so npm flags incompatible environments at install
+  time instead of failing at runtime.
+- Added a guard: if `TuiAltScreen` is missing, mouse features print a readable
+  warning instead of throwing.
+- The Install section of the README now states the Pi ≥ 0.84.0 requirement.
+
+Upgrade Pi to 0.84+ (or wait for your distribution to bundle it) and update
+Starline to pick up the fix.
+
 ## [0.3.1] - 2026-08-11
 
 Click-to-expand now works on MCP tool boxes. pi-mcp-adapter renders its
