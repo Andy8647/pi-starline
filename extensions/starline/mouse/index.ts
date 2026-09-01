@@ -10,17 +10,17 @@
  * registry holds one behaviour per adapter key and a second registration would
  * silently replace the first:
  *
- * `selectionPendingMode`, across two patches:
- * - `copySelectionToClipboard` — the method Pi calls itself on mouse
- *   release. Wrapped to arm a pending state instead of copying immediately
- *   when `copyOnSelect` is off, calling through for every other caller
- *   (including its own ctrl+c path below).
- * - `handleViewportInput` — watched for a bare `ctrl+c` (`\x03`); with a
- *   selection pending it performs the real copy by calling back through
- *   `copySelectionToClipboard` (guarded so that call is recognised as the
- *   real thing and not re-armed), then clears the pending state. Anything
- *   else — including `ctrl+c` with nothing pending — calls through to Pi's
- *   own handler, which is what keeps `ctrl+c` interrupting.
+ * `selectionHint`, one patch plus a derived hint:
+ * - `copyActiveSelectionToClipboard` — the method Pi 0.84.4's Ctrl+X handler
+ *   reaches (`handleCopyCommand` with `preferSelection`). Wrapped so a
+ *   selection the clean-copy features recognise copies clean, calling
+ *   through for everything else.
+ * - The hint is derived, not owned: `activeSelectionHintText()` renders the
+ *   live renderer's state — an active selection that is not being
+ *   auto-copied (`getCopyOnSelect() === false`) — so select-without-copy is
+ *   Pi's own `fullscreenCopyOnSelect`, and this module only tells the user
+ *   what to press. The copy key is `app.message.copy` (default ctrl+x),
+ *   resolved from Pi's keybinding registry so a rebind shows up in the hint.
  *
  * `pathAwareWords`, one patch:
  * - `getWordSelection` — Pi's own double-click word lookup, replaced with
@@ -63,7 +63,7 @@
  *   interrupt and exit chords cannot be swallowed by it from either direction.
  *   Every backspace it does not act on falls through and deletes one character.
  *
- * `editorBufferCopy`, sharing the `copySelectionToClipboard` patch:
+ * `editorBufferCopy`, sharing the `copyActiveSelectionToClipboard` patch:
  * - A selection lying inside the input box is copied from the *draft* rather
  *   than from the rendered rows. That is the one place this module builds
  *   clipboard bytes itself, and the reason is that the rendered rows are not
@@ -80,15 +80,10 @@
  *   was clean before changes.
  *
  * Everywhere else the clipboard gets exactly what Pi's own
- * `copySelectionToClipboard` puts there — see `installMouse` for why frame-free
+ * `copyActiveSelectionToClipboard` puts there — see `installMouse` for why frame-free
  * selection is not part of this.
  */
-import {
-	getKeybindings,
-	matchesKey,
-	sliceByColumn,
-	stripTerminalSequences,
-} from "@earendil-works/pi-tui";
+import { getKeybindings, sliceByColumn, stripTerminalSequences } from "@earendil-works/pi-tui";
 import type { PolishedTuiConfig } from "../config";
 import { installPrototypePatch } from "../prototype-patch-registry";
 import {
@@ -107,37 +102,18 @@ import { activeEditor, wheelTarget } from "./editor-mouse";
 import { scrollEditorBy } from "./editor-scroll";
 import { editorVisualRowCount } from "./editor-text-cursor";
 import { type BoxLike, scrollContentLinesFor } from "./hit-test";
-import { externalEditorName, SelectionPendingState, selectionHintText } from "./selection-state";
+import { externalEditorName, selectionHintText } from "./selection-state";
 import { type ExpandTarget, expandKeyText, expandTargetAt, keyTextFor } from "./tool-box";
 import { cleanTranscriptRows } from "./transcript-copy";
 import { wordRangeAt } from "./word-select";
 
+/** Pi's interrupt chord — refused by the range-delete branch, never consumed. */
 const CTRL_C = "\x03";
 /** Pi's exit chord, and `tui.editor.deleteCharForward`'s second default key. */
 const CTRL_D = "\x04";
 
-/**
- * Whether `data` is the ctrl+c chord, in whatever encoding the terminal sent
- * it. Pi 0.84 pushes the Kitty keyboard protocol (and falls back to xterm
- * modifyOtherKeys) on every capable terminal, and under either protocol the
- * chord arrives as an escape sequence — `\x1b[99;5u` or `\x1b[27;5;99~` —
- * never as the bare `\x03` a plain legacy terminal sends. The pending copy
- * must recognise all three, or ctrl+c falls through to Pi's own binding
- * (`app.clear`, clear the editor) exactly when it was about to copy. Pi's
- * own key matcher is the authority here: it parses every protocol this
- * build negotiates, and its `ctrl+c` arm accepts the raw control character
- * too, so a legacy terminal keeps working unchanged.
- */
-function isCtrlC(data: unknown): boolean {
-	if (typeof data !== "string" || data.length === 0) return false;
-	try {
-		return matchesKey(data, "ctrl+c");
-	} catch {
-		// A pi-tui build that has moved `matchesKey` must not break the copy:
-		// fall back to the raw byte, which is what this branch has always read.
-		return data === CTRL_C;
-	}
-}
+/** The binding Pi's selection copy lives on (`app.message.copy`, default ctrl+x). */
+const COPY_KEYBINDING = "app.message.copy";
 
 /** Opens the draft in `$EDITOR` — the hint an editor selection's hint carries. */
 const EXTERNAL_EDITOR_KEYBINDING = "app.editor.external";
@@ -171,7 +147,21 @@ type MouseCapablePrototype = {
 		row: number,
 		selection: SelectionBounds,
 	): SelectionColumns;
-	copySelectionToClipboard(this: unknown): Promise<void>;
+	/**
+	 * Pi 0.84.4's public selection-copy entry (`tui-alt-screen.ts`): true when
+	 * the active selection was copied, false when there was none. This is what
+	 * coding-agent's Ctrl+X handler reaches, so a clean copy answering this
+	 * method answers exactly the copies that key performs.
+	 */
+	copyActiveSelectionToClipboard(this: unknown): Promise<boolean>;
+	/**
+	 * Pi 0.84.4's select-without-copy state. The hint reads it to decide
+	 * whether a selection is waiting for the copy key or was already copied on
+	 * release.
+	 */
+	getCopyOnSelect(this: unknown): boolean;
+	/** Whether the fullscreen viewport has a non-empty active text selection. */
+	hasActiveSelection(this: unknown): boolean;
 	handleViewportInput(this: unknown, data: string): { consume: boolean } | undefined;
 	flash(this: unknown, message: string, durationMs?: number): void;
 	getWordSelection(this: unknown, point: SelectionPoint): SelectionBounds | undefined;
@@ -203,7 +193,7 @@ type MouseCapablePrototype = {
 	selectionFocus?: unknown;
 	/**
 	 * `TuiBase.terminal` (`tui.js:101`); `rows` is a getter on it, and `write` is
-	 * how `copySelectionToClipboard` reaches the clipboard — it emits OSC 52
+	 * how `copyActiveSelectionToClipboard` reaches the clipboard — it emits OSC 52
 	 * through the terminal rather than through any renderer method.
 	 */
 	terminal?: { rows?: number; write?: (data: string) => void };
@@ -234,15 +224,72 @@ export type InstallMouseDeps = {
 let hasWarned = false;
 
 /**
- * Reader for the pending-selection state of whichever `installMouse` call is
- * currently active, mirroring `pasteExpandHintText`'s pattern in
- * `../paste-collapse.ts`. `ui.ts` composes this with the paste hint
- * on every render; there is nothing to wire when no mouse install is active.
+ * The live renderer the hint reads. `installMouse` receives only the
+ * prototype, so the instance is captured here from the first patched call
+ * that sees one — `handleViewportInput` sees every key and mouse event, and
+ * repaints ride Pi's own `requestRender`, so the hint is never more than one
+ * input away from the current renderer.
  */
-let activeState: SelectionPendingState | undefined;
+let activeReceiver: MouseCapablePrototype | undefined;
+
+/**
+ * Reader for the derived selection hint of whichever `installMouse` call is
+ * currently active, mirroring `pasteExpandHintText`'s pattern in
+ * `../paste-collapse.ts`. `ui.ts` composes this with the paste hint on every
+ * render; there is nothing to wire when no mouse install is active.
+ *
+ * The hint is computed on demand from the live renderer, never cached:
+ * "selected, ctrl+x to copy" is true exactly while Pi is not auto-copying
+ * and something is actually selected. The character count goes through the
+ * same two copy paths the copy key itself would answer, so the hint's
+ * promise and the clipboard's bytes stay in agreement.
+ */
+let activeHint:
+	| { getConfig: () => PolishedTuiConfig; bufferCopy: boolean; cleanCopy: boolean }
+	| undefined;
 
 export function activeSelectionHintText(): string | null {
-	return activeState ? selectionHintText(activeState, externalEditorName()) : null;
+	if (!activeHint || !activeReceiver) return null;
+	const { getConfig, bufferCopy, cleanCopy } = activeHint;
+	try {
+		// Pi auto-copies on release; a selection that is already on the
+		// clipboard needs no hint. `getCopyOnSelect()` is the live value, so a
+		// setting flipped at runtime flips the hint with it.
+		if (activeReceiver.getCopyOnSelect()) return null;
+		if (!activeReceiver.hasActiveSelection()) return null;
+		const bounds = activeReceiver.getSelectionBounds();
+		if (!bounds) return null;
+		const pending = pendingSelectionText(
+			activeReceiver,
+			getConfig(),
+			bounds,
+			bufferCopy,
+			cleanCopy,
+		);
+		return selectionHintText(
+			pending.text.length,
+			copyKeyText(),
+			// An editor selection cannot grow past the visible window — there is
+			// no drag-scroll — so the hint for one points at the external editor,
+			// the way to act on the whole draft. "" (unbound) shows no suffix.
+			pending.inEditor ? keyTextFor(EXTERNAL_EDITOR_KEYBINDING) : undefined,
+			externalEditorName(),
+		);
+	} catch {
+		// The renderer is best effort; a receiver that has moved on offers no
+		// hint rather than breaking the metadata row.
+		return null;
+	}
+}
+
+/**
+ * The rendered name of the copy key, for the hint. `app.message.copy` is what
+ * Pi 0.84.4's Ctrl+X path is bound to (see `handleCopyCommand` in
+ * interactive-mode.ts), and the registry resolves a user rebind so the hint
+ * always quotes the key that really copies.
+ */
+function copyKeyText(): string {
+	return keyTextFor(COPY_KEYBINDING);
 }
 
 /**
@@ -283,10 +330,10 @@ function refreshExternalEditorHint(
 }
 
 /**
- * The exact text `copySelectionToClipboard` would produce, built the same way
- * it builds it: per row, through the receiver's own `getSelectionColumns`,
- * then `sliceByColumn` and `stripTerminalSequences` (both exported by
- * pi-tui), joined with "\n" — see `copySelectionToClipboard` in
+ * The exact text Pi's selection copy would produce, built the same way it
+ * builds it: per row, through the receiver's own `getSelectionColumns`, then
+ * `sliceByColumn` and `stripTerminalSequences` (both exported by pi-tui),
+ * joined with "\n" — see `copyActiveSelectionToClipboard` in
  * `node_modules/@earendil-works/pi-tui/dist/tui-alt-screen.js`. Reusing Pi's
  * own helpers instead of re-deriving the column math is what keeps this exact
  * rather than an estimate. The scroll-view case needs the box behind
@@ -322,42 +369,6 @@ function selectionText(receiver: MouseCapablePrototype, bounds: SelectionBounds)
 }
 
 /**
- * Runs `copySelectionToClipboard` (Pi's real one, reached through the
- * receiver so the `mouse-copy` patch's re-entrancy guard applies) with its
- * own "Copied!" flash suppressed when `copyNotice` is off.
- *
- * Pi's copy method flashes unconditionally — see
- * `node_modules/@earendil-works/pi-tui/dist/tui-alt-screen.js`. Respecting
- * `copyNotice: false` therefore means shadowing `flash` on the receiver for
- * the duration of this one call and restoring it immediately after, the same
- * shadow-and-restore shape `installPasteCollapse` already uses on `handlePaste`.
- * `receiver` here is Pi's own instance (the wrapper runs inside Pi's own
- * method call, not through the extension-facing Proxy), so a plain
- * assignment is safe.
- *
- * 0.84.2 (#8110) boundary: Pi's copy is now async, and when the host injects
- * a clipboard (`copySelection` — coding-agent does since 0.84.2), the flash
- * lands after `await`, outside this synchronous shadow. `copyNotice: false`
- * therefore still suppresses the toast on the OSC 52 fallback path (no host
- * clipboard) but not on the host-clipboard path. The ctrl+c caller must stay
- * synchronous — it returns `{ consume: true }` to Pi's `handleInput` — so
- * awaiting Pi's copy here is not an option.
- */
-function copyWithNotice(receiver: MouseCapablePrototype, showNotice: boolean): void {
-	if (showNotice) {
-		receiver.copySelectionToClipboard();
-		return;
-	}
-	const originalFlash = receiver.flash;
-	receiver.flash = () => {};
-	try {
-		receiver.copySelectionToClipboard();
-	} finally {
-		receiver.flash = originalFlash;
-	}
-}
-
-/**
  * Writes the draft's own text to the clipboard for a selection that lies inside
  * the input box, and reports whether it did — `false` means this selection was
  * not the editor's and Pi's own copy must run instead.
@@ -368,14 +379,13 @@ function copyWithNotice(receiver: MouseCapablePrototype, showNotice: boolean): v
  * the frame fills each row out to, and a newline wherever the draft happened to
  * wrap. None of that is in the draft. The bytes go out the same way Pi's own
  * copy sends them — OSC 52 through `terminal.write`, see
- * `copySelectionToClipboard` in
+ * `copyActiveSelectionToClipboard` in
  * `node_modules/@earendil-works/pi-tui/dist/tui-alt-screen.js` — so nothing
  * downstream can tell the two copies apart.
  *
- * The flash is unconditional, exactly as Pi's is. `copyNotice: false` is
- * honoured by `copyWithNotice`, which shadows `flash` around the whole call;
- * checking the setting here as well would suppress the notice twice on one path
- * and not at all on the other.
+ * The flash is gated on `copyNotice` at the write itself, exactly once — Pi's
+ * own copy flashes unconditionally, so this check is the whole notice path for
+ * a clean copy.
  */
 function editorTextForSelection(
 	receiver: MouseCapablePrototype,
@@ -407,7 +417,7 @@ function copyEditorSelection(receiver: MouseCapablePrototype, config: PolishedTu
 		const write = receiver.terminal?.write;
 		if (typeof write !== "function") return false;
 		write.call(receiver.terminal, `\x1b]52;c;${Buffer.from(text).toString("base64")}\x07`);
-		receiver.flash("Copied!");
+		if (config.mouse.copyNotice) receiver.flash("Copied!");
 		return true;
 	} catch {
 		// Reading the editor and the layout is best effort. Anything this trips
@@ -508,7 +518,7 @@ function copyTranscriptSelection(
 		const write = receiver.terminal?.write;
 		if (typeof write !== "function") return false;
 		write.call(receiver.terminal, `\x1b]52;c;${Buffer.from(text).toString("base64")}\x07`);
-		receiver.flash("Copied!");
+		if (config.mouse.copyNotice) receiver.flash("Copied!");
 		return true;
 	} catch {
 		// Cleaning reads the layout and the selection, both best effort.
@@ -532,8 +542,6 @@ function copyTranscriptSelection(
  * all. `tui.editor.deleteCharForward` binds `ctrl+d` by default, and ctrl+c and
  * ctrl+d are Pi's interrupt and exit chords; consuming either because a
  * selection happens to be live would break a global key to save a keystroke.
- * The ctrl+c branch above already returns before this is reached, but stating
- * it here means the guarantee does not depend on branch order.
  */
 function isRangeDeleteKey(data: unknown): boolean {
 	if (typeof data !== "string" || data.length === 0) return false;
@@ -581,11 +589,11 @@ function deleteSelectedRange(receiver: MouseCapablePrototype, config: PolishedTu
 }
 
 /**
- * The text a copy of this selection would put on the clipboard, for the pending
- * hint's character count.
+ * The text a copy of this selection would put on the clipboard, for the hint's
+ * character count.
  *
  * It has to ask the same two paths the copy itself asks, in the same order, or
- * the hint promises a number ctrl+c does not deliver.
+ * the hint promises a number the copy does not deliver.
  */
 function pendingSelectionText(
 	receiver: MouseCapablePrototype,
@@ -596,8 +604,8 @@ function pendingSelectionText(
 ): { text: string; inEditor: boolean } {
 	const buffered = bufferCopy ? editorTextForSelection(receiver, config, bounds) : undefined;
 	if (buffered !== undefined) return { text: buffered, inEditor: true };
-	// The count the hint shows must be the number ctrl+c actually delivers, so
-	// a selection the copy would clean is counted after cleaning.
+	// The count the hint shows must be the number the copy key actually
+	// delivers, so a selection the copy would clean is counted after cleaning.
 	if (cleanCopy && config.mouse.transcriptCleanCopy) {
 		try {
 			const cleaned = transcriptSelectionText(receiver, config, bounds);
@@ -611,25 +619,24 @@ function pendingSelectionText(
 }
 
 /**
- * Installs the two features that live on `copySelectionToClipboard`.
+ * Installs the clean-copy features on Pi 0.84.4's public copy entry, and the
+ * derived selection hint.
  *
- * `selectionPendingMode` — arm on release, copy on ctrl+c — spans two patches:
- * the copy patch decides whether a release copies now or arms and waits, and
- * the `handleViewportInput` patch is what a waiting selection is eventually
- * released by.
+ * `editorBufferCopy` and `transcriptCleanCopy` sit in front of
+ * `copyActiveSelectionToClipboard` — the method coding-agent's Ctrl+X handler
+ * reaches (`handleCopyCommand` with `preferSelection`) — so the clean copy
+ * answers exactly the copies that key performs. They share one patch rather
+ * than taking a key each because `installPrototypePatch` holds exactly one
+ * behaviour per adapter key: a second registration under `mouse-copy` would
+ * silently replace the first, and two different keys would leave the order
+ * they run in — and which of them gets to consume the call — implicit. Here
+ * the precedence is written down: the buffer copy answers first, and only
+ * when it declines does the clean copy or predecessor see the call.
  *
- * `editorBufferCopy` sits in front of the real copy on that same method. They
- * share one patch rather than taking a key each because
- * `installPrototypePatch` holds exactly one behaviour per adapter key: a second
- * registration under `mouse-copy` would silently replace the first, and two
- * different keys would leave the order they run in — and which of them gets to
- * consume the call — implicit. Here the precedence is written down: the buffer
- * copy answers first, and only when it declines does the pending mode or
- * predecessor see the call.
- *
- * Either feature can be off. With `selectionPendingMode` unavailable there is
- * no state and every call is a real copy; with `editorBufferCopy` unavailable
- * the clipboard is Pi's own bytes, exactly as before.
+ * `selectionHint` owns no state at all: it records the config reader and the
+ * clean-copy flags so `activeSelectionHintText()` can derive the hint on
+ * demand from the live renderer. Either clean-copy feature can be off; with
+ * neither available the clipboard is Pi's own bytes, exactly as before.
  */
 function installCopying(
 	prototype: MouseCapablePrototype,
@@ -639,81 +646,40 @@ function installCopying(
 	const bufferCopy = features.has("editorBufferCopy");
 	const cleanCopy = features.has("transcriptCleanCopy");
 	const rangeDelete = features.has("editorClickToCaret");
-	const pendingMode = features.has("selectionPendingMode");
-	const state = pendingMode ? new SelectionPendingState() : undefined;
-	const previousState = activeState;
-	if (state) activeState = state;
-
-	// Set while this module is driving `copySelectionToClipboard` itself (the
-	// ctrl+c path below), so the `mouse-copy` patch performs the copy instead of
-	// re-arming the state it is itself in the middle of clearing.
-	let performingRealCopy = false;
+	const hint = features.has("selectionHint");
+	const previousHint = activeHint;
+	if (hint) activeHint = { getConfig: deps.getConfig, bufferCopy, cleanCopy };
 
 	const cleanups: Array<() => void> = [];
 
-	// Only installed when a feature that answers `copySelectionToClipboard` is
-	// on. With just `editorClickToCaret` the method is not ours to touch, and a
-	// Pi that has moved it must not make this install throw.
-	if (pendingMode || bufferCopy || cleanCopy) {
+	// Only installed when a feature that answers `copyActiveSelectionToClipboard`
+	// is on. With just `editorClickToCaret` or `selectionHint` the method is
+	// not ours to touch, and a Pi that has moved it must not make this install
+	// throw.
+	if (bufferCopy || cleanCopy) {
 		cleanups.push(
 			installPrototypePatch(
 				prototype,
-				"copySelectionToClipboard",
+				"copyActiveSelectionToClipboard",
 				"mouse-copy",
 				({ predecessor, receiver, args }) => {
 					const typedReceiver = receiver as MouseCapablePrototype;
 					const config = deps.getConfig();
-					if (!state || config.mouse.copyOnSelect || performingRealCopy) {
-						// The real copy, whether Pi triggered it directly on release
-						// (`copyOnSelect: true`), this module is driving it itself for
-						// ctrl+c below, or pending mode is not installed at all.
-						if (bufferCopy && copyEditorSelection(typedReceiver, config)) return undefined;
-						if (
-							cleanCopy &&
-							config.mouse.transcriptCleanCopy &&
-							copyTranscriptSelection(typedReceiver, config)
-						) {
-							return undefined;
-						}
-						return Reflect.apply(predecessor, receiver, args);
+					if (bufferCopy && copyEditorSelection(typedReceiver, config)) return true;
+					if (
+						cleanCopy &&
+						config.mouse.transcriptCleanCopy &&
+						copyTranscriptSelection(typedReceiver, config)
+					) {
+						return true;
 					}
-					const bounds = typedReceiver.getSelectionBounds();
-					if (!bounds) {
-						// A collapsed or empty selection (e.g. a plain click after a prior
-						// drag) still reaches this call — Pi runs it unconditionally on
-						// every release and relies on its own `if (!selection) return;`
-						// guard. Any stale arm from an earlier selection must not survive
-						// this: left in place, it would make a later ctrl+c consume the
-						// key for a no-op copy instead of falling through to interrupt.
-						if (state.pending) {
-							state.clear();
-							typedReceiver.requestRender();
-						}
-						return undefined;
-					}
-					const pendingText = pendingSelectionText(
-						typedReceiver,
-						config,
-						bounds,
-						bufferCopy,
-						cleanCopy,
-					);
-					state.arm(
-						pendingText.text.length,
-						// An editor selection cannot grow past the visible window —
-						// there is no drag-scroll — so the hint for one points at the
-						// external editor, the way to act on the whole draft. ""
-						// (unbound) simply shows no suffix.
-						pendingText.inEditor ? keyTextFor(EXTERNAL_EDITOR_KEYBINDING) : undefined,
-					);
-					typedReceiver.requestRender();
-					return undefined;
+					return Reflect.apply(predecessor, receiver, args);
 				},
 			),
 		);
 	}
 
-	if (!state && !rangeDelete) {
+	if (!hint && !rangeDelete) {
 		return () => {
 			for (const cleanup of cleanups) cleanup();
 		};
@@ -726,58 +692,27 @@ function installCopying(
 			"mouse-viewport-input",
 			({ predecessor, receiver, args }) => {
 				const data = args[0];
+				const typedReceiver = receiver as MouseCapablePrototype;
 				// Keystrokes and mouse events both land here, so this is the one
 				// place that sees every draft change; keep the outgrew-the-box
-				// hint current with it.
-				refreshExternalEditorHint(receiver as MouseCapablePrototype, deps.getConfig());
-				// ---- Branch 1: ctrl+c, `selectionPendingMode`'s. ----------------
+				// hint current with it, and keep the selection hint's renderer
+				// reference pointed at the live instance.
+				activeReceiver = typedReceiver;
+				refreshExternalEditorHint(typedReceiver, deps.getConfig());
+				// ---- Backspace and delete, `editorClickToCaret`'s. ------------
 				//
-				// This branch is FIRST, and deliberately so. The one outcome that
-				// must never regress is a bare ctrl+c with nothing pending reaching
-				// Pi and interrupting; evaluating its branch before any other means
-				// no feature added to this method later can intercept it by being
-				// installed in a different order. `isRangeDeleteKey` refuses ctrl+c
-				// and ctrl+d outright as well, so the guarantee holds structurally
-				// from both directions rather than by ordering alone.
-				if (state && isCtrlC(data) && state.pending) {
-					const typedReceiver = receiver as MouseCapablePrototype;
-					// `state.pending` can be stale: Pi clears its own selection
-					// through paths this module never sees (e.g. starting a new
-					// drag overwrites `selectionAnchor`/`selectionFocus` directly,
-					// with no call to `copySelectionToClipboard`). Re-read the real
-					// bounds before deciding: a copy that would be a no-op must not
-					// consume ctrl+c, or an in-flight interrupt gets swallowed for
-					// nothing.
-					if (!typedReceiver.getSelectionBounds()) {
-						state.clear();
-						typedReceiver.requestRender();
-						return Reflect.apply(predecessor, receiver, args);
-					}
-					performingRealCopy = true;
-					try {
-						copyWithNotice(typedReceiver, deps.getConfig().mouse.copyNotice);
-					} finally {
-						performingRealCopy = false;
-					}
-					state.clear();
-					typedReceiver.requestRender();
-					return { consume: true };
-				}
-				// ---- Branch 2: backspace and delete, `editorClickToCaret`'s. ----
-				//
-				// The two branches key off disjoint input — ctrl+c above, backspace
-				// and delete here — so they compose rather than compete. Range
-				// delete consumes the key only when it really removed something;
-				// every other backspace falls through and goes on deleting one
-				// character, which is the behaviour it must not break.
+				// Range delete consumes the key only when it really removed
+				// something; every other backspace falls through and goes on
+				// deleting one character, which is the behaviour it must not
+				// break. `isRangeDeleteKey` refuses ctrl+c and ctrl+d outright,
+				// so Pi's interrupt and exit chords can never be swallowed by
+				// this branch.
 				if (rangeDelete && isRangeDeleteKey(data)) {
-					const typedReceiver = receiver as MouseCapablePrototype;
 					if (deleteSelectedRange(typedReceiver, deps.getConfig())) {
 						// Pi's `handleInput` returns as soon as a listener consumes,
 						// so the focused editor never sees the key and Pi never
 						// reaches its own `requestImmediateRender` (`tui.js:620`).
 						// Redrawing the changed draft is this branch's job.
-						state?.clear();
 						typedReceiver.requestRender();
 						return { consume: true };
 					}
@@ -789,7 +724,6 @@ function installCopying(
 
 	return () => {
 		for (const cleanup of cleanups) cleanup();
-		if (activeState === state) activeState = previousState;
 	};
 }
 
@@ -1102,7 +1036,7 @@ export function installMouse(prototype: object, deps: InstallMouseDeps): () => v
 	// below: `pi-toolbox` publishing which rows it drew a border on, at which
 	// columns, so Starline reads a fact instead of inferring one.
 	if (
-		enabled.has("selectionPendingMode") ||
+		enabled.has("selectionHint") ||
 		enabled.has("editorBufferCopy") ||
 		enabled.has("editorClickToCaret") ||
 		enabled.has("transcriptCleanCopy")
@@ -1122,6 +1056,8 @@ export function installMouse(prototype: object, deps: InstallMouseDeps): () => v
 	if (cleanups.length === 0) return () => {};
 	return () => {
 		externalEditorHint = null;
+		activeReceiver = undefined;
+		activeHint = undefined;
 		for (const cleanup of cleanups) cleanup();
 	};
 }

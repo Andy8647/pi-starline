@@ -13,11 +13,15 @@ type SelectionColumns = { start: number; end: number };
 type FakeAltScreen = {
 	selectionBounds: SelectionBounds | undefined;
 	previousScreen: string[];
-	copySelectionToClipboard(): void;
+	copyOnSelect: boolean;
+	copyActiveSelectionToClipboard(): Promise<boolean>;
+	getCopyOnSelect(): boolean;
+	hasActiveSelection(): boolean;
 	getSelectionBounds(): SelectionBounds | undefined;
 	getSelectionColumns(line: string, row: number, selection: SelectionBounds): SelectionColumns;
 	handleViewportInput(data: string): { consume: boolean } | undefined;
 	flash(message: string, durationMs?: number): void;
+	hasOverlay(): boolean;
 	routeWheel(): void;
 	handleSelectionMouseEvent(): void;
 	applySelection(): void;
@@ -50,13 +54,21 @@ function makePrototype(): { prototype: FakeAltScreen; calls: string[]; renders: 
 	const prototype: FakeAltScreen = {
 		selectionBounds: { start: { row: 0, col: 0 }, end: { row: 0, col: 5 } },
 		previousScreen: ["hello world"],
+		copyOnSelect: false,
+		getCopyOnSelect() {
+			return this.copyOnSelect;
+		},
+		hasActiveSelection() {
+			return this.selectionBounds !== undefined;
+		},
 		getSelectionBounds() {
 			return this.selectionBounds;
 		},
 		getSelectionColumns: fakeSelectionColumns,
-		copySelectionToClipboard() {
+		async copyActiveSelectionToClipboard() {
 			calls.push("copy");
 			this.flash("Copied!");
+			return true;
 		},
 		handleViewportInput(data: string) {
 			calls.push(`viewport:${data}`);
@@ -64,6 +76,9 @@ function makePrototype(): { prototype: FakeAltScreen; calls: string[]; renders: 
 		},
 		flash(message: string) {
 			calls.push(`flash:${message}`);
+		},
+		hasOverlay() {
+			return false;
 		},
 		routeWheel() {},
 		handleSelectionMouseEvent() {},
@@ -76,16 +91,11 @@ function makePrototype(): { prototype: FakeAltScreen; calls: string[]; renders: 
 	return { prototype, calls, renders };
 }
 
-function makeConfig(
-	copyOnSelect: boolean,
-	copyNotice: boolean,
-	transcriptCleanCopy = true,
-): () => PolishedTuiConfig {
+function makeConfig(copyNotice: boolean, transcriptCleanCopy = true): () => PolishedTuiConfig {
 	return () =>
 		({
 			icons: { rail: "│" },
 			mouse: {
-				copyOnSelect,
 				copyNotice,
 				transcriptCleanCopy,
 				enabled: true,
@@ -96,138 +106,72 @@ function makeConfig(
 		}) as PolishedTuiConfig;
 }
 
-describe("installMouse selectionPendingMode", () => {
-	it("arms instead of copying on release when copyOnSelect is false", () => {
-		const { prototype, calls, renders } = makePrototype();
-		const dispose = installMouse(prototype, {
-			getConfig: makeConfig(false, true),
-		});
+/**
+ * The hint is derived from Pi 0.84.4's own select-without-copy state. The
+ * receiver has to be registered first — `installMouse` sees the prototype, and
+ * the live instance is captured from the first `handleViewportInput` call.
+ */
+function registerReceiver(prototype: FakeAltScreen): void {
+	prototype.handleViewportInput("");
+}
 
-		prototype.copySelectionToClipboard();
-
-		expect(calls).toEqual([]); // no real copy happened
-		expect(activeSelectionHintText()).toBe("5 characters selected, ctrl+c to copy");
-		// Asked its own receiver to repaint, so the hint reaches the screen now
-		// rather than waiting for an unrelated frame.
-		expect(renders).toEqual(["render"]);
-		dispose();
-	});
-
-	it("calls through to the real copy when copyOnSelect is true", () => {
+describe("installMouse selectionHint", () => {
+	it("shows the hint while the renderer is not auto-copying and a selection exists", () => {
 		const { prototype, calls } = makePrototype();
 		const dispose = installMouse(prototype, {
-			getConfig: makeConfig(true, true),
+			getConfig: makeConfig(true),
 		});
+		registerReceiver(prototype);
 
-		prototype.copySelectionToClipboard();
+		expect(activeSelectionHintText()).toContain("5 characters selected");
+		// Nothing copied, nothing flashed — the release did not reach us at all.
+		expect(calls).toEqual(["viewport:"]);
 
-		expect(calls).toEqual(["copy", "flash:Copied!"]);
 		dispose();
-	});
-
-	it("ctrl+c with a pending selection performs the real copy and clears", () => {
-		const { prototype, calls } = makePrototype();
-		const dispose = installMouse(prototype, {
-			getConfig: makeConfig(false, true),
-		});
-
-		prototype.copySelectionToClipboard(); // arms
-		const result = prototype.handleViewportInput("\x03");
-
-		expect(result).toEqual({ consume: true });
-		expect(calls).toEqual(["copy", "flash:Copied!"]);
 		expect(activeSelectionHintText()).toBeNull();
-		dispose();
 	});
 
-	it("ctrl+c with nothing pending falls through to Pi's own handler", () => {
-		const { prototype, calls } = makePrototype();
-		const dispose = installMouse(prototype, {
-			getConfig: makeConfig(false, true),
-		});
-
-		const result = prototype.handleViewportInput("\x03");
-
-		expect(result).toBeUndefined(); // Pi's own handler returns undefined for ctrl+c
-		expect(calls).toEqual(["viewport:\x03"]);
-		dispose();
-	});
-
-	it("suppresses the notice flash when copyNotice is off", () => {
-		const { prototype, calls } = makePrototype();
-		const dispose = installMouse(prototype, {
-			getConfig: makeConfig(false, false),
-		});
-
-		prototype.copySelectionToClipboard(); // arms
-		prototype.handleViewportInput("\x03");
-
-		expect(calls).toEqual(["copy"]);
-		dispose();
-	});
-
-	it("a deselect clears a stale arm instead of leaving it to swallow ctrl+c", () => {
-		const { prototype, calls } = makePrototype();
-		const dispose = installMouse(prototype, {
-			getConfig: makeConfig(false, true),
-		});
-
-		prototype.copySelectionToClipboard(); // release #1: real bounds, arms
-		expect(activeSelectionHintText()).not.toBeNull();
-
-		// release #2: a plain click elsewhere collapses the selection. Pi calls
-		// copySelectionToClipboard unconditionally on every release; its own
-		// getSelectionBounds() now returns undefined.
-		prototype.selectionBounds = undefined;
-		prototype.copySelectionToClipboard();
-		expect(activeSelectionHintText()).toBeNull();
-
-		calls.length = 0; // isolate what ctrl+c does from here
-		const result = prototype.handleViewportInput("\x03");
-
-		// The interrupt must reach Pi's real handler, not be consumed for a
-		// no-op copy. Assert the predecessor actually ran, not just the shape
-		// of the return value.
-		expect(calls).toContain("viewport:\x03");
-		expect(result).toBeUndefined();
-		expect(activeSelectionHintText()).toBeNull();
-		dispose();
-	});
-
-	it("ctrl+c does not consume when an armed selection has gone stale some other way", () => {
-		// The same class of bug from the handleViewportInput side: state.pending
-		// can be true while Pi's own selection is already gone through a path
-		// that never calls copySelectionToClipboard (starting a new drag
-		// overwrites selectionAnchor/selectionFocus directly). This simulates
-		// that by mutating the bounds without a release in between.
-		const { prototype, calls } = makePrototype();
-		const dispose = installMouse(prototype, {
-			getConfig: makeConfig(false, true),
-		});
-
-		prototype.copySelectionToClipboard(); // arms
-		expect(activeSelectionHintText()).not.toBeNull();
-
-		prototype.selectionBounds = undefined; // Pi's selection is gone, unobserved
-
-		calls.length = 0;
-		const result = prototype.handleViewportInput("\x03");
-
-		expect(calls).toContain("viewport:\x03");
-		expect(result).toBeUndefined();
-		expect(activeSelectionHintText()).toBeNull();
-		dispose();
-	});
-
-	it("dispose removes the patches", () => {
+	it("no hint while the renderer auto-copies", () => {
 		const { prototype } = makePrototype();
-		const original = prototype.copySelectionToClipboard;
 		const dispose = installMouse(prototype, {
-			getConfig: makeConfig(false, true),
+			getConfig: makeConfig(true),
 		});
-		dispose();
-		expect(prototype.copySelectionToClipboard).toBe(original);
+		registerReceiver(prototype);
+
+		prototype.copyOnSelect = true;
 		expect(activeSelectionHintText()).toBeNull();
+		dispose();
+	});
+
+	it("no hint without a selection", () => {
+		const { prototype } = makePrototype();
+		const dispose = installMouse(prototype, {
+			getConfig: makeConfig(true),
+		});
+		registerReceiver(prototype);
+
+		prototype.selectionBounds = undefined;
+		expect(activeSelectionHintText()).toBeNull();
+		dispose();
+	});
+
+	it("does not install without Pi 0.84.4's selection APIs, and still copies clean", () => {
+		// Dropping `getCopyOnSelect`/`hasActiveSelection` takes `selectionHint`
+		// with it — no hint — while `transcriptCleanCopy` needs neither and
+		// still answers the copy. (This fixture never stubs
+		// `getSelectionSourceLine`, so `pathAwareWords` was never going to
+		// install here either; see capabilities.test.ts for that gating.)
+		const { prototype } = makePrototype();
+		const { getCopyOnSelect: _droppedA, hasActiveSelection: _droppedB, ...withoutApi } = prototype;
+		const original = withoutApi.copyActiveSelectionToClipboard;
+
+		const dispose = installMouse(withoutApi, {
+			getConfig: makeConfig(true),
+		});
+
+		expect(withoutApi.copyActiveSelectionToClipboard).not.toBe(original);
+		expect(activeSelectionHintText()).toBeNull();
+		dispose();
 	});
 });
 
@@ -250,7 +194,7 @@ const FRAME_WIDTH = 12;
  * off on the way to the clipboard, and the `transcriptCleanCopy: false`
  * opt-out must leave it on.
  *
- * `copySelectionToClipboard` here is Pi's own algorithm, transcribed from
+ * `copyActiveSelectionToClipboard` here is Pi's own algorithm, transcribed from
  * `node_modules/@earendil-works/pi-tui/dist/tui-alt-screen.js` — per row,
  * `getSelectionColumns` then slice then `trimEnd`, joined with "\n" and
  * written as OSC 52. That makes the assertions below a comparison against
@@ -258,6 +202,7 @@ const FRAME_WIDTH = 12;
  */
 function makeTranscriptFixture() {
 	const written: string[] = [];
+	const flashes: string[] = [];
 	const scrollView = { name: "transcript" };
 	const document = new Container();
 	const tool = new FramedToolComponent();
@@ -279,6 +224,7 @@ function makeTranscriptFixture() {
 	const prototype = {
 		selectionBounds: bounds as SelectionBounds | undefined,
 		previousScreen: [] as string[],
+		copyOnSelect: false,
 		currentLayout: {
 			root: {
 				rect: { x: 0, y: 0, width: FRAME_WIDTH, height: lines.length },
@@ -297,6 +243,12 @@ function makeTranscriptFixture() {
 		hasOverlay() {
 			return false;
 		},
+		getCopyOnSelect() {
+			return this.copyOnSelect;
+		},
+		hasActiveSelection() {
+			return this.selectionBounds !== undefined;
+		},
 		requestRender() {
 			this.renders.push("render");
 		},
@@ -304,9 +256,9 @@ function makeTranscriptFixture() {
 			return this.selectionBounds;
 		},
 		getSelectionColumns: fakeSelectionColumns,
-		copySelectionToClipboard() {
+		async copyActiveSelectionToClipboard() {
 			const selection = this.getSelectionBounds();
-			if (!selection) return;
+			if (!selection) return false;
 			const rows: string[] = [];
 			for (let row = selection.start.row; row <= selection.end.row; row++) {
 				const line = lines[row] ?? "";
@@ -314,14 +266,17 @@ function makeTranscriptFixture() {
 				rows.push(line.slice(columns.start, columns.end).trimEnd());
 			}
 			const text = rows.join("\n");
-			if (text.length === 0) return;
+			if (text.length === 0) return false;
 			this.terminal.write(`\x1b]52;c;${Buffer.from(text).toString("base64")}\x07`);
 			this.flash("Copied!");
+			return true;
 		},
 		handleViewportInput(data: string) {
 			return data === "\x03" ? undefined : { consume: true };
 		},
-		flash(_message: string) {},
+		flash(message: string) {
+			flashes.push(message);
+		},
 		routeWheel() {},
 		handleSelectionMouseEvent() {},
 		applySelection() {},
@@ -334,54 +289,55 @@ function makeTranscriptFixture() {
 		.map((line) => line.trimEnd())
 		.join("\n");
 
-	return { written, lines, bounds, prototype, piCopyText };
+	return { written, flashes, lines, bounds, prototype, piCopyText };
 }
 
 describe("installMouse over a real framed transcript", () => {
-	it("arms with the exact character count of the cleaned text ctrl+c delivers", () => {
-		// The hint promises "N characters selected"; N has to be what ctrl+c
-		// actually puts on the clipboard. Over a framed transcript that is the
-		// *cleaned* text now — the frame is chrome, and the count must not
+	it("counts the cleaned text in the hint, matching what the copy key delivers", () => {
+		// The hint promises "N characters selected"; N has to be what the copy
+		// key actually puts on the clipboard. Over a framed transcript that is
+		// the *cleaned* text now — the frame is chrome, and the count must not
 		// promise bytes the copy no longer sends.
 		const { prototype, written } = makeTranscriptFixture();
 		const dispose = installMouse(prototype, {
-			getConfig: makeConfig(false, true),
+			getConfig: makeConfig(true),
 		});
-
-		prototype.copySelectionToClipboard(); // release: arms, copies nothing
+		registerReceiver(prototype);
 
 		expect(written).toEqual([]);
-		expect(activeSelectionHintText()).toBe("5 characters selected, ctrl+c to copy");
+		expect(activeSelectionHintText()).toContain("5 characters selected");
 
-		prototype.handleViewportInput("\x03");
+		// The copy key's path: Pi's `handleCopyCommand` reaches
+		// `copyActiveSelectionToClipboard`, and the clean copy answers it.
+		prototype.copyActiveSelectionToClipboard();
 		expect(decodeOsc52(written[0])).toBe("hello");
 		dispose();
 	});
 
-	it("copies a tool box's content without its frame", () => {
+	it("copies a tool box's content without its frame", async () => {
 		// transcriptCleanCopy: the border rows are chrome, drawn by pi-toolbox's
 		// rounded frame, and the clipboard is better without them. What must
 		// survive is the *content* — the text the box actually held.
 		const { prototype, written } = makeTranscriptFixture();
 		const dispose = installMouse(prototype, {
-			getConfig: makeConfig(true, true),
+			getConfig: makeConfig(true),
 		});
 
-		prototype.copySelectionToClipboard();
+		await prototype.copyActiveSelectionToClipboard();
 
 		expect(decodeOsc52(written[0])).toBe("hello");
 		dispose();
 	});
 
-	it("puts a tool box's border on the clipboard, unmodified, when transcriptCleanCopy is off", () => {
+	it("puts a tool box's border on the clipboard, unmodified, when transcriptCleanCopy is off", async () => {
 		// The opt-out: with `mouse.transcriptCleanCopy: false` the copy is
 		// exactly what Pi's own would have been, frame and all.
 		const { prototype, written, lines, piCopyText } = makeTranscriptFixture();
 		const dispose = installMouse(prototype, {
-			getConfig: makeConfig(true, true, false),
+			getConfig: makeConfig(true, false),
 		});
 
-		prototype.copySelectionToClipboard();
+		await prototype.copyActiveSelectionToClipboard();
 
 		const copied = decodeOsc52(written[0]);
 		expect(copied.split("\n")).toEqual(lines.slice(1).map((line) => line.trimEnd()));
@@ -392,22 +348,15 @@ describe("installMouse over a real framed transcript", () => {
 		dispose();
 	});
 
-	it("arms nothing when the pending mode cannot install, and still copies clean", () => {
-		// Dropping `handleViewportInput` takes `selectionPendingMode` with it —
-		// no arm, no hint — while `transcriptCleanCopy` needs no key
-		// interception and still answers the copy. (This fixture never stubs
-		// `getSelectionSourceLine`, so `pathAwareWords` was never going to
-		// install here either; see capabilities.test.ts for that gating.)
-		const { prototype, written } = makeTranscriptFixture();
-		const { handleViewportInput: _dropped, ...withoutViewportInput } = prototype;
-
-		const dispose = installMouse(withoutViewportInput, {
-			getConfig: makeConfig(false, true),
+	it("gates the clean copy's notice flash on copyNotice", async () => {
+		const { prototype, flashes } = makeTranscriptFixture();
+		const dispose = installMouse(prototype, {
+			getConfig: makeConfig(false),
 		});
 
-		withoutViewportInput.copySelectionToClipboard();
-		expect(activeSelectionHintText()).toBeNull();
-		expect(decodeOsc52(written[0])).toBe("hello");
+		await prototype.copyActiveSelectionToClipboard();
+
+		expect(flashes).toEqual([]);
 		dispose();
 	});
 });
@@ -444,9 +393,9 @@ function makeLineFixture(lines: readonly string[], bounds: SelectionBounds) {
 			return this.selectionBounds;
 		},
 		getSelectionColumns: fakeSelectionColumns,
-		copySelectionToClipboard() {
+		async copyActiveSelectionToClipboard() {
 			const selection = this.getSelectionBounds();
-			if (!selection) return;
+			if (!selection) return false;
 			const rows: string[] = [];
 			for (let row = selection.start.row; row <= selection.end.row; row++) {
 				const line = lines[row] ?? "";
@@ -454,8 +403,9 @@ function makeLineFixture(lines: readonly string[], bounds: SelectionBounds) {
 				rows.push(line.slice(columns.start, columns.end).trimEnd());
 			}
 			const text = rows.join("\n");
-			if (text.length === 0) return;
+			if (text.length === 0) return false;
 			this.terminal.write(`\x1b]52;c;${Buffer.from(text).toString("base64")}\x07`);
+			return true;
 		},
 		handleViewportInput(_data: string) {
 			return undefined;
@@ -479,7 +429,7 @@ describe("installMouse transcriptCleanCopy", () => {
 			end: { row: lines.length - 1, col: WIDTH },
 		}) as SelectionBounds;
 
-	it("copies a user message as its text, without rail or border rules", () => {
+	it("copies a user message as its text, without rail or border rules", async () => {
 		// The headline case from real use: a drag across a user message box
 		// copied the rail, the rules and the padding. Now it copies the message.
 		const lines = [
@@ -488,9 +438,9 @@ describe("installMouse transcriptCleanCopy", () => {
 			"next answer line",
 		];
 		const { prototype, written } = makeLineFixture(lines, wholeTranscript(lines));
-		const dispose = installMouse(prototype, { getConfig: makeConfig(true, true) });
+		const dispose = installMouse(prototype, { getConfig: makeConfig(true) });
 
-		prototype.copySelectionToClipboard();
+		await prototype.copyActiveSelectionToClipboard();
 
 		expect(decodeOsc52(written[0])).toBe(
 			"previous answer line\nfix the flaky test\nand the other one\nnext answer line",
@@ -498,7 +448,7 @@ describe("installMouse transcriptCleanCopy", () => {
 		dispose();
 	});
 
-	it("cleans a mid-box drag whose range contains no border row", () => {
+	it("cleans a mid-box drag whose range contains no border row", async () => {
 		const box = userBox(["one", "two", "three"]);
 		const lines = [...box, "after"];
 		const bounds = {
@@ -506,15 +456,15 @@ describe("installMouse transcriptCleanCopy", () => {
 			end: { row: 3, col: WIDTH },
 		} as SelectionBounds;
 		const { prototype, written } = makeLineFixture(lines, bounds);
-		const dispose = installMouse(prototype, { getConfig: makeConfig(true, true) });
+		const dispose = installMouse(prototype, { getConfig: makeConfig(true) });
 
-		prototype.copySelectionToClipboard();
+		await prototype.copyActiveSelectionToClipboard();
 
 		expect(decodeOsc52(written[0])).toBe("two\nthree");
 		dispose();
 	});
 
-	it("slices a mid-row start out of the content, not out of the rail", () => {
+	it("slices a mid-row start out of the content, not out of the rail", async () => {
 		// A drag over columns 5..7 of a rail row covers columns 3..5 of the
 		// content once the rail comes off — `leftTrim` shifts the columns, and
 		// the receiver's column math (exclusive-end here) does the slicing.
@@ -525,28 +475,28 @@ describe("installMouse transcriptCleanCopy", () => {
 			end: { row: 1, col: 7, scrollView: { name: "transcript" } },
 		} as SelectionBounds;
 		const { prototype, written } = makeLineFixture(lines, bounds);
-		const dispose = installMouse(prototype, { getConfig: makeConfig(true, true) });
+		const dispose = installMouse(prototype, { getConfig: makeConfig(true) });
 
-		prototype.copySelectionToClipboard();
+		await prototype.copyActiveSelectionToClipboard();
 
 		expect(decodeOsc52(written[0])).toBe("de");
 		dispose();
 	});
 
-	it("falls back to Pi's verbatim copy for a selection with no chrome", () => {
+	it("falls back to Pi's verbatim copy for a selection with no chrome", async () => {
 		// A markdown table — square corners — is content. Nothing about it may
 		// change on the way to the clipboard.
 		const lines = ["┌─ one ─┬─ two ─┐", "│ a     │ b     │", "└─ ─── ─┴─ ─── ─┘"];
 		const { prototype, written } = makeLineFixture(lines, wholeTranscript(lines));
-		const dispose = installMouse(prototype, { getConfig: makeConfig(true, true) });
+		const dispose = installMouse(prototype, { getConfig: makeConfig(true) });
 
-		prototype.copySelectionToClipboard();
+		await prototype.copyActiveSelectionToClipboard();
 
 		expect(decodeOsc52(written[0])).toBe(lines.join("\n"));
 		dispose();
 	});
 
-	it("leaves screen-space selections to Pi", () => {
+	it("leaves screen-space selections to Pi", async () => {
 		// No scroll view on the anchor: the selection is over the dock or the
 		// status area, not the transcript, and stays byte-for-byte Pi's.
 		const lines = ["─".repeat(WIDTH), "│ dock row".padEnd(WIDTH), "─".repeat(WIDTH)];
@@ -555,15 +505,15 @@ describe("installMouse transcriptCleanCopy", () => {
 			end: { row: 2, col: WIDTH },
 		} as SelectionBounds;
 		const { prototype, written } = makeLineFixture(lines, bounds);
-		const dispose = installMouse(prototype, { getConfig: makeConfig(true, true) });
+		const dispose = installMouse(prototype, { getConfig: makeConfig(true) });
 
-		prototype.copySelectionToClipboard();
+		await prototype.copyActiveSelectionToClipboard();
 
 		expect(decodeOsc52(written[0])).toBe(lines.map((line) => line.trimEnd()).join("\n"));
 		dispose();
 	});
 
-	it("consumes a pure-decoration drag without writing the clipboard", () => {
+	it("consumes a pure-decoration drag without writing the clipboard", async () => {
 		// Selecting just a user box's border rules cleans to nothing — Pi's own
 		// copy has the same `text.length === 0` shape, it just gets there after
 		// building a string of rules.
@@ -573,9 +523,9 @@ describe("installMouse transcriptCleanCopy", () => {
 			end: { row: 1, col: WIDTH },
 		} as SelectionBounds;
 		const { prototype, written } = makeLineFixture(lines, bounds);
-		const dispose = installMouse(prototype, { getConfig: makeConfig(true, true) });
+		const dispose = installMouse(prototype, { getConfig: makeConfig(true) });
 
-		prototype.copySelectionToClipboard();
+		await prototype.copyActiveSelectionToClipboard();
 
 		expect(written).toEqual([]);
 		dispose();
@@ -624,7 +574,7 @@ describe("installMouse pathAwareWords", () => {
 	it("keeps a path whole where predecessor would have split it", () => {
 		const prototype = makeWordSelectionPrototype();
 		const dispose = installMouse(prototype, {
-			getConfig: makeConfig(false, true),
+			getConfig: makeConfig(true),
 		});
 
 		// Column 9 is inside "fixed" (of "src/fixed-editor/a.ts"). Predecessor's
@@ -644,7 +594,6 @@ describe("installMouse pathAwareWords", () => {
 			getConfig: () =>
 				({
 					mouse: {
-						copyOnSelect: false,
 						copyNotice: true,
 						enabled: true,
 						wheelRouting: true,
@@ -664,7 +613,7 @@ describe("installMouse pathAwareWords", () => {
 	it("calls through when wordRangeAt declines (column past the end of the line)", () => {
 		const prototype = makeWordSelectionPrototype();
 		const dispose = installMouse(prototype, {
-			getConfig: makeConfig(false, true),
+			getConfig: makeConfig(true),
 		});
 
 		const range = prototype.getWordSelection({ row: 0, col: 999 });
@@ -677,7 +626,7 @@ describe("installMouse pathAwareWords", () => {
 		const original = withoutSourceLine.getWordSelection;
 
 		const dispose = installMouse(withoutSourceLine, {
-			getConfig: makeConfig(false, true),
+			getConfig: makeConfig(true),
 		});
 
 		expect(withoutSourceLine.getWordSelection).toBe(original);
@@ -688,7 +637,7 @@ describe("installMouse pathAwareWords", () => {
 		const prototype = makeWordSelectionPrototype();
 		const original = prototype.getWordSelection;
 		const dispose = installMouse(prototype, {
-			getConfig: makeConfig(false, true),
+			getConfig: makeConfig(true),
 		});
 
 		dispose();
@@ -699,11 +648,11 @@ describe("installMouse pathAwareWords", () => {
 
 describe("installMouse gating for editorClickToCaret", () => {
 	it("patches handleViewportInput when editorClickToCaret is the only editor feature enabled", () => {
-		// A Pi build that has moved copySelectionToClipboard disables
-		// selectionPendingMode and editorBufferCopy (both require it), but NOT
+		// A Pi build that has moved copyActiveSelectionToClipboard disables
+		// editorBufferCopy and transcriptCleanCopy (both require it), but NOT
 		// editorClickToCaret. The range-delete half of editorClickToCaret lives
 		// on the handleViewportInput patch inside installCopying, so the gating
-		// must install it even when those two features are off — otherwise the
+		// must install it even when those features are off — otherwise the
 		// caret installs while its delete silently never exists, exactly the
 		// half-working install the capability table's rule forbids.
 		const { prototype, calls } = makePrototype();
@@ -713,11 +662,11 @@ describe("installMouse gating for editorClickToCaret", () => {
 		extended.hasOverlay = () => false;
 		// The capability probe looks at the object itself and its prototype
 		// chain; removing the method makes isPatchable report it missing.
-		delete (extended as Partial<FakeAltScreen>).copySelectionToClipboard;
+		delete (extended as Partial<FakeAltScreen>).copyActiveSelectionToClipboard;
 
 		const originalViewportInput = prototype.handleViewportInput;
 		const dispose = installMouse(prototype, {
-			getConfig: makeConfig(false, true),
+			getConfig: makeConfig(true),
 		});
 
 		// handleViewportInput is patched: backspace with no selection still

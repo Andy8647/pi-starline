@@ -143,7 +143,7 @@ function getEditorChromeWidths(config: PolishedTuiConfig, uiTheme: Theme, reset:
  */
 function composeRightStatus(vimStatus: string | undefined, uiTheme: Theme): string | undefined {
 	// A live selection hint already spells the external editor out ("N
-	// characters selected, ctrl+c to copy ⋅ ctrl+g to edit in $EDITOR"), so it
+	// characters selected, ctrl+x to copy ⋅ ctrl+g to edit in $EDITOR"), so it
 	// takes precedence; the always-on hint only speaks when nothing else does.
 	const hint = composeHints(
 		pasteExpandHintText(),
