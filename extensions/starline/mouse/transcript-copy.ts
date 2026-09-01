@@ -2,7 +2,7 @@
  * Strips decoration out of a transcript selection before it reaches the
  * clipboard.
  *
- * Pi's `copySelectionToClipboard` copies *rendered* rows. In the transcript
+ * Pi's `copyActiveSelectionToClipboard` copies *rendered* rows. In the transcript
  * those rows carry chrome that two components paint around their content:
  *
  * - Starline's own user messages (`user-message.ts`): a full-width `─` rule

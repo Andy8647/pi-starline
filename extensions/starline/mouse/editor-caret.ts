@@ -397,9 +397,9 @@ type EditableEditor = {
  * range back a letter at a time. So one snapshot is pushed up front through the
  * editor's own `pushUndoSnapshot`, and the editor's own is shadowed for the
  * duration of the loop and put back in a `finally` — the same shadow-and-restore
- * shape `copyWithNotice` uses on `flash` and `installPasteCollapse` uses on
- * `handlePaste`. This is a plain assignment on Starline's own editor instance,
- * never on anything reached through Pi's renderer Proxy.
+ * shape `installPasteCollapse` uses on `handlePaste`. This is a plain
+ * assignment on Starline's own editor instance, never on anything reached
+ * through Pi's renderer Proxy.
  *
  * The loop is bounded twice over: by the character count of the range, and by a
  * no-progress check, so an editor that stops deleting cannot spin.

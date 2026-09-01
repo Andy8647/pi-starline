@@ -3,7 +3,7 @@
  * `TuiAltScreen.prototype` — not a fake. `pi-tui-contract.test.ts` checks that
  * the methods Starline touches still exist with the right shape; this checks
  * that `installMouse`'s patches actually compose correctly with Pi's real
- * method bodies: the real `getSelectionColumns`/`copySelectionToClipboard`
+ * method bodies: the real `getSelectionColumns`/`copyActiveSelectionToClipboard`
  * column math, the real OSC 52 write, the real `handleViewportInput`
  * ctrl+c-falls-through behavior.
  *
@@ -18,13 +18,13 @@ import { afterEach, describe, expect, it } from "vitest";
 import { setActiveEditor } from "../../extensions/starline/mouse/editor-mouse";
 import { activeSelectionHintText, installMouse } from "../../extensions/starline/mouse/index";
 
-// `copySelectionToClipboard`/`handleViewportInput` are typed `private` in
+// `copyActiveSelectionToClipboard`/`handleViewportInput` are typed `private` in
 // pi-tui's `.d.ts` even though they are plain functions on the prototype at
 // runtime (TypeScript `private` is erased, not enforced) — the same fact
 // `pi-tui-contract.test.ts` documents. This local view exposes them so the
 // test can call and reassign them directly, the way Pi's own internals do.
 type TuiAltScreenPrototype = {
-	copySelectionToClipboard: () => void;
+	copyActiveSelectionToClipboard: () => Promise<boolean>;
 	handleViewportInput: (data: string) => { consume: boolean } | undefined;
 	handleSelectionMouseEvent: (event: unknown) => void;
 	getWordSelection: (point: unknown) => unknown;
@@ -32,45 +32,47 @@ type TuiAltScreenPrototype = {
 };
 const prototype = TuiAltScreen.prototype as unknown as TuiAltScreenPrototype;
 
-const originalCopy = prototype.copySelectionToClipboard;
+const originalCopy = prototype.copyActiveSelectionToClipboard;
 const originalViewportInput = prototype.handleViewportInput;
 const originalMouseEvent = prototype.handleSelectionMouseEvent;
 const originalWordSelection = prototype.getWordSelection;
 const originalRouteWheel = prototype.routeWheel;
 
 type RealReceiver = {
+	copyOnSelect: boolean;
 	selectionAnchor: { row: number; col: number } | undefined;
 	selectionFocus: { row: number; col: number } | undefined;
 	previousScreen: string[];
 	terminal: { write: (data: string) => void };
 	flashes: { flash: (message: string) => void };
 	overlayStack: unknown[];
-	copySelectionToClipboard: () => void;
+	copyActiveSelectionToClipboard: () => Promise<boolean>;
 	handleViewportInput: (data: string) => { consume: boolean } | undefined;
 	// `TuiBase.requestRender` is inherited, not stubbed: the patches call it on
 	// the receiver, so this file exercises Pi's real one.
 	requestRender: (force?: boolean) => void;
-	renderRequested: boolean;
 	stopped: boolean;
 };
 
 function makeReceiver(previousScreen: string[]): { instance: RealReceiver; written: string[] } {
 	const written: string[] = [];
 	const instance = Object.create(TuiAltScreen.prototype) as RealReceiver;
+	// The constructor normally sets this; a fake that never ran one must. Pi
+	// 0.84.4's select-without-copy is on exactly when it is false.
+	instance.copyOnSelect = false;
 	instance.selectionAnchor = undefined;
 	instance.selectionFocus = undefined;
 	instance.previousScreen = previousScreen;
 	instance.terminal = { write: (data: string) => written.push(data) };
 	instance.flashes = { flash: () => {} };
-	// 0.84.2: `handleViewportInput` runs `isOverlayFocused()` on the way to
-	// every non-wheel key, which reads `overlayStack`. The real instance gets
-	// it from the constructor; this fake never ran one, so set it explicitly.
+	// `handleViewportInput` runs `isOverlayFocused()` on the way to every
+	// non-wheel key, which reads `overlayStack`. The real instance gets it from
+	// the constructor; this fake never ran one, so set it explicitly.
 	instance.overlayStack = [];
-	instance.renderRequested = false;
 	// `requestRender` defers the actual frame to `scheduleRender` on the next
 	// tick, which returns immediately when the TUI is stopped. This keeps the
-	// real method's observable effect (`renderRequested`) without letting a
-	// detached receiver try to paint a terminal it does not have.
+	// real method's observable effect without letting a detached receiver try
+	// to paint a terminal it does not have.
 	instance.stopped = true;
 	return { instance, written };
 }
@@ -93,7 +95,7 @@ describe("mouse patches against the real TuiAltScreen.prototype", () => {
 			dispose?.();
 		} finally {
 			dispose = undefined;
-			expect(prototype.copySelectionToClipboard).toBe(originalCopy);
+			expect(prototype.copyActiveSelectionToClipboard).toBe(originalCopy);
 			expect(prototype.handleViewportInput).toBe(originalViewportInput);
 			// Every method `installMouse` may touch, not only the two this file
 			// exercises: the real prototype is shared with every other test file.
@@ -106,16 +108,16 @@ describe("mouse patches against the real TuiAltScreen.prototype", () => {
 
 	it("installs on the real prototype and restores it on dispose", () => {
 		dispose = installMouse(prototype, {
-			getConfig: () => ({ mouse: { copyOnSelect: false, copyNotice: true } }) as never,
+			getConfig: () => ({ mouse: { copyNotice: true } }) as never,
 		});
 
-		expect(prototype.copySelectionToClipboard).not.toBe(originalCopy);
+		expect(prototype.copyActiveSelectionToClipboard).not.toBe(originalCopy);
 		expect(prototype.handleViewportInput).not.toBe(originalViewportInput);
 	});
 
-	it("withholds the real copy on release, then performs it byte-exact on ctrl+c", () => {
+	it("keeps the selection visible and hinted when not auto-copying, and the copy key answers it", async () => {
 		dispose = installMouse(prototype, {
-			getConfig: () => ({ mouse: { copyOnSelect: false, copyNotice: true } }) as never,
+			getConfig: () => ({ mouse: { copyNotice: true, transcriptCleanCopy: true } }) as never,
 		});
 
 		const { instance, written } = makeReceiver([
@@ -126,24 +128,24 @@ describe("mouse patches against the real TuiAltScreen.prototype", () => {
 		instance.selectionAnchor = { row: 0, col: 2 };
 		instance.selectionFocus = { row: 2, col: 3 };
 
-		instance.copySelectionToClipboard(); // release: armed, nothing written yet
-		expect(written).toEqual([]);
+		// An input event registers the live instance the hint reads.
+		instance.handleViewportInput("");
 
 		const expectedText = ["llo world", "second row here", "end"].join("\n");
-		expect(activeSelectionHintText()).toBe(
-			`${expectedText.length} characters selected, ctrl+c to copy`,
-		);
+		expect(activeSelectionHintText()).toContain(`${expectedText.length} characters selected`);
 
-		const result = instance.handleViewportInput("\x03");
-		expect(result).toEqual({ consume: true });
+		// The copy key's path: coding-agent's Ctrl+X handler reaches
+		// `copyActiveSelectionToClipboard`, and Pi's real implementation answers
+		// with the same selection text the hint counted.
+		const ok = await instance.copyActiveSelectionToClipboard();
+		expect(ok).toBe(true);
 		expect(written).toHaveLength(1);
 		expect(decodeOsc52(written[0])).toBe(expectedText);
-		expect(activeSelectionHintText()).toBeNull();
 	});
 
-	it("falls through to Pi's real ctrl+c handling when nothing is pending", () => {
+	it("leaves ctrl+c entirely to Pi — the patch never intercepts it", () => {
 		dispose = installMouse(prototype, {
-			getConfig: () => ({ mouse: { copyOnSelect: false, copyNotice: true } }) as never,
+			getConfig: () => ({ mouse: { copyNotice: true } }) as never,
 		});
 
 		const { instance, written } = makeReceiver(["hello"]);
@@ -248,7 +250,16 @@ describe("the wheel patch against the real TuiAltScreen.prototype", () => {
 
 	function install() {
 		dispose = installMouse(prototype, {
-			getConfig: () => ({ mouse: { wheelRouting: true, copyOnSelect: true } }) as never,
+			getConfig: () =>
+				({
+					mouse: {
+						wheelRouting: true,
+						copyNotice: true,
+						enabled: true,
+						clickToExpandTools: true,
+						pathAwareWords: true,
+					},
+				}) as never,
 		});
 	}
 

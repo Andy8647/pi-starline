@@ -15,7 +15,9 @@ const ALL = [
 	"handleViewportInput",
 	"routeWheel",
 	"handleSelectionMouseEvent",
-	"copySelectionToClipboard",
+	"copyActiveSelectionToClipboard",
+	"getCopyOnSelect",
+	"hasActiveSelection",
 	"getWordSelection",
 	"getSelectionSourceLine",
 	"getSelectionBounds",
@@ -38,12 +40,12 @@ describe("probeCapabilities", () => {
 
 	it("skips a non-writable method", () => {
 		const proto = prototypeWith(ALL);
-		Object.defineProperty(proto, "copySelectionToClipboard", {
+		Object.defineProperty(proto, "copyActiveSelectionToClipboard", {
 			value: () => undefined,
 			writable: false,
 			configurable: true,
 		});
-		expect(probeCapabilities(proto).has("copySelectionToClipboard")).toBe(false);
+		expect(probeCapabilities(proto).has("copyActiveSelectionToClipboard")).toBe(false);
 	});
 
 	it("skips a non-configurable method", () => {
@@ -94,12 +96,16 @@ describe("enabledFeatures", () => {
 		expect(features.size).toBe(7);
 	});
 
-	it("disables the pending mode when ctrl+c cannot be intercepted", () => {
-		const without = ALL.filter((name) => name !== "handleViewportInput");
-		const features = enabledFeatures(probeCapabilities(prototypeWith(without)));
-		expect(features.has("selectionPendingMode")).toBe(false);
-		// Copying from the editor buffer needs no key interception.
-		expect(features.has("editorBufferCopy")).toBe(true);
+	it("disables the hint when Pi 0.84.4's selection APIs are missing", () => {
+		// The hint is derived from Pi's own select-without-copy state; without
+		// `getCopyOnSelect` or `hasActiveSelection` there is nothing to derive
+		// it from. Copying still answers the copy key, which needs neither.
+		for (const capability of ["getCopyOnSelect", "hasActiveSelection"] as const) {
+			const without = ALL.filter((name) => name !== capability);
+			const features = enabledFeatures(probeCapabilities(prototypeWith(without)));
+			expect(features.has("selectionHint")).toBe(false);
+			expect(features.has("transcriptCleanCopy")).toBe(true);
+		}
 	});
 
 	it("claims no feature that installMouse would not install", () => {
@@ -114,19 +120,20 @@ describe("enabledFeatures", () => {
 			"editorClickToCaret",
 			"editorWheelScroll",
 			"pathAwareWords",
-			"selectionPendingMode",
+			"selectionHint",
 			"transcriptCleanCopy",
 		]);
 	});
 
 	it("disables both repainting features when the renderer cannot be asked to repaint", () => {
 		// `requestRender` is the one capability these features only ever *call*.
-		// Installing without it leaves the pending hint and a toggled tool box off
-		// screen until some unrelated frame arrives, which is the half-working
-		// install this table exists to prevent.
+		// Installing without it leaves a toggled tool box off screen until some
+		// unrelated frame arrives, which is the half-working install this table
+		// exists to prevent. The hint needs no repaint of its own — it rides
+		// Pi's repaints, so it survives.
 		const without = ALL.filter((name) => name !== "requestRender");
 		const features = enabledFeatures(probeCapabilities(prototypeWith(without)));
-		expect(features.has("selectionPendingMode")).toBe(false);
+		expect(features.has("selectionHint")).toBe(true);
 		expect(features.has("clickToExpandTools")).toBe(false);
 		// The wheel patch consumes the notch, so Pi never reaches the repaint at
 		// the end of its own `routeWheel`: without one of its own, the box would
@@ -151,11 +158,13 @@ describe("enabledFeatures", () => {
 		// An overlay is composited over a layout that still contains the editor,
 		// so without this the wheel would scroll a draft hidden behind a dialog.
 		expect(features.has("editorWheelScroll")).toBe(false);
-		expect(features.has("selectionPendingMode")).toBe(true);
+		expect(features.has("selectionHint")).toBe(true);
 		// The same layout an overlay is composited over still holds the editor, so
-		// both editor click features would answer for rows a dialog is covering.
+		// both editor click features would answer for rows a dialog is covering,
+		// and a clean copy would read a dialog's rows as the transcript's.
 		expect(features.has("editorClickToCaret")).toBe(false);
 		expect(features.has("editorBufferCopy")).toBe(false);
+		expect(features.has("transcriptCleanCopy")).toBe(false);
 	});
 
 	it("disables both click features when the mouse event handler is missing", () => {
@@ -167,12 +176,14 @@ describe("enabledFeatures", () => {
 
 	it("disables buffer copy without the selection it would have to recognise", () => {
 		// It has to read the bounds to find out whether the selection is the
-		// editor's at all, and it raises Pi's own "Copied!" itself because it
-		// answers the copy instead of calling through.
-		for (const capability of ["getSelectionBounds", "flash"] as const) {
+		// editor's at all, and it raises its own "Copied!" itself because it
+		// answers the copy instead of calling through. `flash` is shared with
+		// the clean copy, which is why only the bounds check gates it here.
+		for (const capability of ["getSelectionBounds"] as const) {
 			const without = ALL.filter((name) => name !== capability);
 			const features = enabledFeatures(probeCapabilities(prototypeWith(without)));
 			expect(features.has("editorBufferCopy")).toBe(false);
+			expect(features.has("transcriptCleanCopy")).toBe(false);
 		}
 	});
 
@@ -186,7 +197,7 @@ describe("enabledFeatures", () => {
 			const features = enabledFeatures(probeCapabilities(prototypeWith(without)));
 			expect(features.has("editorClickToCaret")).toBe(false);
 		}
-		// `flash` is the buffer copy's, not the caret's.
+		// `flash` is the copy features', not the caret's.
 		const withoutFlash = ALL.filter((name) => name !== "flash");
 		expect(
 			enabledFeatures(probeCapabilities(prototypeWith(withoutFlash))).has("editorClickToCaret"),
@@ -204,7 +215,7 @@ describe("disabledFeatureWarning", () => {
 	it("names every disabled feature in one message", () => {
 		const features = enabledFeatures(probeCapabilities(prototypeWith([])));
 		const warning = disabledFeatureWarning(features);
-		expect(warning).toContain("selectionPendingMode");
+		expect(warning).toContain("selectionHint");
 		expect(warning).toContain("editorWheelScroll");
 		expect(warning?.split("\n")).toHaveLength(1);
 	});

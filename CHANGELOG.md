@@ -10,6 +10,37 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [0.3.3] - 2026-09-01
+
+Adopted Pi 0.84.4's native select-without-copy. Pi now owns "don't copy on
+release" (`fullscreenCopyOnSelect`) and the copy key (`app.message.copy`,
+default `ctrl+x`), so Starline's own pending-copy machinery — the release
+interception, the `ctrl+c` copy, the `mouse.copyOnSelect` config — is gone.
+
+**Breaking**
+
+- `mouse.copyOnSelect` is removed. Set Pi's `fullscreenCopyOnSelect: false` in
+  your Pi settings instead: the selection stays highlighted and `ctrl+x` copies
+  it. A `fixedEditor.copyOnSelect` from an old config is dropped by the
+  migration, not carried over.
+- The selection hint's copy key is now `ctrl+x` (whatever `app.message.copy` is
+  bound to), not `ctrl+c`. `ctrl+c` always interrupts again.
+- Peer ranges for `@earendil-works/pi-ai`, `pi-coding-agent`, and `pi-tui`
+  raised to `>= 0.84.4` — the release that ships
+  `TuiAltScreen.copyActiveSelectionToClipboard`, `getCopyOnSelect` and
+  `hasActiveSelection`, which the hint and the clean copy now run on.
+
+**Changed**
+
+- The selection hint is derived from Pi's own state instead of an armed pending
+  copy: it shows while a selection is highlighted and Pi is not auto-copying,
+  and quotes the live `app.message.copy` key, so a rebind shows up in the hint.
+- Clean copies (editor buffer text, transcript chrome stripped) now answer
+  `copyActiveSelectionToClipboard` — the exact method the `ctrl+x` handler
+  reaches — instead of intercepting Pi's release-time copy.
+- `copyNotice` now also gates the flash of a clean copy; Pi's own copy flash
+  remains outside Starline's reach, as it has been since 0.84.2.
+
 ## [0.3.2] - 2026-08-24
 
 Fixed a startup crash for environments running an older Pi. Starline needs

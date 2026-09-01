@@ -11,15 +11,15 @@ describe("composeHints", () => {
 	});
 
 	it("returns the selection hint alone", () => {
-		expect(composeHints(null, "5 characters selected, ctrl+c to copy")).toBe(
-			"5 characters selected, ctrl+c to copy",
+		expect(composeHints(null, "5 characters selected, ctrl+x to copy")).toBe(
+			"5 characters selected, ctrl+x to copy",
 		);
 	});
 
 	it("puts the paste hint first, separated by a dot", () => {
 		// The order and separator 0.2.0's controller used, and its tests asserted.
-		expect(composeHints("paste again to expand", "5 characters selected, ctrl+c to copy")).toBe(
-			"paste again to expand ⋅ 5 characters selected, ctrl+c to copy",
+		expect(composeHints("paste again to expand", "5 characters selected, ctrl+x to copy")).toBe(
+			"paste again to expand ⋅ 5 characters selected, ctrl+x to copy",
 		);
 	});
 });

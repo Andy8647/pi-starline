@@ -14,13 +14,20 @@
  * install this table exists to prevent. The check being stricter than a plain
  * call needs (it also demands writable and configurable) costs nothing, because
  * a class method declared the ordinary way is both.
+ *
+ * Since 0.84.4 the peer floor guarantees `copyActiveSelectionToClipboard`,
+ * `getCopyOnSelect` and `hasActiveSelection` exist; the probe still runs so a
+ * future Pi that moves them degrades feature-by-feature instead of breaking
+ * the whole install.
  */
 
 export type MouseCapability =
 	| "handleViewportInput"
 	| "routeWheel"
 	| "handleSelectionMouseEvent"
-	| "copySelectionToClipboard"
+	| "copyActiveSelectionToClipboard"
+	| "getCopyOnSelect"
+	| "hasActiveSelection"
 	| "getWordSelection"
 	| "getSelectionSourceLine"
 	| "getSelectionBounds"
@@ -30,7 +37,7 @@ export type MouseCapability =
 	| "requestRender";
 
 export type MouseFeature =
-	| "selectionPendingMode"
+	| "selectionHint"
 	| "pathAwareWords"
 	| "clickToExpandTools"
 	| "editorWheelScroll"
@@ -42,7 +49,9 @@ const CAPABILITIES: readonly MouseCapability[] = [
 	"handleViewportInput",
 	"routeWheel",
 	"handleSelectionMouseEvent",
-	"copySelectionToClipboard",
+	"copyActiveSelectionToClipboard",
+	"getCopyOnSelect",
+	"hasActiveSelection",
 	"getWordSelection",
 	"getSelectionSourceLine",
 	"getSelectionBounds",
@@ -61,20 +70,19 @@ const CAPABILITIES: readonly MouseCapability[] = [
  * is worse than no table.
  */
 const REQUIREMENTS: Record<MouseFeature, readonly MouseCapability[]> = {
-	// Without ctrl+c interception the pending mode strands a highlight the user
-	// cannot copy, which is worse than copy-on-release. It also reads the
-	// selection directly (`getSelectionBounds`, `getSelectionColumns`) to build
-	// an exact character count, and raises its own notice (`flash`), so all
-	// three must be reachable too. `requestRender` is what puts the pending hint
-	// on screen the moment the button comes up: arming without it would leave
-	// the user staring at a highlight with nothing telling them ctrl+c copies it.
-	selectionPendingMode: [
-		"copySelectionToClipboard",
-		"handleViewportInput",
+	// Derived from Pi 0.84.4's own select-without-copy state: the hint shows
+	// only while the renderer is NOT auto-copying (`getCopyOnSelect` false) and
+	// something is actually selected (`hasActiveSelection`). The character
+	// count is computed from the live selection through `getSelectionBounds`
+	// and `getSelectionColumns`, matching the columns the copy itself would
+	// slice — the hint promises what ctrl+x delivers. No release interception,
+	// no pending state: Pi's `copyOnSelect: false` already keeps the selection
+	// highlighted, and the hint rides Pi's own repaints.
+	selectionHint: [
+		"getCopyOnSelect",
+		"hasActiveSelection",
 		"getSelectionBounds",
 		"getSelectionColumns",
-		"flash",
-		"requestRender",
 	],
 	// Also reads the line under the pointer through the receiver's own
 	// `getSelectionSourceLine`, so the patch has a real line to hand
@@ -123,11 +131,12 @@ const REQUIREMENTS: Record<MouseFeature, readonly MouseCapability[]> = {
 		"hasOverlay",
 		"requestRender",
 	],
-	// It wraps `copySelectionToClipboard`, reads the selection through
-	// `getSelectionBounds` to find out whether it is the editor's, and raises
-	// Pi's own "Copied!" through `flash` when it answers the copy itself.
-	// `hasOverlay` again: a selection dropped on a dialog must not be read as
-	// text from the draft behind it.
+	// It wraps `copyActiveSelectionToClipboard` — the method Pi 0.84.4's
+	// Ctrl+X handler reaches (`handleCopyCommand` with `preferSelection`), so
+	// the clean copy answers exactly the copies that key performs — and reads
+	// the selection through `getSelectionBounds` to find out whether it is the
+	// editor's. `hasOverlay` again: a selection dropped on a dialog must not be
+	// read as text from the draft behind it.
 	//
 	// The clipboard write goes through `terminal.write`, which is not listed
 	// because it is not on this prototype — `terminal` is a plain instance field
@@ -135,18 +144,18 @@ const REQUIREMENTS: Record<MouseFeature, readonly MouseCapability[]> = {
 	// It is checked at the call site instead, and a terminal that cannot be
 	// written to makes the copy fall through to Pi rather than disabling the
 	// feature at install time.
-	editorBufferCopy: ["copySelectionToClipboard", "getSelectionBounds", "hasOverlay", "flash"],
-	// Shares the `copySelectionToClipboard` patch with the two features above
-	// it. It reads the selection through `getSelectionBounds` to find the rows,
-	// through `getSelectionColumns` to slice the cleaned text along the same
-	// grapheme-aligned columns Pi would have used, asks `hasOverlay` before
+	editorBufferCopy: ["copyActiveSelectionToClipboard", "getSelectionBounds", "hasOverlay", "flash"],
+	// Shares the `copyActiveSelectionToClipboard` patch with the two features
+	// above it. It reads the selection through `getSelectionBounds` to find the
+	// rows, through `getSelectionColumns` to slice the cleaned text along the
+	// same grapheme-aligned columns Pi would have used, asks `hasOverlay` before
 	// trusting those rows (an overlay is composited over a layout that still
-	// contains the transcript), and raises Pi's own "Copied!" through `flash`
+	// contains the transcript), and raises its own "Copied!" through `flash`
 	// when it answers the copy itself. The clipboard write goes through
 	// `terminal.write`, unlisted for the same reason as editorBufferCopy's — it
 	// is an instance field, checked at the call site instead.
 	transcriptCleanCopy: [
-		"copySelectionToClipboard",
+		"copyActiveSelectionToClipboard",
 		"getSelectionBounds",
 		"getSelectionColumns",
 		"hasOverlay",

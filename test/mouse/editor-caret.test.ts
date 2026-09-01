@@ -429,7 +429,7 @@ describe("editorSelectionRange", () => {
  *
  * Both of this task's features land on a method another feature already owns:
  * `handleSelectionMouseEvent` is click-to-expand's, and
- * `copySelectionToClipboard` is the pending mode's. `installPrototypePatch`
+ * `copyActiveSelectionToClipboard` is the clean copy's. `installPrototypePatch`
  * holds exactly one behaviour per adapter key and silently replaces it, so a
  * second registration under either key would disable the earlier feature with
  * no error and no failing test anywhere in this suite. The scene below is what
@@ -505,6 +505,7 @@ function makeScene(draft: string, config = makeConfig()) {
 	const prototype = {
 		selectionBounds: undefined as SelectionBounds | undefined,
 		overlay: false,
+		copyOnSelect: false,
 		currentLayout: { root: undefined as BoxLike | undefined },
 		terminal: {
 			rows: HEIGHT,
@@ -516,14 +517,20 @@ function makeScene(draft: string, config = makeConfig()) {
 		handleSelectionMouseEvent(event: FakeMouseEvent) {
 			throughCalls.push(event);
 		},
-		copySelectionToClipboard() {
-			// Pi's own algorithm, transcribed from `copySelectionToClipboard` in
-			// tui-alt-screen.js: per row, `getSelectionColumns`, then `sliceByColumn`
-			// — a *column* slice, not a UTF-16 one, which is what makes it agree
-			// with the rendered width of a row carrying ANSI — then
+		getCopyOnSelect() {
+			return this.copyOnSelect;
+		},
+		hasActiveSelection() {
+			return this.selectionBounds !== undefined;
+		},
+		async copyActiveSelectionToClipboard() {
+			// Pi's own algorithm, transcribed from `copyActiveSelectionToClipboard`
+			// in tui-alt-screen.js: per row, `getSelectionColumns`, then
+			// `sliceByColumn` — a *column* slice, not a UTF-16 one, which is what
+			// makes it agree with the rendered width of a row carrying ANSI — then
 			// `stripTerminalSequences` and `trimEnd`, joined and sent as OSC 52.
 			const selection = this.getSelectionBounds();
-			if (!selection) return;
+			if (!selection) return false;
 			const rows: string[] = [];
 			for (let row = selection.start.row; row <= selection.end.row; row++) {
 				const line = previousScreen[row] ?? "";
@@ -535,9 +542,10 @@ function makeScene(draft: string, config = makeConfig()) {
 				);
 			}
 			const text = rows.join("\n");
-			if (text.length === 0) return;
+			if (text.length === 0) return false;
 			this.terminal.write(`\x1b]52;c;${Buffer.from(text).toString("base64")}\x07`);
 			this.flash("Copied!");
+			return true;
 		},
 		getSelectionBounds() {
 			return this.selectionBounds;
@@ -749,7 +757,7 @@ describe("the two features that share handleSelectionMouseEvent", () => {
 	});
 });
 
-describe("the two features that share copySelectionToClipboard", () => {
+describe("the clean-copy patch on copyActiveSelectionToClipboard", () => {
 	let dispose: (() => void) | undefined;
 
 	afterEach(() => {
@@ -776,13 +784,13 @@ describe("the two features that share copySelectionToClipboard", () => {
 		};
 	}
 
-	it("copies the draft's own text, not the rendered rows", () => {
+	it("copies the draft's own text, not the rendered rows", async () => {
 		const scene = makeScene(numbered(12), makeConfig({ mouse: { ...defaultConfig.mouse } }));
 		install(scene);
 		const { textY } = scene.relayout();
 		selectTextRows(scene, textY, 0, 1);
 
-		scene.prototype.copySelectionToClipboard();
+		await scene.prototype.copyActiveSelectionToClipboard();
 
 		// Rows 0 and 1 of the visible window are visual lines 5 and 6.
 		expect(decodeOsc52(scene.written[0])).toBe("line 5\nline 6");
@@ -791,7 +799,7 @@ describe("the two features that share copySelectionToClipboard", () => {
 		expect(scene.flashes).toEqual(["Copied!"]);
 	});
 
-	it("reaches a row the box has scrolled out of view", () => {
+	it("reaches a row the box has scrolled out of view", async () => {
 		// The box shows visual lines 5 to 11. Line 11 is the last row of the
 		// window; a selection ending there copies from the buffer, which is the
 		// same text whether or not the row is still on screen when ctrl+c lands.
@@ -800,14 +808,14 @@ describe("the two features that share copySelectionToClipboard", () => {
 		const { textY } = scene.relayout();
 		selectTextRows(scene, textY, 0, VISIBLE - 1);
 
-		scene.prototype.copySelectionToClipboard();
+		await scene.prototype.copyActiveSelectionToClipboard();
 
 		expect(decodeOsc52(scene.written[0])).toBe(
 			["line 5", "line 6", "line 7", "line 8", "line 9", "line 10", "line 11"].join("\n"),
 		);
 	});
 
-	it("lets Pi copy a selection that is not the input box's", () => {
+	it("lets Pi copy a selection that is not the input box's", async () => {
 		const scene = makeScene(numbered(12), makeConfig({ mouse: { ...defaultConfig.mouse } }));
 		install(scene);
 		scene.relayout();
@@ -817,7 +825,7 @@ describe("the two features that share copySelectionToClipboard", () => {
 			end: { row: 0, col: 4, scrollView: {} },
 		};
 
-		scene.prototype.copySelectionToClipboard();
+		await scene.prototype.copyActiveSelectionToClipboard();
 
 		// Pi's own path ran: it reads previousScreen, which has no row 0 content
 		// for a scroll-view selection, so what matters is that our path declined
@@ -825,63 +833,54 @@ describe("the two features that share copySelectionToClipboard", () => {
 		expect(scene.written.map(decodeOsc52).join("")).not.toContain("line ");
 	});
 
-	it("arms the pending hint with the buffer's count, and ctrl+c delivers it", () => {
-		// Both features live on this one patch. The hint promises a character
-		// count; the copy has to deliver exactly that many, which it can only do
-		// if the arming path measures the same text the copying path sends.
-		const scene = makeScene(
-			numbered(12),
-			makeConfig({ mouse: { ...defaultConfig.mouse, copyOnSelect: false } }),
-		);
+	it("counts the buffer's text in the hint, and the copy key delivers it", async () => {
+		// The hint is derived, so its promise and the copy key's bytes have to
+		// agree without an arming step: both must measure the same text.
+		const scene = makeScene(numbered(12), makeConfig());
 		install(scene);
 		const { textY } = scene.relayout();
 		selectTextRows(scene, textY, 0, 1);
 
-		scene.prototype.copySelectionToClipboard(); // release: arms, copies nothing
+		// The hint is derived from the live renderer, not armed by a release: an
+		// input event registers the instance, and nothing is copied until the
+		// copy key's path runs.
+		scene.prototype.handleViewportInput("");
 
 		expect(scene.written).toEqual([]);
-		expect(activeSelectionHintText()).toBe(
-			`${"line 5\nline 6".length} characters selected, ctrl+c to copy`,
-		);
+		expect(activeSelectionHintText()).toBe(`${"line 5\nline 6".length} characters selected`);
 
-		scene.prototype.handleViewportInput("\x03");
+		await scene.prototype.copyActiveSelectionToClipboard();
 
 		expect(decodeOsc52(scene.written[0])).toBe("line 5\nline 6");
-		expect(activeSelectionHintText()).toBeNull();
 	});
 
-	it("still arms with Pi's own count for a selection outside the input box", () => {
-		// The pending mode is not shadowed by the buffer copy: a selection the
-		// editor declines still arms, and still arms with the screen text's length.
-		const scene = makeScene(
-			numbered(12),
-			makeConfig({ mouse: { ...defaultConfig.mouse, copyOnSelect: false } }),
-		);
+	it("counts Pi's own screen text for a selection outside the input box", () => {
+		// The hint is not shadowed by the buffer copy: a selection the editor
+		// declines still hints, and still hints with the screen text's length —
+		// the same text Pi's own copy would send.
+		const scene = makeScene(numbered(12), makeConfig());
 		install(scene);
 		scene.relayout();
+		scene.prototype.handleViewportInput("");
 		scene.prototype.selectionBounds = {
 			start: { row: 0, col: 0 },
 			end: { row: 0, col: 4 },
 		};
 
-		scene.prototype.copySelectionToClipboard();
-
 		const screenRow = stripTerminalSequences(scene.prototype.previousScreen[0] ?? "").slice(0, 5);
-		expect(activeSelectionHintText()).toBe(
-			`${screenRow.trimEnd().length} characters selected, ctrl+c to copy`,
-		);
+		expect(activeSelectionHintText()).toBe(`${screenRow.trimEnd().length} characters selected`);
 	});
 
 	it("puts both patches back on dispose", () => {
 		const scene = makeScene(numbered(12));
-		const originalCopy = scene.prototype.copySelectionToClipboard;
+		const originalCopy = scene.prototype.copyActiveSelectionToClipboard;
 		const originalInput = scene.prototype.handleViewportInput;
 		install(scene);
 
 		dispose?.();
 		dispose = undefined;
 
-		expect(scene.prototype.copySelectionToClipboard).toBe(originalCopy);
+		expect(scene.prototype.copyActiveSelectionToClipboard).toBe(originalCopy);
 		expect(scene.prototype.handleViewportInput).toBe(originalInput);
 		expect(activeSelectionHintText()).toBeNull();
 	});
@@ -896,16 +895,13 @@ describe("the overlay guard is asked by both halves of the copy patch", () => {
 		setActiveEditor(undefined);
 	});
 
-	it("measures and copies the same text when a dialog covers the box", () => {
+	it("measures and copies the same text when a dialog covers the box", async () => {
 		// A selection can exist over an overlay — Pi resolves no scroll view then,
 		// so its rows are plain screen rows and can coincide with the input box's.
 		// If only one of the two paths asked `hasOverlay`, the hint would promise
-		// a count from the draft while ctrl+c sent the dialog's pixels, or the
-		// other way round.
-		const scene = makeScene(
-			numbered(12),
-			makeConfig({ mouse: { ...defaultConfig.mouse, copyOnSelect: false } }),
-		);
+		// a count from the draft while the copy key sent the dialog's pixels, or
+		// the other way round.
+		const scene = makeScene(numbered(12), makeConfig());
 		setActiveEditor({ component: scene.editor, scrollable: scene.editor });
 		dispose = installMouse(scene.prototype, { getConfig: () => scene.config });
 		const { textY } = scene.relayout();
@@ -915,12 +911,12 @@ describe("the overlay guard is asked by both halves of the copy patch", () => {
 			end: { row: textY(1), col: WIDTH - 1 },
 		};
 
-		scene.prototype.copySelectionToClipboard(); // arms
-		const armed = activeSelectionHintText();
-		scene.prototype.handleViewportInput("\x03");
+		scene.prototype.handleViewportInput("");
+		const hinted = activeSelectionHintText();
+		await scene.prototype.copyActiveSelectionToClipboard();
 		const copied = decodeOsc52(scene.written[0] ?? "");
 
-		expect(armed).toBe(`${copied.length} characters selected, ctrl+c to copy`);
+		expect(hinted).toBe(`${copied.length} characters selected`);
 		// And it is Pi's screen text, not the draft's, because a dialog is up.
 		expect(copied).not.toBe("line 5\nline 6");
 	});
@@ -1191,7 +1187,7 @@ describe("the two features that share handleViewportInput", () => {
 
 	it("NEVER swallows ctrl+c with nothing pending, even with a live selection", () => {
 		// The single outcome that could block this release. Range delete shares
-		// this method with the pending mode, and `tui.editor.deleteCharForward`
+		// this method with the clean copy, and `tui.editor.deleteCharForward`
 		// binds ctrl+d by default — so both interrupt chords are refused outright
 		// by `isRangeDeleteKey`, before any selection is even looked at.
 		const scene = makeScene("alpha beta\ngamma delta");
@@ -1211,116 +1207,50 @@ describe("the two features that share handleViewportInput", () => {
 		expect(scene.editor.getLines()).toEqual(["alpha beta", "gamma delta"]);
 	});
 
-	it("still copies on ctrl+c when a selection is pending", () => {
-		// The pending mode is not shadowed by range delete sharing its patch.
-		const scene = makeScene(
-			"alpha beta\ngamma delta",
-			makeConfig({ mouse: { ...defaultConfig.mouse, copyOnSelect: false } }),
-		);
+	it("the hint disappears once the selection it described is gone", () => {
+		const scene = makeScene("alpha beta\ngamma delta", makeConfig());
 		install(scene);
 		const { textY } = scene.relayout();
 		selectFirstRows(scene, textY);
-
-		scene.prototype.copySelectionToClipboard(); // release: arms
-		expect(activeSelectionHintText()).not.toBeNull();
-		scene.prototype.handleViewportInput("\x03");
-
-		expect(decodeOsc52(scene.written[0] ?? "")).toBe("alpha beta\ngamma delta");
-		expect(activeSelectionHintText()).toBeNull();
-		// And the draft is untouched — ctrl+c copied, it did not delete.
-		expect(scene.editor.getLines()).toEqual(["alpha beta", "gamma delta"]);
-	});
-
-	it("copies on ctrl+c sent as an xterm modifyOtherKeys sequence", () => {
-		// Pi 0.84 negotiates the Kitty keyboard protocol and falls back to
-		// modifyOtherKeys, under which the chord is CSI 27;5;99~ rather than the
-		// bare \x03. The pending copy must recognise the encoded form or ctrl+c
-		// falls through to Pi's `app.clear` exactly when it was about to copy.
-		const scene = makeScene(
-			"alpha beta\ngamma delta",
-			makeConfig({ mouse: { ...defaultConfig.mouse, copyOnSelect: false } }),
-		);
-		install(scene);
-		const { textY } = scene.relayout();
-		selectFirstRows(scene, textY);
-
-		scene.prototype.copySelectionToClipboard(); // release: arms
-		expect(activeSelectionHintText()).not.toBeNull();
-		scene.prototype.handleViewportInput("\x1b[27;5;99~");
-
-		expect(decodeOsc52(scene.written[0] ?? "")).toBe("alpha beta\ngamma delta");
-		expect(activeSelectionHintText()).toBeNull();
-	});
-
-	it("copies on ctrl+c sent as a Kitty keyboard protocol sequence", () => {
-		// The same chord under the Kitty protocol: CSI 99;5u.
-		const scene = makeScene(
-			"alpha beta\ngamma delta",
-			makeConfig({ mouse: { ...defaultConfig.mouse, copyOnSelect: false } }),
-		);
-		install(scene);
-		const { textY } = scene.relayout();
-		selectFirstRows(scene, textY);
-
-		scene.prototype.copySelectionToClipboard(); // release: arms
-		expect(activeSelectionHintText()).not.toBeNull();
-		scene.prototype.handleViewportInput("\x1b[99;5u");
-
-		expect(decodeOsc52(scene.written[0] ?? "")).toBe("alpha beta\ngamma delta");
-		expect(activeSelectionHintText()).toBeNull();
-	});
-
-	it("clears a pending arm when the range it described is deleted", () => {
-		const scene = makeScene(
-			"alpha beta\ngamma delta",
-			makeConfig({ mouse: { ...defaultConfig.mouse, copyOnSelect: false } }),
-		);
-		install(scene);
-		const { textY } = scene.relayout();
-		selectFirstRows(scene, textY);
-		scene.prototype.copySelectionToClipboard(); // arms
+		scene.prototype.handleViewportInput("");
 		expect(activeSelectionHintText()).not.toBeNull();
 
 		scene.prototype.handleViewportInput(BACKSPACE);
+		// Pi clears anchor and focus when the range is deleted; the fixture keeps
+		// its own bounds field, so simulate the real consequence.
+		scene.prototype.selectionBounds = undefined;
 
-		// A hint offering to copy text that has been deleted would be a lie, and
-		// a stale arm makes the next ctrl+c consume an interrupt for a no-op copy.
+		// A hint offering to copy text that no longer exists would be a lie, and
+		// there is no arm to go stale — the hint is derived, so it just dies.
 		expect(activeSelectionHintText()).toBeNull();
 	});
 
-	it("arms an editor selection with the external-editor hint, a transcript one without", () => {
+	it("points an editor selection's hint at the external editor, a transcript one not", () => {
 		// The editor selection cannot grow past the visible window — there is no
-		// drag-scroll — so its pending hint points at `app.editor.external`,
-		// spelled the way this session has it bound. A transcript selection can
-		// scroll and needs no such pointer.
+		// drag-scroll — so its hint points at `app.editor.external`, spelled the
+		// way this session has it bound. A transcript selection can scroll and
+		// needs no such pointer.
 		const original = getKeybindings();
 		setKeybindings(
 			new KeybindingsManager({ "app.editor.external": { defaultKeys: "ctrl+g" } }) as never,
 		);
 		try {
-			const scene = makeScene(
-				"alpha beta\ngamma delta",
-				makeConfig({ mouse: { ...defaultConfig.mouse, copyOnSelect: false } }),
-			);
+			const scene = makeScene("alpha beta\ngamma delta", makeConfig());
 			install(scene);
 			const { textY } = scene.relayout();
 			selectFirstRows(scene, textY);
-
-			scene.prototype.copySelectionToClipboard(); // release: arms
+			scene.prototype.handleViewportInput("");
 
 			// Unset EDITOR keeps the literal variable name in the hint.
 			vi.stubEnv("EDITOR", "");
 			expect(activeSelectionHintText()).toMatch(
-				/characters selected, ctrl\+c to copy ⋅ ctrl\+g to edit in \$EDITOR$/,
+				/characters selected ⋅ ctrl\+g to edit in \$EDITOR$/,
 			);
 			// With $EDITOR set, the hint names the editor it would open.
 			vi.stubEnv("EDITOR", "/usr/bin/nvim");
-			expect(activeSelectionHintText()).toMatch(
-				/characters selected, ctrl\+c to copy ⋅ ctrl\+g to edit in nvim$/,
-			);
+			expect(activeSelectionHintText()).toMatch(/characters selected ⋅ ctrl\+g to edit in nvim$/);
 
-			// A transcript selection arms the plain hint.
-			scene.prototype.handleViewportInput("\x03"); // copies and clears
+			// A transcript selection hints without the external-editor pointer.
 			const scrollView = (
 				scene.prototype.currentLayout.root?.children?.[0] as { scrollView?: unknown }
 			)?.scrollView;
@@ -1328,7 +1258,6 @@ describe("the two features that share handleViewportInput", () => {
 				start: { row: 0, col: 0, scrollView },
 				end: { row: 0, col: 4, scrollView },
 			};
-			scene.prototype.copySelectionToClipboard();
 			const hint = activeSelectionHintText();
 			expect(hint).not.toBeNull();
 			expect(hint).not.toContain("$EDITOR");
@@ -1397,7 +1326,7 @@ describe("the two features that share handleViewportInput", () => {
 		expect(scene.editor.getLines()).toEqual(["alpha beta", "gamma delta"]);
 	});
 
-	it("all six features coexist: expand, caret, copy and range delete", () => {
+	it("all six features coexist: expand, caret, copy and range delete", async () => {
 		// Every feature installed at once, exercising all three shared patches in
 		// one session. Reproducing any adapter-key collision turns this red.
 		const scene = makeScene("alpha beta\ngamma delta\nepsilon zeta");
@@ -1437,7 +1366,7 @@ describe("the two features that share handleViewportInput", () => {
 			start: { row: second.textY(0), col: TEXT_COLUMN },
 			end: { row: second.textY(1), col: WIDTH - 1 },
 		};
-		scene.prototype.copySelectionToClipboard();
+		await scene.prototype.copyActiveSelectionToClipboard();
 		expect(decodeOsc52(scene.written[0] ?? "")).toBe("alpha beta\ngamma delta");
 
 		// mouse-viewport-input, behaviour 2: range delete.

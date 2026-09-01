@@ -16,7 +16,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { activeSelectionHintText } from "../../extensions/starline/mouse/index";
 
 let mouseEnabled = true;
-let copyOnSelect = false;
 
 vi.mock("../../extensions/starline/config", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("../../extensions/starline/config")>();
@@ -27,9 +26,9 @@ vi.mock("../../extensions/starline/config", async (importOriginal) => {
 			...actual.defaultConfig,
 			projectRefreshIntervalMs: 0,
 			// `statusLine: false` is load-bearing, not incidental — see the
-			// repaint test at the bottom of this file.
+			// hint test at the bottom of this file.
 			features: { ...actual.defaultConfig.features, editor: false, statusLine: false },
-			mouse: { ...actual.defaultConfig.mouse, enabled: mouseEnabled, copyOnSelect },
+			mouse: { ...actual.defaultConfig.mouse, enabled: mouseEnabled },
 		}),
 	};
 });
@@ -39,7 +38,7 @@ import starline from "../../extensions/starline/index";
 // Typed `private` in pi-tui's `.d.ts`, plain prototype functions at runtime —
 // the same view `test/contract/mouse-install.test.ts` documents.
 type TuiAltScreenPrototype = {
-	copySelectionToClipboard: () => void;
+	copyActiveSelectionToClipboard: () => Promise<boolean>;
 	handleViewportInput: (data: string) => { consume: boolean } | undefined;
 	handleSelectionMouseEvent: (event: unknown) => void;
 	getWordSelection: (point: unknown) => unknown;
@@ -47,14 +46,14 @@ type TuiAltScreenPrototype = {
 const prototype = TuiAltScreen.prototype as unknown as TuiAltScreenPrototype;
 
 const originals = {
-	copySelectionToClipboard: prototype.copySelectionToClipboard,
+	copyActiveSelectionToClipboard: prototype.copyActiveSelectionToClipboard,
 	handleViewportInput: prototype.handleViewportInput,
 	handleSelectionMouseEvent: prototype.handleSelectionMouseEvent,
 	getWordSelection: prototype.getWordSelection,
 };
 
 function expectRestored(): void {
-	expect(prototype.copySelectionToClipboard).toBe(originals.copySelectionToClipboard);
+	expect(prototype.copyActiveSelectionToClipboard).toBe(originals.copyActiveSelectionToClipboard);
 	expect(prototype.handleViewportInput).toBe(originals.handleViewportInput);
 	expect(prototype.handleSelectionMouseEvent).toBe(originals.handleSelectionMouseEvent);
 	expect(prototype.getWordSelection).toBe(originals.getWordSelection);
@@ -137,7 +136,6 @@ describe("extension wiring of installMouse", () => {
 			await endSession();
 		} finally {
 			mouseEnabled = true;
-			copyOnSelect = false;
 			expectRestored();
 		}
 	});
@@ -145,7 +143,9 @@ describe("extension wiring of installMouse", () => {
 	it("patches the real TuiAltScreen prototype on session_start", async () => {
 		await startSession();
 
-		expect(prototype.copySelectionToClipboard).not.toBe(originals.copySelectionToClipboard);
+		expect(prototype.copyActiveSelectionToClipboard).not.toBe(
+			originals.copyActiveSelectionToClipboard,
+		);
 		expect(prototype.handleViewportInput).not.toBe(originals.handleViewportInput);
 		expect(prototype.handleSelectionMouseEvent).not.toBe(originals.handleSelectionMouseEvent);
 		expect(prototype.getWordSelection).not.toBe(originals.getWordSelection);
@@ -168,53 +168,35 @@ describe("extension wiring of installMouse", () => {
 	});
 
 	/**
-	 * The gap this file did not catch the first time.
-	 *
-	 * The wiring originally passed the extension's own `refresh` as the patches'
-	 * repaint callback. `refresh` calls `requestFooterRender`, which is only ever
-	 * set inside `installStatusLine` — so with `features.statusLine` off (exactly
-	 * what this file's config mock configures) arming a selection asked nobody to
-	 * repaint, and the pending hint sat invisible until some unrelated frame
-	 * arrived. The hint lives in the editor's metadata row, so the footer was
-	 * never the right thing to depend on.
-	 *
-	 * This asserts the real effect rather than that a stub was called: a real
-	 * receiver off the real prototype, Pi's own inherited `requestRender`, and
-	 * `renderRequested` — the flag Pi's own method sets — flipping on release.
+	 * The hint is derived, so nothing about a release needs Starline's help: Pi
+	 * 0.84.4's `copyOnSelect: false` keeps the selection highlighted and its own
+	 * repaints put the hint on screen via the metadata row. This drives the real
+	 * prototype the way a real session would — selection on the live renderer,
+	 * one input event to register the instance — and reads the derived hint.
 	 */
-	it("asks the renderer to repaint on release even with the statusline off", async () => {
+	it("derives the selection hint from the real prototype's own state", async () => {
 		await startSession();
 
 		const receiver = Object.create(TuiAltScreen.prototype) as {
+			copyOnSelect: boolean;
 			selectionAnchor: { row: number; col: number } | undefined;
 			selectionFocus: { row: number; col: number } | undefined;
 			previousScreen: string[];
-			terminal: { write: (data: string) => void };
-			flashes: { flash: (message: string) => void };
-			copySelectionToClipboard: () => void;
-			renderRequested: boolean;
+			overlayStack: unknown[];
+			handleViewportInput: (data: string) => { consume: boolean } | undefined;
 			stopped: boolean;
 		};
-		const written: string[] = [];
+		receiver.copyOnSelect = false;
 		receiver.previousScreen = ["hello world"];
-		receiver.terminal = { write: (data: string) => written.push(data) };
-		receiver.flashes = { flash: () => {} };
 		receiver.selectionAnchor = { row: 0, col: 0 };
 		receiver.selectionFocus = { row: 0, col: 5 };
-		receiver.renderRequested = false;
-		// `requestRender` defers the frame itself to `scheduleRender` on the next
-		// tick, which returns immediately while stopped. That leaves the real
-		// method's observable effect without a detached receiver trying to paint.
+		receiver.overlayStack = [];
 		receiver.stopped = true;
 
-		// The release. Pi calls this itself when the button comes up.
-		receiver.copySelectionToClipboard();
+		// An input event registers the live instance the hint reads.
+		receiver.handleViewportInput("");
 
-		expect(written).toEqual([]); // armed, not copied
-		expect(activeSelectionHintText()).toBe("5 characters selected, ctrl+c to copy");
-		// Pi's own `requestRender` ran, with no footer installed anywhere. Under
-		// the original wiring this stayed false.
-		expect(receiver.renderRequested).toBe(true);
+		expect(activeSelectionHintText()).toContain("5 characters selected");
 
 		await endSession();
 		expect(activeSelectionHintText()).toBeNull();
