@@ -151,7 +151,7 @@ Detects Starship Nerd Font runtime/language modules, uses the Starship Nerd Font
 
 ## Install
 
-Starline drives Pi 0.84's alternate-screen renderer, so it needs **Pi ≥ 0.84.0**.
+Starline drives Pi 0.84's alternate-screen renderer, so it needs **Pi ≥ 0.84.4**.
 If you are on a distribution that bundles an older Pi, upgrade it or wait for it to catch up.
 
 ```bash
