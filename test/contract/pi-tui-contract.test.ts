@@ -22,7 +22,6 @@ const PATCHED_METHODS = [
 	"routeWheel",
 	"handleSelectionMouseEvent",
 	"copyActiveSelectionToClipboard",
-	"getWordSelection",
 ];
 
 // Read, not patched — the selection itself stays Pi's, and `hasOverlay` is

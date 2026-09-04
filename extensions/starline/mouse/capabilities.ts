@@ -28,8 +28,6 @@ export type MouseCapability =
 	| "copyActiveSelectionToClipboard"
 	| "getCopyOnSelect"
 	| "hasActiveSelection"
-	| "getWordSelection"
-	| "getSelectionSourceLine"
 	| "getSelectionBounds"
 	| "getSelectionColumns"
 	| "flash"
@@ -38,7 +36,6 @@ export type MouseCapability =
 
 export type MouseFeature =
 	| "selectionHint"
-	| "pathAwareWords"
 	| "clickToExpandTools"
 	| "editorWheelScroll"
 	| "editorClickToCaret"
@@ -52,8 +49,6 @@ const CAPABILITIES: readonly MouseCapability[] = [
 	"copyActiveSelectionToClipboard",
 	"getCopyOnSelect",
 	"hasActiveSelection",
-	"getWordSelection",
-	"getSelectionSourceLine",
 	"getSelectionBounds",
 	"getSelectionColumns",
 	"flash",
@@ -84,10 +79,6 @@ const REQUIREMENTS: Record<MouseFeature, readonly MouseCapability[]> = {
 		"getSelectionBounds",
 		"getSelectionColumns",
 	],
-	// Also reads the line under the pointer through the receiver's own
-	// `getSelectionSourceLine`, so the patch has a real line to hand
-	// `wordRangeAt` — without it there's nothing to compute a range over.
-	pathAwareWords: ["getWordSelection", "getSelectionSourceLine"],
 	// The press it acts on arrives through `handleSelectionMouseEvent`, and it
 	// asks `hasOverlay` the same question Pi's own press path asks before
 	// resolving a scroll view (`tui-alt-screen.js:684`) — without it, a click on

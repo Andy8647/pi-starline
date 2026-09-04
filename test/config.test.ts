@@ -112,7 +112,6 @@ describe("mergeConfig", () => {
 			wheelRouting: true,
 			copyNotice: true,
 			clickToExpandTools: true,
-			pathAwareWords: true,
 			transcriptCleanCopy: true,
 		});
 		expect(defaultConfig.mouse).toEqual({
@@ -120,7 +119,6 @@ describe("mergeConfig", () => {
 			wheelRouting: true,
 			copyNotice: true,
 			clickToExpandTools: true,
-			pathAwareWords: true,
 			transcriptCleanCopy: true,
 		});
 	});
@@ -131,7 +129,6 @@ describe("mergeConfig", () => {
 			wheelRouting: false,
 			copyNotice: true,
 			clickToExpandTools: true,
-			pathAwareWords: true,
 			transcriptCleanCopy: true,
 		});
 	});
@@ -142,7 +139,6 @@ describe("mergeConfig", () => {
 			wheelRouting: true,
 			copyNotice: true,
 			clickToExpandTools: true,
-			pathAwareWords: true,
 			transcriptCleanCopy: true,
 		});
 	});
@@ -1390,7 +1386,6 @@ describe("saveMousePatch", () => {
 				wheelRouting: false,
 				copyNotice: true,
 				clickToExpandTools: true,
-				pathAwareWords: true,
 				transcriptCleanCopy: true,
 			});
 		} finally {

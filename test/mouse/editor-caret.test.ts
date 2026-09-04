@@ -574,10 +574,6 @@ function makeScene(draft: string, config = makeConfig()) {
 			renders.push("render");
 		},
 		routeWheel() {},
-		getWordSelection() {},
-		getSelectionSourceLine() {
-			return "";
-		},
 	};
 
 	/**

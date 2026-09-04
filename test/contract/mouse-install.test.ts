@@ -27,7 +27,6 @@ type TuiAltScreenPrototype = {
 	copyActiveSelectionToClipboard: () => Promise<boolean>;
 	handleViewportInput: (data: string) => { consume: boolean } | undefined;
 	handleSelectionMouseEvent: (event: unknown) => void;
-	getWordSelection: (point: unknown) => unknown;
 	routeWheel: (event: unknown) => void;
 };
 const prototype = TuiAltScreen.prototype as unknown as TuiAltScreenPrototype;
@@ -35,7 +34,6 @@ const prototype = TuiAltScreen.prototype as unknown as TuiAltScreenPrototype;
 const originalCopy = prototype.copyActiveSelectionToClipboard;
 const originalViewportInput = prototype.handleViewportInput;
 const originalMouseEvent = prototype.handleSelectionMouseEvent;
-const originalWordSelection = prototype.getWordSelection;
 const originalRouteWheel = prototype.routeWheel;
 
 type RealReceiver = {
@@ -100,7 +98,6 @@ describe("mouse patches against the real TuiAltScreen.prototype", () => {
 			// Every method `installMouse` may touch, not only the two this file
 			// exercises: the real prototype is shared with every other test file.
 			expect(prototype.handleSelectionMouseEvent).toBe(originalMouseEvent);
-			expect(prototype.getWordSelection).toBe(originalWordSelection);
 			expect(prototype.routeWheel).toBe(originalRouteWheel);
 			setActiveEditor(undefined);
 		}
@@ -257,7 +254,6 @@ describe("the wheel patch against the real TuiAltScreen.prototype", () => {
 						copyNotice: true,
 						enabled: true,
 						clickToExpandTools: true,
-						pathAwareWords: true,
 					},
 				}) as never,
 		});

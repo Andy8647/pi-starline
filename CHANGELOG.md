@@ -10,6 +10,30 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [0.3.4] - 2026-09-04
+
+Dropped Starline's own path-aware word selection. Pi 0.84.4 ships the same
+behaviour natively — its `getWordSelection` keeps `/` and `-` inside a word
+(the fix for Pi #7746, merged upstream as #8676) — so the duplicate patch is
+gone and double-click word selection is Pi's own again.
+
+**Removed**
+
+- `mouse.pathAwareWords` is removed. The behaviour it switched — a
+  double-click keeping paths and kebab-case whole — is now Pi 0.84.4's own
+  word selection, on by default and not toggleable from Starline. A
+  `mouse.pathAwareWords` key in an old config is ignored at runtime.
+
+**Changed**
+
+- Double-click word selection now answers Pi's own `getWordSelection` rather
+  than Starline's `wordRangeAt`. The two agree on the common cases; the edges
+  differ slightly — `http://` double-clicking `//` selects `//a.com/b` where
+  Starline selected `a.com/b`, and a trailing `/` in `foo/` stays in the
+  selection where Starline dropped it.
+- The Install section of the README now states Pi ≥ 0.84.4, matching the peer
+  ranges 0.3.3 raised.
+
 ## [0.3.3] - 2026-09-01
 
 Adopted Pi 0.84.4's native select-without-copy. Pi now owns "don't copy on
@@ -307,7 +331,8 @@ What this fork adds over upstream:
   selection
 - Paste collapsing, with paste-again-to-expand
 
-[Unreleased]: https://github.com/Andy8647/pi-starline/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/Andy8647/pi-starline/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/Andy8647/pi-starline/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/Andy8647/pi-starline/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/Andy8647/pi-starline/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/Andy8647/pi-starline/compare/v0.3.0...v0.3.1
