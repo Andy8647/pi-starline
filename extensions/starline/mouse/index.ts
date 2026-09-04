@@ -634,7 +634,6 @@ function installCopying(
 	const cleanCopy = features.has("transcriptCleanCopy");
 	const rangeDelete = features.has("editorClickToCaret");
 	const hint = features.has("selectionHint");
-	const previousHint = activeHint;
 	if (hint) activeHint = { getConfig: deps.getConfig, bufferCopy, cleanCopy };
 
 	const cleanups: Array<() => void> = [];
