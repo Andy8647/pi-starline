@@ -5,7 +5,7 @@
  * what it would do to it. `installMouse` probes what the running Pi build
  * exposes, logs once if something is missing, and installs each feature gated
  * on exactly its own declared requirement (`capabilities.ts`). Today that is
- * six features across five patches. Three of those methods carry two features
+ * six features across four patches. Two of those methods carry two features
  * each, and in every case the two share a single patch, because the patch
  * registry holds one behaviour per adapter key and a second registration would
  * silently replace the first:
@@ -21,16 +21,6 @@
  *   Pi's own `fullscreenCopyOnSelect`, and this module only tells the user
  *   what to press. The copy key is `app.message.copy` (default ctrl+x),
  *   resolved from Pi's keybinding registry so a rebind shows up in the hint.
- *
- * `pathAwareWords`, one patch:
- * - `getWordSelection` — Pi's own double-click word lookup, replaced with
- *   `wordRangeAt` (`word-select.ts`, ported from pi issue #7746) so a path or
- *   a kebab-case identifier selects whole instead of stopping at `/` or `-`.
- *   The installed 0.84.1 build predates #7746, so this substitutes Pi's
- *   entire word-selection rule rather than layering path handling on top of
- *   it — that is what #7746 itself proposes, not scope creep introduced
- *   here. Calls through when `wordRangeAt` declines (column past the end of
- *   the line) or when `mouse.pathAwareWords` is off.
  *
  * `clickToExpandTools`, one patch:
  * - `handleSelectionMouseEvent` — watched for a left-button press that landed
@@ -105,7 +95,6 @@ import { type BoxLike, scrollContentLinesFor } from "./hit-test";
 import { externalEditorName, selectionHintText } from "./selection-state";
 import { type ExpandTarget, expandKeyText, expandTargetAt, keyTextFor } from "./tool-box";
 import { cleanTranscriptRows } from "./transcript-copy";
-import { wordRangeAt } from "./word-select";
 
 /** Pi's interrupt chord — refused by the range-delete branch, never consumed. */
 const CTRL_C = "\x03";
@@ -164,8 +153,6 @@ type MouseCapablePrototype = {
 	hasActiveSelection(this: unknown): boolean;
 	handleViewportInput(this: unknown, data: string): { consume: boolean } | undefined;
 	flash(this: unknown, message: string, durationMs?: number): void;
-	getWordSelection(this: unknown, point: SelectionPoint): SelectionBounds | undefined;
-	getSelectionSourceLine(this: unknown, point: SelectionPoint): string;
 	hasOverlay(this: unknown): boolean;
 	/**
 	 * `TuiAltScreen.routeWheel(event)` (`tui-alt-screen.js:375`). `event` is
@@ -728,43 +715,6 @@ function installCopying(
 }
 
 /**
- * Installs `pathAwareWords` on `getWordSelection`.
- *
- * The receiver's own `getSelectionSourceLine` gives the raw line under the
- * point; `stripTerminalSequences` is applied the same way predecessor itself
- * applies it (see `getWordSelection` in
- * `node_modules/@earendil-works/pi-tui/dist/tui-alt-screen.js`), so
- * `wordRangeAt` sees the same plain text Pi's own segmenter would. `col` is
- * the only thing the wrapper changes on the way out — `row`, `scrollView`
- * and any other point field ride through unmodified, which is what keeps a
- * scroll-view selection landing in the right place.
- */
-function installPathAwareWords(
-	prototype: MouseCapablePrototype,
-	deps: InstallMouseDeps,
-): () => void {
-	return installPrototypePatch(
-		prototype,
-		"getWordSelection",
-		"mouse-word-selection",
-		({ predecessor, receiver, args }) => {
-			if (!deps.getConfig().mouse.pathAwareWords) {
-				return Reflect.apply(predecessor, receiver, args);
-			}
-			const typedReceiver = receiver as MouseCapablePrototype;
-			const point = args[0] as SelectionPoint;
-			const line = stripTerminalSequences(typedReceiver.getSelectionSourceLine(point));
-			const range = wordRangeAt(line, point.col);
-			if (!range) return Reflect.apply(predecessor, receiver, args);
-			return {
-				start: { ...point, col: range.start },
-				end: { ...point, col: range.end, boundary: true },
-			};
-		},
-	);
-}
-
-/**
  * A left-button press: not a release, not a drag, not another button.
  *
  * Pi's own handler returns immediately unless `(button & 3) === 0`, treats
@@ -1042,9 +992,6 @@ export function installMouse(prototype: object, deps: InstallMouseDeps): () => v
 		enabled.has("transcriptCleanCopy")
 	) {
 		cleanups.push(installCopying(typedPrototype, deps, enabled));
-	}
-	if (enabled.has("pathAwareWords")) {
-		cleanups.push(installPathAwareWords(typedPrototype, deps));
 	}
 	if (enabled.has("clickToExpandTools") || enabled.has("editorClickToCaret")) {
 		cleanups.push(installSelectionMouse(typedPrototype, deps, enabled));

@@ -281,7 +281,6 @@ function makeConfig(clickToExpandTools: boolean): () => PolishedTuiConfig {
 				wheelRouting: true,
 				copyNotice: true,
 				clickToExpandTools,
-				pathAwareWords: true,
 			},
 		}) as PolishedTuiConfig;
 }

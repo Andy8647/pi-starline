@@ -18,8 +18,6 @@ const ALL = [
 	"copyActiveSelectionToClipboard",
 	"getCopyOnSelect",
 	"hasActiveSelection",
-	"getWordSelection",
-	"getSelectionSourceLine",
 	"getSelectionBounds",
 	"getSelectionColumns",
 	"flash",
@@ -50,12 +48,12 @@ describe("probeCapabilities", () => {
 
 	it("skips a non-configurable method", () => {
 		const proto = prototypeWith(ALL);
-		Object.defineProperty(proto, "getWordSelection", {
+		Object.defineProperty(proto, "getSelectionBounds", {
 			value: () => undefined,
 			writable: true,
 			configurable: false,
 		});
-		expect(probeCapabilities(proto).has("getWordSelection")).toBe(false);
+		expect(probeCapabilities(proto).has("getSelectionBounds")).toBe(false);
 	});
 
 	it("skips an accessor property", () => {
@@ -93,7 +91,7 @@ describe("probeCapabilities", () => {
 describe("enabledFeatures", () => {
 	it("enables everything when every capability is present", () => {
 		const features = enabledFeatures(probeCapabilities(prototypeWith(ALL)));
-		expect(features.size).toBe(7);
+		expect(features.size).toBe(6);
 	});
 
 	it("disables the hint when Pi 0.84.4's selection APIs are missing", () => {
@@ -119,7 +117,6 @@ describe("enabledFeatures", () => {
 			"editorBufferCopy",
 			"editorClickToCaret",
 			"editorWheelScroll",
-			"pathAwareWords",
 			"selectionHint",
 			"transcriptCleanCopy",
 		]);
@@ -139,8 +136,6 @@ describe("enabledFeatures", () => {
 		// the end of its own `routeWheel`: without one of its own, the box would
 		// scroll and not be redrawn.
 		expect(features.has("editorWheelScroll")).toBe(false);
-		// Word selection returns a range and lets Pi repaint on its own path.
-		expect(features.has("pathAwareWords")).toBe(true);
 		// Click-to-caret needs it too, but only because of its *second* half: the
 		// caret alone calls through and rides Pi's own repaint, while the range
 		// delete consumes the key, so Pi never reaches `requestImmediateRender`

@@ -25,7 +25,6 @@ type FakeAltScreen = {
 	routeWheel(): void;
 	handleSelectionMouseEvent(): void;
 	applySelection(): void;
-	getWordSelection(): void;
 	requestRender(): void;
 };
 
@@ -83,7 +82,6 @@ function makePrototype(): { prototype: FakeAltScreen; calls: string[]; renders: 
 		routeWheel() {},
 		handleSelectionMouseEvent() {},
 		applySelection() {},
-		getWordSelection() {},
 		requestRender() {
 			renders.push("render");
 		},
@@ -101,7 +99,6 @@ function makeConfig(copyNotice: boolean, transcriptCleanCopy = true): () => Poli
 				enabled: true,
 				wheelRouting: true,
 				clickToExpandTools: true,
-				pathAwareWords: true,
 			},
 		}) as PolishedTuiConfig;
 }
@@ -158,9 +155,7 @@ describe("installMouse selectionHint", () => {
 	it("does not install without Pi 0.84.4's selection APIs, and still copies clean", () => {
 		// Dropping `getCopyOnSelect`/`hasActiveSelection` takes `selectionHint`
 		// with it — no hint — while `transcriptCleanCopy` needs neither and
-		// still answers the copy. (This fixture never stubs
-		// `getSelectionSourceLine`, so `pathAwareWords` was never going to
-		// install here either; see capabilities.test.ts for that gating.)
+		// still answers the copy.
 		const { prototype } = makePrototype();
 		const { getCopyOnSelect: _droppedA, hasActiveSelection: _droppedB, ...withoutApi } = prototype;
 		const original = withoutApi.copyActiveSelectionToClipboard;
@@ -280,7 +275,6 @@ function makeTranscriptFixture() {
 		routeWheel() {},
 		handleSelectionMouseEvent() {},
 		applySelection() {},
-		getWordSelection() {},
 	};
 
 	/** What Pi's own copy produces for this selection — frame and all. */
@@ -529,120 +523,6 @@ describe("installMouse transcriptCleanCopy", () => {
 
 		expect(written).toEqual([]);
 		dispose();
-	});
-});
-
-type WordSelectionPoint = { row: number; col: number; scrollView?: unknown };
-type WordSelectionRange = { start: WordSelectionPoint; end: WordSelectionPoint };
-
-type WordSelectionPrototype = {
-	previousScreen: string[];
-	getSelectionSourceLine(point: WordSelectionPoint): string;
-	getWordSelection(point: WordSelectionPoint): WordSelectionRange | undefined;
-};
-
-/**
- * A minimal stand-in for the slice of `TuiAltScreen` `pathAwareWords` touches
- * — just the two methods `capabilities.ts` requires for it, wired the same
- * way Pi's own `getWordSelection`/`getSelectionSourceLine` are (source line
- * comes from `previousScreen`; predecessor's `getWordSelection` is a crude
- * stand-in for Pi's real pre-#7746 rule — runs of letters/digits only, so it
- * splits at `/` and `-` the same way the real, unpatched segmenter does —
- * which is what makes a call-through distinguishable from the patched
- * `wordRangeAt` answer by its *value*, not just by identity).
- */
-function makeWordSelectionPrototype(): WordSelectionPrototype {
-	return {
-		previousScreen: ["see src/fixed-editor/a.ts here"],
-		getSelectionSourceLine(point) {
-			return this.previousScreen[point.row] ?? "";
-		},
-		getWordSelection(point) {
-			const line = this.previousScreen[point.row] ?? "";
-			const isWord = (ch: string | undefined) => ch !== undefined && /[A-Za-z0-9]/.test(ch);
-			if (!isWord(line[point.col])) return undefined;
-			let start = point.col;
-			while (start > 0 && isWord(line[start - 1])) start--;
-			let end = point.col;
-			while (end < line.length && isWord(line[end])) end++;
-			return { start: { ...point, col: start }, end: { ...point, col: end } };
-		},
-	};
-}
-
-describe("installMouse pathAwareWords", () => {
-	it("keeps a path whole where predecessor would have split it", () => {
-		const prototype = makeWordSelectionPrototype();
-		const dispose = installMouse(prototype, {
-			getConfig: makeConfig(true),
-		});
-
-		// Column 9 is inside "fixed" (of "src/fixed-editor/a.ts"). Predecessor's
-		// letters-and-digits-only rule would stop there, at the `/` and `-` on
-		// either side; the patched one keeps the whole path.
-		const range = prototype.getWordSelection({ row: 0, col: 9 });
-		expect(range).toEqual({
-			start: { row: 0, col: 4, scrollView: undefined },
-			end: { row: 0, col: 25, scrollView: undefined, boundary: true },
-		});
-		dispose();
-	});
-
-	it("calls through to predecessor when mouse.pathAwareWords is off", () => {
-		const prototype = makeWordSelectionPrototype();
-		const dispose = installMouse(prototype, {
-			getConfig: () =>
-				({
-					mouse: {
-						copyNotice: true,
-						enabled: true,
-						wheelRouting: true,
-						clickToExpandTools: true,
-						pathAwareWords: false,
-					},
-				}) as PolishedTuiConfig,
-		});
-
-		const range = prototype.getWordSelection({ row: 0, col: 9 });
-		// Predecessor's cruder rule: just "fixed", stopping at `/` and `-`, and
-		// with no `boundary` field — the tell that this is predecessor's shape.
-		expect(range).toEqual({ start: { row: 0, col: 8 }, end: { row: 0, col: 13 } });
-		dispose();
-	});
-
-	it("calls through when wordRangeAt declines (column past the end of the line)", () => {
-		const prototype = makeWordSelectionPrototype();
-		const dispose = installMouse(prototype, {
-			getConfig: makeConfig(true),
-		});
-
-		const range = prototype.getWordSelection({ row: 0, col: 999 });
-		expect(range).toBeUndefined();
-		dispose();
-	});
-
-	it("does not install when getSelectionSourceLine is missing", () => {
-		const { getSelectionSourceLine: _dropped, ...withoutSourceLine } = makeWordSelectionPrototype();
-		const original = withoutSourceLine.getWordSelection;
-
-		const dispose = installMouse(withoutSourceLine, {
-			getConfig: makeConfig(true),
-		});
-
-		expect(withoutSourceLine.getWordSelection).toBe(original);
-		dispose();
-	});
-
-	it("dispose restores predecessor", () => {
-		const prototype = makeWordSelectionPrototype();
-		const original = prototype.getWordSelection;
-		const dispose = installMouse(prototype, {
-			getConfig: makeConfig(true),
-		});
-
-		dispose();
-
-		expect(prototype.getWordSelection).toBe(original);
 	});
 });
 

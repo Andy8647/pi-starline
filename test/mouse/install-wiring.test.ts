@@ -41,7 +41,6 @@ type TuiAltScreenPrototype = {
 	copyActiveSelectionToClipboard: () => Promise<boolean>;
 	handleViewportInput: (data: string) => { consume: boolean } | undefined;
 	handleSelectionMouseEvent: (event: unknown) => void;
-	getWordSelection: (point: unknown) => unknown;
 };
 const prototype = TuiAltScreen.prototype as unknown as TuiAltScreenPrototype;
 
@@ -49,14 +48,12 @@ const originals = {
 	copyActiveSelectionToClipboard: prototype.copyActiveSelectionToClipboard,
 	handleViewportInput: prototype.handleViewportInput,
 	handleSelectionMouseEvent: prototype.handleSelectionMouseEvent,
-	getWordSelection: prototype.getWordSelection,
 };
 
 function expectRestored(): void {
 	expect(prototype.copyActiveSelectionToClipboard).toBe(originals.copyActiveSelectionToClipboard);
 	expect(prototype.handleViewportInput).toBe(originals.handleViewportInput);
 	expect(prototype.handleSelectionMouseEvent).toBe(originals.handleSelectionMouseEvent);
-	expect(prototype.getWordSelection).toBe(originals.getWordSelection);
 }
 
 type Handler = (event: unknown, ctx: unknown) => unknown | Promise<unknown>;
@@ -148,7 +145,6 @@ describe("extension wiring of installMouse", () => {
 		);
 		expect(prototype.handleViewportInput).not.toBe(originals.handleViewportInput);
 		expect(prototype.handleSelectionMouseEvent).not.toBe(originals.handleSelectionMouseEvent);
-		expect(prototype.getWordSelection).not.toBe(originals.getWordSelection);
 	});
 
 	it("installs nothing when mouse.enabled is false", async () => {

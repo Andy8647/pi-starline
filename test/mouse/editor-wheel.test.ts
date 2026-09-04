@@ -157,8 +157,6 @@ type FakeAltScreen = {
 	handleViewportInput(): void;
 	handleSelectionMouseEvent(): void;
 	copyActiveSelectionToClipboard(): Promise<boolean>;
-	getWordSelection(): void;
-	getSelectionSourceLine(): string;
 	getSelectionBounds(): undefined;
 	getSelectionColumns(): { start: number; end: number };
 	flash(): void;
@@ -185,8 +183,6 @@ function makePrototype(): { prototype: FakeAltScreen; routed: WheelEvent[]; rend
 		async copyActiveSelectionToClipboard() {
 			return false;
 		},
-		getWordSelection() {},
-		getSelectionSourceLine: () => "",
 		getSelectionBounds: () => undefined,
 		getSelectionColumns: () => ({ start: 0, end: 0 }),
 		flash() {},
@@ -202,7 +198,6 @@ function makeConfig(wheelRouting: boolean): () => PolishedTuiConfig {
 				wheelRouting,
 				copyNotice: true,
 				clickToExpandTools: false,
-				pathAwareWords: false,
 			},
 		}) as PolishedTuiConfig;
 }
