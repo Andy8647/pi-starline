@@ -10,6 +10,28 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [0.3.5] - 2026-09-09
+
+### Added
+
+- **`extensionStatuses.placements[key]: "editor"`** puts a third-party status on
+  the editor's bottom-right metadata row — the slot the copy and paste hints
+  already use — instead of the footer. Pick it per status key from the
+  `Extension segments` tab in `/starline`, or in JSON:
+
+  ```json
+  { "extensionStatuses": { "placements": { "pi-ide": "editor" } } }
+  ```
+
+  The row renders one muted line, so per-status `colors`, `icons`, and
+  `colorMode` apply to footer placements only. It needs `features.editor` and
+  `features.statusLine` both on: the status map reaches Starline through its
+  own footer factory, so there is nothing to read when the footer is Pi's.
+
+  Paired with pi-ide-context, whose `in main.ts` / `N lines selected in
+  main.ts` moved from a widget below the editor to `ctx.ui.setStatus()`. With
+  this placement that text sits in the editor frame where it belongs.
+
 ## [0.3.4] - 2026-09-04
 
 Dropped Starline's own path-aware word selection. Pi 0.84.4 ships the same

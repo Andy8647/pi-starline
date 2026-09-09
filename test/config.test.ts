@@ -549,6 +549,7 @@ describe("mergeConfig", () => {
 					alpha: "left",
 					beta: "off",
 					gamma: "right",
+					delta: "editor",
 				},
 				colorModes: {
 					alpha: "original",
@@ -565,6 +566,7 @@ describe("mergeConfig", () => {
 				alpha: "left",
 				beta: "off",
 				gamma: "right",
+				delta: "editor",
 			},
 			colorModes: {
 				alpha: "original",

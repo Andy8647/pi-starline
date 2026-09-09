@@ -150,7 +150,15 @@ export function migrateFixedEditorKeys(raw: Record<string, unknown>): {
 	return { config: { ...rest, mouse }, migrated: true };
 }
 
-export type ExtensionStatusPlacement = "off" | "left" | "middle" | "right";
+/**
+ * Where a third-party status is drawn.
+ *
+ * `editor` is the right-hand side of the editor's metadata row, alongside the
+ * vim-mode label and the copy/paste hints — not the footer. It needs Starline's
+ * own footer installed to have data at all, because the status map only reaches
+ * the extension through the footer factory.
+ */
+export type ExtensionStatusPlacement = "off" | "left" | "middle" | "right" | "editor";
 export type ExtensionStatusColorMode = "themed" | "original";
 
 /**
@@ -756,7 +764,13 @@ function normalizeGitMetricsConfig(record: Record<string, unknown>): GitMetricsC
 }
 
 export function isExtensionStatusPlacement(value: unknown): value is ExtensionStatusPlacement {
-	return value === "off" || value === "left" || value === "middle" || value === "right";
+	return (
+		value === "off" ||
+		value === "left" ||
+		value === "middle" ||
+		value === "right" ||
+		value === "editor"
+	);
 }
 
 export function isExtensionStatusColorMode(value: unknown): value is ExtensionStatusColorMode {

@@ -11,6 +11,7 @@ import {
 import type { PolishedTuiConfig } from "./config";
 import { applyEditorCursorStyleToLines } from "./editor-cursor";
 import { renderEditorMetadataFormat } from "./editor-metadata-format";
+import { collectExtensionStatusSegments } from "./extension-status";
 import { activeSelectionHintText, externalEditorHintText } from "./mouse";
 import { composeHints } from "./mouse/hint";
 import { pasteExpandHintText } from "./paste-collapse";
@@ -85,6 +86,8 @@ type PolishedFrameOptions = {
 	modelMeta: EditorMeta;
 	thinkingLevel: string | undefined;
 	rightStatus?: string;
+	/** Third-party statuses placed on the editor row (`placement: "editor"`). */
+	editorStatus?: string;
 	splitBaseFrame?: (lines: string[]) => PolishedFrameSplit | undefined;
 };
 
@@ -132,7 +135,8 @@ function getEditorChromeWidths(config: PolishedTuiConfig, uiTheme: Theme, reset:
 }
 
 /**
- * The right side of the metadata row: vim mode, the paste-expand hint, or both.
+ * The right side of the metadata row: vim mode, third-party statuses placed
+ * there, and the paste/selection hints.
  *
  * The hint used to live on the editor's bottom border, drawn there by the fixed
  * editor's compositor. Pi 0.84 supersedes the fixed editor, so the hint needs a
@@ -140,8 +144,15 @@ function getEditorChromeWidths(config: PolishedTuiConfig, uiTheme: Theme, reset:
  * `isHorizontalBorder` requires an unbroken rule to find the frame again. The
  * metadata row is always rendered, even when `editorMetadataFormat` is blank,
  * so the hint shows up whatever the user has done to that template.
+ *
+ * Hints come last: `composeMetadataLine` truncates this string from the right
+ * when it cannot fit, and the hints are the transient, actionable part.
  */
-function composeRightStatus(vimStatus: string | undefined, uiTheme: Theme): string | undefined {
+function composeRightStatus(
+	vimStatus: string | undefined,
+	editorStatus: string | undefined,
+	uiTheme: Theme,
+): string | undefined {
 	// A live selection hint already spells the external editor out ("N
 	// characters selected, ctrl+x to copy ⋅ ctrl+g to edit in $EDITOR"), so it
 	// takes precedence; the always-on hint only speaks when nothing else does.
@@ -149,9 +160,31 @@ function composeRightStatus(vimStatus: string | undefined, uiTheme: Theme): stri
 		pasteExpandHintText(),
 		activeSelectionHintText() ?? externalEditorHintText(),
 	);
-	if (!hint) return vimStatus;
-	const styled = safeThemeFg(uiTheme, "muted", hint);
-	return vimStatus ? `${vimStatus} ⋅ ${styled}` : styled;
+	const styled = hint ? safeThemeFg(uiTheme, "muted", hint) : undefined;
+	const parts = [vimStatus, editorStatus, styled].filter((part): part is string => Boolean(part));
+	return parts.length > 0 ? parts.join(" ⋅ ") : undefined;
+}
+
+/**
+ * Statuses configured with `placement: "editor"`, joined for the metadata row.
+ *
+ * The row is one muted line like the hints beside it, so the per-status colours
+ * and icons (footer features) are not applied here; `colorMode: "original"`
+ * text keeps whatever the extension already styled it with.
+ */
+function editorStatusText(
+	config: PolishedTuiConfig,
+	uiTheme: Theme,
+	statuses: ReadonlyMap<string, string> | undefined,
+): string | undefined {
+	if (!statuses || statuses.size === 0) return undefined;
+	const segments = collectExtensionStatusSegments(statuses, config).editor;
+	if (segments.length === 0) return undefined;
+	return segments
+		.map((segment) =>
+			segment.colorMode === "original" ? segment.text : safeThemeFg(uiTheme, "muted", segment.text),
+		)
+		.join(" ⋅ ");
 }
 
 function composeMetadataLine(left: string, right: string | undefined, width: number): string {
@@ -280,6 +313,7 @@ function renderPolishedFrame({
 	modelMeta,
 	thinkingLevel,
 	rightStatus,
+	editorStatus,
 	splitBaseFrame,
 }: PolishedFrameOptions): string[] {
 	if (width <= 2) return clampRenderedLines(baseRendered, width);
@@ -330,7 +364,7 @@ function renderPolishedFrame({
 		uiTheme,
 		config,
 	);
-	const status = composeRightStatus(rightStatus, uiTheme);
+	const status = composeRightStatus(rightStatus, editorStatus, uiTheme);
 	const copyFriendlyMeta = composeMetadataLine(meta, status, Math.max(0, width - 1));
 	const railedMeta = composeMetadataLine(meta, status, innerWidth);
 
@@ -381,6 +415,7 @@ export class PolishedEditor extends CustomEditor {
 	private readonly getThinkingLevel: () => string | undefined;
 	private readonly getConfig: () => PolishedTuiConfig;
 	private readonly uiTheme: Theme;
+	private readonly getExtensionStatuses: (() => ReadonlyMap<string, string>) | undefined;
 
 	constructor(
 		tui: TUI,
@@ -390,6 +425,7 @@ export class PolishedEditor extends CustomEditor {
 		getConfig: () => PolishedTuiConfig,
 		getModelMeta: () => EditorMeta,
 		getThinkingLevel: () => string | undefined,
+		getExtensionStatuses?: () => ReadonlyMap<string, string>,
 	) {
 		super(tui, theme, keybindings, { paddingX: 0 });
 		this.borderColor = (text: string) => safeThemeFg(uiTheme, "border", text);
@@ -397,6 +433,7 @@ export class PolishedEditor extends CustomEditor {
 		this.getConfig = getConfig;
 		this.getModelMeta = getModelMeta;
 		this.getThinkingLevel = getThinkingLevel;
+		this.getExtensionStatuses = getExtensionStatuses;
 	}
 
 	render(width: number): string[] {
@@ -417,6 +454,7 @@ export class PolishedEditor extends CustomEditor {
 			config,
 			modelMeta,
 			thinkingLevel: this.getThinkingLevel(),
+			editorStatus: editorStatusText(config, this.uiTheme, this.getExtensionStatuses?.()),
 		});
 		return result;
 	}
@@ -437,6 +475,7 @@ export class WrappedPolishedEditor implements EditorComponent {
 		private readonly getConfig: () => PolishedTuiConfig,
 		private readonly getModelMeta: () => EditorMeta,
 		private readonly getThinkingLevel: () => string | undefined,
+		private readonly getExtensionStatuses?: () => ReadonlyMap<string, string>,
 	) {}
 
 	get focused(): boolean {
@@ -534,6 +573,7 @@ export class WrappedPolishedEditor implements EditorComponent {
 			modelMeta,
 			thinkingLevel: this.getThinkingLevel(),
 			rightStatus: vimStatus,
+			editorStatus: editorStatusText(config, this.uiTheme, this.getExtensionStatuses?.()),
 			splitBaseFrame: (
 				this.base[SPLIT_POLISHED_FRAME] ?? this.base[LEGACY_SPLIT_POLISHED_FRAME]
 			)?.bind(this.base),
