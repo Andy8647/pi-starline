@@ -324,6 +324,7 @@ export default function (pi: ExtensionAPI) {
 					sessionName: ctx.sessionManager.getSessionName() ?? "",
 				}),
 				getThinkingLevel,
+				() => getActiveExtensionStatuses(),
 			);
 			applyPasteCollapse(editor);
 			// Nothing on Pi's renderer points at the live editor, and the
@@ -357,6 +358,7 @@ export default function (pi: ExtensionAPI) {
 					sessionName: ctx.sessionManager.getSessionName() ?? "",
 				}),
 				getThinkingLevel,
+				() => getActiveExtensionStatuses(),
 			);
 			// Two references, because these are two different objects here: the
 			// wrapper is what gets mounted and hit-tested, while the draft's

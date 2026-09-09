@@ -30,7 +30,8 @@ pieces of one product, not a theme:
 - Built-in footer segments can be shown or hidden individually from `/starline`
 - Fully custom Starship-style layout via a `footerFormat` template string — see [Footer Format Template](https://github.com/Andy8647/pi-starline/blob/main/docs/configuration.md#footer-format-template)
 - Third-party Pi extension statuses from `ctx.ui.setStatus()` can be shown on the left,
-  middle, or right side, or hidden per status key from `/starline`
+  middle, or right side of the footer, on the editor's metadata row, or hidden per
+  status key from `/starline`
 
 ### Editor (Opencode-inspired)
 

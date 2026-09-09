@@ -42,6 +42,7 @@ const extensionStatusPlacementValues: ExtensionStatusPlacement[] = [
 	"left",
 	"middle",
 	"right",
+	"editor",
 ];
 const extensionStatusColorModeValues: ExtensionStatusColorMode[] = ["themed", "original"];
 const contextStyleValues: ContextStyle[] = ["text", "gauge", "text+gauge"];

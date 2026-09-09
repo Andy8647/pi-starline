@@ -85,6 +85,27 @@ describe("collectExtensionStatusSegments", () => {
 		).not.toContain("hidden");
 	});
 
+	it("routes editor-placed statuses to their own bucket, out of the footer", () => {
+		const config = configWithExtensionStatuses({
+			placements: {
+				chip: "editor",
+				alpha: "left",
+			},
+		});
+		const segments = collectExtensionStatusSegments(
+			new Map([
+				["chip", "in main.ts"],
+				["alpha", "alpha"],
+			]),
+			config,
+		);
+
+		expect(segments.editor.map((segment) => segment.key)).toEqual(["chip"]);
+		expect(segments.left.map((segment) => segment.key)).toEqual(["alpha"]);
+		expect(segments.middle).toEqual([]);
+		expect(segments.right).toEqual([]);
+	});
+
 	it("sorts each placement alphabetically and skips sanitized-empty statuses", () => {
 		const config = configWithExtensionStatuses({ defaultPlacement: "left" });
 		const segments = collectExtensionStatusSegments(

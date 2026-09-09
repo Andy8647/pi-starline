@@ -17,6 +17,7 @@ export type ExtensionStatusSegmentsByPlacement = {
 	left: ExtensionStatusSegment[];
 	middle: ExtensionStatusSegment[];
 	right: ExtensionStatusSegment[];
+	editor: ExtensionStatusSegment[];
 };
 
 const safeSgrPattern = /\x1b\[[0-9;:]*m/g;
@@ -65,6 +66,7 @@ export function collectExtensionStatusSegments(
 		left: [],
 		middle: [],
 		right: [],
+		editor: [],
 	};
 
 	for (const [key, value] of statuses.entries()) {
@@ -84,5 +86,6 @@ export function collectExtensionStatusSegments(
 	segments.left.sort(compareKeys);
 	segments.middle.sort(compareKeys);
 	segments.right.sort(compareKeys);
+	segments.editor.sort(compareKeys);
 	return segments;
 }

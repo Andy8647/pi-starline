@@ -3446,7 +3446,9 @@ describe("Pi docs compliance", () => {
 			},
 		});
 
-		expect(placements).toEqual([{ key: "alpha", placement: "off" }]);
+		// The cycle is off → left → middle → right → editor → off, so the first
+		// press from the default "right" lands on "editor".
+		expect(placements).toEqual([{ key: "alpha", placement: "editor" }]);
 		expect(dependencyRenderRequests).toBe(1);
 		expect(tuiRenderRequests).toBe(5);
 	});
