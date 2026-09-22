@@ -109,8 +109,6 @@ export type MouseConfig = {
 	wheelRouting: boolean;
 	/** Show a "copied to clipboard" notice for a copy Starline itself performs. */
 	copyNotice: boolean;
-	/** Clicking a tool box's `ctrl+o to expand` hint expands that one box. */
-	clickToExpandTools: boolean;
 	/** Copy transcript selections without the painted rails, rules and frames. */
 	transcriptCleanCopy: boolean;
 };
@@ -119,7 +117,6 @@ const FIXED_EDITOR_KEY_MAP: Record<string, keyof MouseConfig> = {
 	enabled: "enabled",
 	mouseScroll: "wheelRouting",
 	copyNotice: "copyNotice",
-	clickToExpandTools: "clickToExpandTools",
 };
 
 /**
@@ -418,7 +415,6 @@ export const defaultConfig: PolishedTuiConfig = {
 		enabled: true,
 		wheelRouting: true,
 		copyNotice: true,
-		clickToExpandTools: true,
 		transcriptCleanCopy: true,
 	},
 };
@@ -838,10 +834,6 @@ function normalizeMouseConfig(record: Record<string, unknown>): MouseConfig {
 				: defaultConfig.mouse.wheelRouting,
 		copyNotice:
 			typeof record.copyNotice === "boolean" ? record.copyNotice : defaultConfig.mouse.copyNotice,
-		clickToExpandTools:
-			typeof record.clickToExpandTools === "boolean"
-				? record.clickToExpandTools
-				: defaultConfig.mouse.clickToExpandTools,
 		transcriptCleanCopy:
 			typeof record.transcriptCleanCopy === "boolean"
 				? record.transcriptCleanCopy
@@ -1303,9 +1295,6 @@ export function saveMousePatch(patch: Partial<MouseConfig>, path = configPath): 
 			...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
 			...(patch.wheelRouting !== undefined ? { wheelRouting: patch.wheelRouting } : {}),
 			...(patch.copyNotice !== undefined ? { copyNotice: patch.copyNotice } : {}),
-			...(patch.clickToExpandTools !== undefined
-				? { clickToExpandTools: patch.clickToExpandTools }
-				: {}),
 			...(patch.transcriptCleanCopy !== undefined
 				? { transcriptCleanCopy: patch.transcriptCleanCopy }
 				: {}),

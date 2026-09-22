@@ -210,7 +210,6 @@ Default config values — copy this and change any value you want:
 		"enabled": true,
 		"wheelRouting": true,
 		"copyNotice": true,
-		"clickToExpandTools": true,
 		"transcriptCleanCopy": true
 	}
 }
@@ -457,20 +456,17 @@ guessing would be silently pasting the wrong thing.
 		"enabled": true,
 		"wheelRouting": true,
 		"copyNotice": true,
-		"clickToExpandTools": true,
 		"transcriptCleanCopy": true
 	}
 }
 ```
 
-`mouse` replaces the old `fixedEditor` namespace: what it named stopped being either fixed or only about the editor once Starline moved to patching Pi 0.84's own renderer instead of running its own compositor. A `fixedEditor` block from an older config is migrated automatically the first time Starline loads it — every old key is carried over under its new name, the old block is removed, and the change is written back once with a warning. An explicit `mouse` key already present in the config always wins over whatever the migration would have written for it. (`fixedEditor.copyOnSelect` is dropped, not migrated: Pi 0.84.4 owns select-without-copy as `fullscreenCopyOnSelect`, and Starline no longer has a key for it.)
+`mouse` replaces the old `fixedEditor` namespace: what it named stopped being either fixed or only about the editor once Starline moved to patching Pi 0.84's own renderer instead of running its own compositor. A `fixedEditor` block from an older config is migrated automatically the first time Starline loads it — every old key is carried over under its new name, the old block is removed, and the change is written back once with a warning. An explicit `mouse` key already present in the config always wins over whatever the migration would have written for it. (`fixedEditor.copyOnSelect` is dropped, not migrated: Pi 0.84.4 owns select-without-copy as `fullscreenCopyOnSelect`. `fixedEditor.clickToExpandTools` is dropped the same way: Pi 0.86.0 toggles a single tool box on click natively. Starline no longer has keys for either.)
 
 - `enabled` — master switch for every mouse feature below. On by default.
 - `wheelRouting` — routes the mouse wheel to scroll the transcript instead of leaving it to the terminal.
 - `copyNotice` — shows a "Copied to clipboard" flash for a copy **Starline** performs, such as a clean copy. Pi confirms its own copy-on-release with its own flash regardless of this setting.
-- `clickToExpandTools` — clicking a tool box's `… ctrl+o to expand` hint row expands just that box, instead of `ctrl+o` expanding every box in the transcript. Only the hint row toggles; a press anywhere else in the box still starts a selection, and the row follows whatever key you have bound to `app.tools.expand`. Two things worth knowing before they surprise you:
-  - **Clicking does not always close what it opened.** Bash boxes keep a `ctrl+o to collapse` hint on screen when open, and clicking it closes them. With `pi-toolbox` installed, `read`, `grep`, `ls`, `write` and `find` boxes get the same row appended inside the frame when expanded (pi-toolbox's `collapseAnchor`), so those close with one click too. Skill blocks, branch summaries and compaction summaries still drop the hint entirely once expanded — nothing is left to click, and `ctrl+o` (which closes every box) is the way back.
-  - **A box whose output contains the literal text `(ctrl+o to expand)` makes that line clickable too** — printing this page, say, or `cat`-ing a file that documents the keybinding. Pi draws a box's output and its hint the same way, so they cannot be told apart without matching theme colours. Clicking such a line toggles the box it is already inside; nothing else happens.
+Single-box click-to-toggle is **Pi's own** since 0.86.0 — a click anywhere in a tool box's result region toggles just that box (the renderer only synthesizes a click when press and release land on the same cell, so drag-selection is unaffected), and thinking blocks, branch/compaction summaries and skill invocations toggle the same way. Starline's hint-row patch and its `clickToExpandTools` key are retired; a `mouse.clickToExpandTools` key in an old config is ignored at runtime.
 
 ## Editor cursor
 

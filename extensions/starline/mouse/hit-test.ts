@@ -39,10 +39,9 @@ export type HitTestOptions = {
 	 * must not: content row N belongs to the same component whether or not the
 	 * viewport happens to be showing it.
 	 *
-	 * Frame ownership used to be the caller; it moved to `component-tree.ts`,
-	 * where the distinction cannot arise at all because a component graph has
-	 * no clip to consult. This stays for the next content-space question asked
-	 * of the layout tree — the distinction is a property of `clip`, not of the
+	 * `component-tree.ts` — the one content-space caller — is gone with
+	 * click-to-expand; this stays for the next content-space question asked of
+	 * the layout tree — the distinction is a property of `clip`, not of the
 	 * caller that first ran into it.
 	 */
 	ignoreClip?: boolean;
@@ -106,38 +105,6 @@ export function scrollContentLinesFor(
 	if (root.scrollView === scrollView) return root.scrollContentLines;
 	for (const child of root.children ?? []) {
 		const found = scrollContentLinesFor(child as ScrollBoxLike, scrollView);
-		if (found) return found;
-	}
-	return undefined;
-}
-
-/**
- * The box holding a scroll view's content — the same walk
- * `scrollContentLinesFor` does, returning the box rather than its rows. Two
- * things come off it that the lines alone cannot answer:
- *
- * - `rect.width` — the width its component was rendered at, which is what
- *   `createComponentTree` has to be given to reproduce the same row heights
- *   (`layoutComponent`'s "scroll" branch renders the content at
- *   `node.state.getContentWidth(width)` and sets `rect.width` to it).
- * - `rect.y` — where content row 0 sits on screen, for a caller asking in
- *   screen coordinates. It is `viewportY - scrollTop`: the "scroll" branch
- *   lays the child out at `y - scrollTop` and then translates it back by the
- *   same amount. That relation is pinned in
- *   `test/contract/transcript-layout.test.ts`.
- *
- * Like the rest of this module it currently has no production caller — the
- * screen-row-to-content-row conversion is what Task 8's click-to-expand needs
- * to find the component under a click.
- */
-export function scrollContentOrigin(
-	root: BoxLike | undefined,
-	scrollView: unknown,
-): BoxLike | undefined {
-	if (!root) return undefined;
-	if ((root as ScrollBoxLike).scrollView === scrollView) return root.children?.[0];
-	for (const child of root.children ?? []) {
-		const found = scrollContentOrigin(child, scrollView);
 		if (found) return found;
 	}
 	return undefined;

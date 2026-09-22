@@ -91,7 +91,7 @@ describe("probeCapabilities", () => {
 describe("enabledFeatures", () => {
 	it("enables everything when every capability is present", () => {
 		const features = enabledFeatures(probeCapabilities(prototypeWith(ALL)));
-		expect(features.size).toBe(6);
+		expect(features.size).toBe(5);
 	});
 
 	it("disables the hint when Pi 0.84.4's selection APIs are missing", () => {
@@ -113,7 +113,6 @@ describe("enabledFeatures", () => {
 		// through survives anywhere in here.
 		const features = enabledFeatures(probeCapabilities(prototypeWith(ALL)));
 		expect([...features].sort()).toEqual([
-			"clickToExpandTools",
 			"editorBufferCopy",
 			"editorClickToCaret",
 			"editorWheelScroll",
@@ -122,16 +121,15 @@ describe("enabledFeatures", () => {
 		]);
 	});
 
-	it("disables both repainting features when the renderer cannot be asked to repaint", () => {
+	it("disables the repainting features when the renderer cannot be asked to repaint", () => {
 		// `requestRender` is the one capability these features only ever *call*.
-		// Installing without it leaves a toggled tool box off screen until some
-		// unrelated frame arrives, which is the half-working install this table
-		// exists to prevent. The hint needs no repaint of its own — it rides
-		// Pi's repaints, so it survives.
+		// Installing without it leaves the patch's own change off screen until
+		// some unrelated frame arrives, which is the half-working install this
+		// table exists to prevent. The hint needs no repaint of its own — it
+		// rides Pi's repaints, so it survives.
 		const without = ALL.filter((name) => name !== "requestRender");
 		const features = enabledFeatures(probeCapabilities(prototypeWith(without)));
 		expect(features.has("selectionHint")).toBe(true);
-		expect(features.has("clickToExpandTools")).toBe(false);
 		// The wheel patch consumes the notch, so Pi never reaches the repaint at
 		// the end of its own `routeWheel`: without one of its own, the box would
 		// scroll and not be redrawn.
@@ -143,15 +141,11 @@ describe("enabledFeatures", () => {
 		expect(features.has("editorClickToCaret")).toBe(false);
 	});
 
-	it("disables click-to-expand when overlays cannot be detected", () => {
-		// Without `hasOverlay` the feature would resolve a tool box through an
-		// open dialog and toggle it on a click aimed at the dialog. It is a
-		// capability the feature *calls*, so it gates installation like any other.
-		const without = ALL.filter((name) => name !== "hasOverlay");
-		const features = enabledFeatures(probeCapabilities(prototypeWith(without)));
-		expect(features.has("clickToExpandTools")).toBe(false);
+	it("disables the mouse-driven features when overlays cannot be detected", () => {
 		// An overlay is composited over a layout that still contains the editor,
 		// so without this the wheel would scroll a draft hidden behind a dialog.
+		const without = ALL.filter((name) => name !== "hasOverlay");
+		const features = enabledFeatures(probeCapabilities(prototypeWith(without)));
 		expect(features.has("editorWheelScroll")).toBe(false);
 		expect(features.has("selectionHint")).toBe(true);
 		// The same layout an overlay is composited over still holds the editor, so
@@ -162,10 +156,9 @@ describe("enabledFeatures", () => {
 		expect(features.has("transcriptCleanCopy")).toBe(false);
 	});
 
-	it("disables both click features when the mouse event handler is missing", () => {
+	it("disables click-to-caret when the mouse event handler is missing", () => {
 		const without = ALL.filter((name) => name !== "handleSelectionMouseEvent");
 		const features = enabledFeatures(probeCapabilities(prototypeWith(without)));
-		expect(features.has("clickToExpandTools")).toBe(false);
 		expect(features.has("editorClickToCaret")).toBe(false);
 	});
 

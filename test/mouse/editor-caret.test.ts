@@ -56,7 +56,6 @@ import {
 	installMouse,
 } from "../../extensions/starline/mouse/index";
 import { PolishedEditor } from "../../extensions/starline/ui";
-import { HintedToolComponent } from "./component-graph";
 
 const WIDTH = 40;
 const HEIGHT = 24;
@@ -425,18 +424,17 @@ describe("editorSelectionRange", () => {
 
 /*
  * ---------------------------------------------------------------------------
- * The two patches, installed on one prototype.
+ * The patches, installed on one prototype.
  *
- * Both of this task's features land on a method another feature already owns:
- * `handleSelectionMouseEvent` is click-to-expand's, and
- * `copyActiveSelectionToClipboard` is the clean copy's. `installPrototypePatch`
- * holds exactly one behaviour per adapter key and silently replaces it, so a
- * second registration under either key would disable the earlier feature with
- * no error and no failing test anywhere in this suite. The scene below is what
- * makes that a caught regression rather than a discovered one: one layout
- * holding both a clickable tool box and the input box, one install with every
- * feature enabled, and assertions that each feature still does its own job
- * while the other is doing its.
+ * `handleViewportInput` is shared by the range delete and the hint refresh,
+ * and `copyActiveSelectionToClipboard` by the buffer copy and the clean copy.
+ * `installPrototypePatch` holds exactly one behaviour per adapter key and
+ * silently replaces it, so a second registration under either key would
+ * disable the earlier feature with no error and no failing test anywhere in
+ * this suite. The scene below is what makes that a caught regression rather
+ * than a discovered one: one layout holding both the transcript and the input
+ * box, one install with every feature enabled, and assertions that each
+ * feature still does its own job while the others are doing theirs.
  * ---------------------------------------------------------------------------
  */
 
@@ -465,21 +463,14 @@ function decodeOsc52(data: string): string {
 	return Buffer.from(match?.[1] ?? "", "base64").toString();
 }
 
-/** The content row whose plain text contains `needle`, found not counted. */
-function rowContaining(lines: readonly string[], needle: string): number {
-	const row = lines.findIndex((line) => stripTerminalSequences(line).includes(needle));
-	if (row < 0) throw new Error(`no rendered row contains ${JSON.stringify(needle)}`);
-	return row;
-}
-
 /**
- * One layout holding both features' targets: a scroll view over a transcript
- * with an expandable tool box in it, and the dock with the editor in it — the
- * arrangement `interactive-mode.js` builds, laid out by pi-tui itself.
+ * One layout holding the features' targets: a scroll view over a transcript,
+ * and the dock with the editor in it — the arrangement `interactive-mode.js`
+ * builds, laid out by pi-tui itself.
  *
  * The prototype carries every capability `capabilities.ts` lists, so
- * `installMouse` installs all six features and the two shared patches really do
- * hold two behaviours each.
+ * `installMouse` installs all five features and the two shared patches really
+ * do hold two behaviours each.
  */
 function makeScene(draft: string, config = makeConfig()) {
 	const editor = makeEditor(config);
@@ -491,8 +482,8 @@ function makeScene(draft: string, config = makeConfig()) {
 	const chat = new Container();
 	document.addChild(chat);
 	chat.addChild(new Text("first message", 0, 0));
-	const tool = new HintedToolComponent("bash echo hi", ["out one", "out two", "out three"], 1);
-	chat.addChild(tool);
+	chat.addChild(new Text("bash echo hi", 0, 0));
+	chat.addChild(new Text("out one\nout two\nout three", 0, 0));
 	const scroll = new ScrollView(document, { primary: true });
 
 	const written: string[] = [];
@@ -602,8 +593,6 @@ function makeScene(draft: string, config = makeConfig()) {
 		const box = editorBoxFor(frame.root, editor);
 		if (!box || !contentBox) throw new Error("the scene did not lay out");
 		return {
-			/** Screen y of the transcript content row containing `needle`. */
-			hintY: (needle: string) => contentBox.rect.y + rowContaining(contentLines, needle),
 			/** Screen y of text row `index` of the input box. */
 			textY: (index: number) => box.rect.y + 1 + (config.editorPaddingY > 0 ? 1 : 0) + index,
 			box,
@@ -612,7 +601,6 @@ function makeScene(draft: string, config = makeConfig()) {
 
 	return {
 		editor,
-		tool,
 		prototype,
 		written,
 		throughCalls,
@@ -624,21 +612,16 @@ function makeScene(draft: string, config = makeConfig()) {
 	};
 }
 
-describe("the two features that share handleSelectionMouseEvent", () => {
-	const originalKeybindings = getKeybindings();
+describe("the click-to-caret patch on handleSelectionMouseEvent", () => {
 	let dispose: (() => void) | undefined;
 
 	afterEach(() => {
 		dispose?.();
 		dispose = undefined;
-		setKeybindings(originalKeybindings);
 		setActiveEditor(undefined);
 	});
 
 	function install(scene: ReturnType<typeof makeScene>) {
-		setKeybindings(
-			new KeybindingsManager({ "app.tools.expand": { defaultKeys: "ctrl+o" } }) as never,
-		);
 		setActiveEditor({ component: scene.editor, scrollable: scene.editor });
 		dispose = installMouse(scene.prototype, { getConfig: () => scene.config });
 	}
@@ -647,31 +630,18 @@ describe("the two features that share handleSelectionMouseEvent", () => {
 		scene.prototype.handleSelectionMouseEvent({ button: PRESS, x, y, release: false });
 	}
 
-	it("runs both behaviours from one install, neither shadowing the other", () => {
-		// The regression this exists for: `installPrototypePatch` keeps one
-		// behaviour per adapter key, so registering click-to-caret under
-		// `mouse-selection-event` as a second patch would have silently disabled
-		// click-to-expand — with every other test in the suite still green,
-		// because no other test has both features live at once.
+	it("moves the caret on a press in the input box, without consuming it", () => {
 		const scene = makeScene(numbered(12));
 		install(scene);
-		const { hintY, textY } = scene.relayout();
+		const { textY } = scene.relayout();
 
-		// Click-to-expand, on a row in the transcript.
-		press(scene, 4, hintY("to expand"));
-		expect(scene.tool.expanded).toBe(true);
-		// It consumed the press, so Pi never saw it.
-		expect(scene.throughCalls).toHaveLength(0);
-
-		// Click-to-caret, on a row in the input box — same install, same patch.
 		press(scene, 4, textY(2));
 		expect(scene.editor.getCursor()).toEqual({ line: 7, col: 2 });
 		// It did *not* consume: Pi still gets the press and drops its anchor.
 		expect(scene.throughCalls).toHaveLength(1);
 	});
 
-	it("still expands when a press in the transcript follows one in the editor", () => {
-		// Order must not matter: each press is resolved from scratch.
+	it("resolves every press from scratch, so order does not matter", () => {
 		const scene = makeScene(numbered(12));
 		install(scene);
 		const first = scene.relayout();
@@ -680,8 +650,8 @@ describe("the two features that share handleSelectionMouseEvent", () => {
 		expect(scene.editor.getCursor()).toEqual({ line: 5, col: 2 });
 
 		const second = scene.relayout();
-		press(scene, 4, second.hintY("to expand"));
-		expect(scene.tool.expanded).toBe(true);
+		press(scene, 4, second.textY(2));
+		expect(scene.editor.getCursor()).toEqual({ line: 7, col: 2 });
 	});
 
 	it("leaves a press outside the input box alone", () => {
@@ -692,11 +662,10 @@ describe("the two features that share handleSelectionMouseEvent", () => {
 
 		// The top rule of the box, one row above its first text row.
 		press(scene, 4, textY(-1));
-		// A row in the transcript that is not a hint row.
+		// A row in the transcript.
 		press(scene, 4, 0);
 
 		expect(scene.editor.getCursor()).toEqual(before);
-		expect(scene.tool.expanded).toBe(false);
 		expect(scene.throughCalls).toHaveLength(2);
 	});
 
@@ -1322,33 +1291,18 @@ describe("the two features that share handleViewportInput", () => {
 		expect(scene.editor.getLines()).toEqual(["alpha beta", "gamma delta"]);
 	});
 
-	it("all six features coexist: expand, caret, copy and range delete", async () => {
+	it("all five features coexist: caret, copy and range delete", async () => {
 		// Every feature installed at once, exercising all three shared patches in
 		// one session. Reproducing any adapter-key collision turns this red.
 		const scene = makeScene("alpha beta\ngamma delta\nepsilon zeta");
-		// Pi's real defaults plus the expand binding: this case needs the editor's
-		// own delete bindings present as well as `app.tools.expand`, because both
-		// shared patches are exercised in the one session.
-		setKeybindings(
-			new KeybindingsManager({
-				...TUI_KEYBINDINGS,
-				"app.tools.expand": { defaultKeys: "ctrl+o" },
-			}) as never,
-		);
+		// Pi's real defaults: this case needs the editor's own delete bindings,
+		// because both behaviours of the viewport-input patch are exercised in
+		// the one session.
+		setKeybindings(new KeybindingsManager({ ...TUI_KEYBINDINGS }) as never);
 		install(scene);
-		const first = scene.relayout();
-
-		// mouse-selection-event, behaviour 1: click-to-expand.
-		scene.prototype.handleSelectionMouseEvent({
-			button: 0,
-			x: 4,
-			y: first.hintY("to expand"),
-			release: false,
-		});
-		expect(scene.tool.expanded).toBe(true);
-
-		// mouse-selection-event, behaviour 2: click-to-caret.
 		const second = scene.relayout();
+
+		// mouse-selection-event: click-to-caret.
 		scene.prototype.handleSelectionMouseEvent({
 			button: 0,
 			x: TEXT_COLUMN + 6,

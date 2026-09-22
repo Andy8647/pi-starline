@@ -5,7 +5,7 @@
  * what it would do to it. `installMouse` probes what the running Pi build
  * exposes, logs once if something is missing, and installs each feature gated
  * on exactly its own declared requirement (`capabilities.ts`). Today that is
- * six features across four patches. Two of those methods carry two features
+ * five features across four patches. Two of those methods carry two features
  * each, and in every case the two share a single patch, because the patch
  * registry holds one behaviour per adapter key and a second registration would
  * silently replace the first:
@@ -22,14 +22,12 @@
  *   what to press. The copy key is `app.message.copy` (default ctrl+x),
  *   resolved from Pi's keybinding registry so a rebind shows up in the hint.
  *
- * `clickToExpandTools`, one patch:
- * - `handleSelectionMouseEvent` — watched for a left-button press that landed
- *   on a tool box's `ctrl+o to expand` hint row. On a hit it toggles that one
- *   box and consumes the press, so the click does not also drop a selection
- *   anchor into the box it just opened; every other press, including one
- *   anywhere else inside the same box, calls through and starts a selection as
- *   usual. `tool-box.ts` carries the reasoning for why the hint row is the
- *   only target and why resolution goes through the component tree.
+ * Single-box click-to-expand is deliberately not installed: Pi 0.86.0 toggles
+ * a tool box on a click anywhere in its result region natively (the renderer
+ * synthesizes a click only when press and release land on the same cell
+ * without a drag, so drag-selection is preserved), and the hint-row patch
+ * that predated it — `tool-box.ts` and the `component-tree.ts` resolution
+ * engine — is gone.
  *
  * `editorWheelScroll`, one patch:
  * - `routeWheel` — Pi's own wheel routing, which knows only about scroll views
@@ -92,8 +90,8 @@ import { activeEditor, wheelTarget } from "./editor-mouse";
 import { scrollEditorBy } from "./editor-scroll";
 import { editorVisualRowCount } from "./editor-text-cursor";
 import { type BoxLike, scrollContentLinesFor } from "./hit-test";
+import { keyTextFor } from "./key-text";
 import { externalEditorName, selectionHintText } from "./selection-state";
-import { type ExpandTarget, expandKeyText, expandTargetAt, keyTextFor } from "./tool-box";
 import { cleanTranscriptRows } from "./transcript-copy";
 
 /** Pi's interrupt chord — refused by the range-delete branch, never consumed. */
@@ -521,7 +519,7 @@ function copyTranscriptSelection(
  * bindings Pi's editor itself dispatches on (`editor.js:599-606`), so a user who
  * has rebound either gets the key they bound rather than a hardcoded byte. A
  * registry that disagrees — this repo has two copies of pi-tui, though
- * production resolves both to Pi's, see `expandKeyText` in `tool-box.ts` — makes
+ * production resolves both to Pi's, see `keyTextFor` in `key-text.ts` — makes
  * this return false, which falls through to Pi's own one-character delete. That
  * is the safe direction to be wrong in.
  *
@@ -723,9 +721,9 @@ function installCopying(
  *
  * Bit 64 is excluded too, even though `handleInput` peels wheel reports off
  * before this method is reached (`parseWheelEvent` claims anything with bit 64
- * and a direction of 0 or 1): a notch of scroll that landed on a hint row
- * would otherwise expand a box the pointer was only passing over, and that
- * depends on a dispatch order in a file this package does not own.
+ * and a direction of 0 or 1): a notch of scroll is never a caret move, and
+ * depending on a dispatch order in a file this package does not own is how the
+ * old click-to-expand patch broke.
  *
  * The shape is checked rather than assumed — this runs on whatever Pi passes,
  * and a malformed event must fall through, never throw.
@@ -738,38 +736,6 @@ function isLeftButtonPress(event: unknown): event is MouseEventLike {
 	if (candidate.release) return false;
 	if ((candidate.button & (MOTION_BIT | WHEEL_BIT)) !== 0) return false;
 	return (candidate.button & BUTTON_MASK) === LEFT_BUTTON;
-}
-
-/**
- * The box a press should toggle, or undefined for every press that should go
- * on being a press.
- *
- * Everything is resolved here, inside the one call: the layout is read as it
- * is right now, the component tree is built and dropped, and nothing is
- * carried to the release. A tool that is still running re-renders between the
- * two, so an answer kept that long would be about rows that have moved.
- */
-function pressExpandTarget(
-	receiver: MouseCapablePrototype,
-	event: unknown,
-	deps: InstallMouseDeps,
-): ExpandTarget | undefined {
-	try {
-		if (!deps.getConfig().mouse.clickToExpandTools) return undefined;
-		if (!isLeftButtonPress(event)) return undefined;
-		// Pi resolves no scroll view while an overlay is up, so neither does this
-		// — a click on a dialog must not reach the transcript behind it.
-		if (receiver.hasOverlay()) return undefined;
-		return expandTargetAt(
-			{ root: receiver.currentLayout?.root, keyText: expandKeyText() },
-			event.x,
-			event.y,
-		);
-	} catch {
-		// Resolution is a best-effort read of Pi's internals. Anything it trips
-		// over means this press was an ordinary press.
-		return undefined;
-	}
 }
 
 /**
@@ -803,49 +769,23 @@ function moveCaretForPress(
 }
 
 /**
- * Installs the two features that live on `handleSelectionMouseEvent`.
+ * Installs `editorClickToCaret`'s press half on `handleSelectionMouseEvent`.
  *
- * They share one patch because `installPrototypePatch` holds exactly one
- * behaviour per adapter key — a second registration under
- * `mouse-selection-event` would silently replace the first, and giving them a
- * key each would leave the order they run in implicit, which matters here
- * because only one of them may consume the press. Written as one patch the
- * precedence is explicit and testable:
- *
- * 1. `clickToExpandTools` gets the press first, and *consumes* it when it lands
- *    on a tool box's hint row. That is what keeps the click from also dropping
- *    a selection anchor into the box it just opened.
- * 2. `editorClickToCaret` gets every press expand did not take, moves the caret
- *    if the press was inside the input box, and never consumes.
- * 3. Pi gets the press either way, unless expand took it.
- *
- * The two cannot collide in practice — the hint rows are in the transcript and
- * the caret rows are in the dock — but the ordering is what makes that a fact
- * rather than a hope, and either feature may be off without disturbing the
- * other.
+ * The caret moves if the press was inside the input box, and the press is
+ * never consumed: it goes on to Pi, which drops its selection anchor there
+ * exactly as it always did, so a drag from that point still highlights and
+ * still copies.
  */
 function installSelectionMouse(
 	prototype: MouseCapablePrototype,
 	deps: InstallMouseDeps,
-	features: ReadonlySet<MouseFeature>,
 ): () => void {
-	const expandTools = features.has("clickToExpandTools");
-	const clickToCaret = features.has("editorClickToCaret");
 	return installPrototypePatch(
 		prototype,
 		"handleSelectionMouseEvent",
 		"mouse-selection-event",
 		({ predecessor, receiver, args }) => {
-			const typedReceiver = receiver as MouseCapablePrototype;
-			if (expandTools) {
-				const target = pressExpandTarget(typedReceiver, args[0], deps);
-				if (target) {
-					target.component.setExpanded(target.expanded);
-					typedReceiver.requestRender();
-					return undefined;
-				}
-			}
-			if (clickToCaret) moveCaretForPress(typedReceiver, args[0], deps);
+			moveCaretForPress(receiver as MouseCapablePrototype, args[0], deps);
 			return Reflect.apply(predecessor, receiver, args);
 		},
 	);
@@ -992,8 +932,8 @@ export function installMouse(prototype: object, deps: InstallMouseDeps): () => v
 	) {
 		cleanups.push(installCopying(typedPrototype, deps, enabled));
 	}
-	if (enabled.has("clickToExpandTools") || enabled.has("editorClickToCaret")) {
-		cleanups.push(installSelectionMouse(typedPrototype, deps, enabled));
+	if (enabled.has("editorClickToCaret")) {
+		cleanups.push(installSelectionMouse(typedPrototype, deps));
 	}
 	if (enabled.has("editorWheelScroll")) {
 		cleanups.push(installEditorWheelScroll(typedPrototype, deps));
