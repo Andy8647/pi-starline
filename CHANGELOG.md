@@ -10,6 +10,24 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [0.3.7] - 2026-09-22
+
+Dropped Starline's own click-to-expand for tool boxes. Pi 0.86.0 ships the
+same behaviour natively — a click anywhere in a tool box's result region
+toggles just that box, with drag-selection preserved — so the hint-row patch
+and the component-tree resolution engine behind it are gone.
+
+**Removed**
+
+- `mouse.clickToExpandTools` is removed. The behaviour it switched is now
+  Pi's own on Pi ≥ 0.86.0, on by default and not toggleable from Starline. A
+  `mouse.clickToExpandTools` key in an old config is ignored at runtime; the
+  `/starline` settings menu no longer lists the toggle. On Pi 0.84.4–0.85.x
+  the feature simply does not exist — upgrade Pi to get it back.
+- The feature took `tool-box.ts` and `component-tree.ts` with it; what remains
+  of the mouse suite is the selection hint, clean copies, click-to-caret,
+  range delete and editor wheel scroll, all unchanged.
+
 ## [0.3.6] - 2026-09-22
 
 ### Fixed
@@ -366,7 +384,10 @@ What this fork adds over upstream:
   selection
 - Paste collapsing, with paste-again-to-expand
 
-[Unreleased]: https://github.com/Andy8647/pi-starline/compare/v0.3.4...HEAD
+[Unreleased]: https://github.com/Andy8647/pi-starline/compare/v0.3.7...HEAD
+[0.3.7]: https://github.com/Andy8647/pi-starline/compare/v0.3.6...v0.3.7
+[0.3.6]: https://github.com/Andy8647/pi-starline/compare/v0.3.5...v0.3.6
+[0.3.5]: https://github.com/Andy8647/pi-starline/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/Andy8647/pi-starline/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/Andy8647/pi-starline/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/Andy8647/pi-starline/compare/v0.3.1...v0.3.2

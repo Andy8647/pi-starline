@@ -253,7 +253,6 @@ describe("the wheel patch against the real TuiAltScreen.prototype", () => {
 						wheelRouting: true,
 						copyNotice: true,
 						enabled: true,
-						clickToExpandTools: true,
 					},
 				}) as never,
 		});

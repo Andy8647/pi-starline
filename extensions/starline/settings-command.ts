@@ -468,14 +468,6 @@ function buildItems(
 				currentValue: featureValue(config.mouse.copyNotice),
 				values: featureStateValues,
 			});
-			items.push({
-				id: "mouseClickToExpandTools",
-				label: "Click to expand tools",
-				description:
-					"Click a tool box's border or its expand hint to expand that one box. Needs wheel routing.",
-				currentValue: featureValue(config.mouse.clickToExpandTools),
-				values: featureStateValues,
-			});
 		}
 		return items;
 	}
@@ -828,14 +820,6 @@ export function registerStarlineSettingsCommand(pi: ExtensionAPI, deps: Settings
 									settingsList.updateValue(id, newValue);
 									deps.requestRender();
 									ctx.ui.notify(`Copy notice: ${newValue}`, "info");
-									tui.requestRender();
-									return;
-								}
-								if (id === "mouseClickToExpandTools" && isFeatureState(newValue)) {
-									deps.setMouseConfig({ clickToExpandTools: newValue === "enabled" }, ctx);
-									settingsList.updateValue(id, newValue);
-									deps.requestRender();
-									ctx.ui.notify(`Click to expand tools: ${newValue}`, "info");
 									tui.requestRender();
 									return;
 								}

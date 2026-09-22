@@ -36,7 +36,6 @@ export type MouseCapability =
 
 export type MouseFeature =
 	| "selectionHint"
-	| "clickToExpandTools"
 	| "editorWheelScroll"
 	| "editorClickToCaret"
 	| "editorBufferCopy"
@@ -79,18 +78,11 @@ const REQUIREMENTS: Record<MouseFeature, readonly MouseCapability[]> = {
 		"getSelectionBounds",
 		"getSelectionColumns",
 	],
-	// The press it acts on arrives through `handleSelectionMouseEvent`, and it
-	// asks `hasOverlay` the same question Pi's own press path asks before
-	// resolving a scroll view (`tui-alt-screen.js:684`) — without it, a click on
-	// a dialog would toggle whatever tool box happens to sit behind it. It
-	// consumes the press rather than calling through, so Pi never reaches its own
-	// repaint for that event: `requestRender` is the only thing that draws the
-	// box it just toggled.
-	clickToExpandTools: ["handleSelectionMouseEvent", "hasOverlay", "requestRender"],
 	// The notch arrives through `routeWheel`, which it consumes on an editor hit
 	// rather than calling through — so Pi never reaches its own repaint for that
 	// event and `requestRender` is the only thing that draws the scrolled box. It
-	// asks `hasOverlay` for the same reason click-to-expand does: an overlay is
+	// asks `hasOverlay` for the same reason the other editor features do: an
+	// overlay is
 	// composited on top of a layout that still contains the editor
 	// (`tui.js:123`), so without it a notch aimed at a dialog would scroll the
 	// draft hidden behind it.
