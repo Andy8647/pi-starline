@@ -671,6 +671,25 @@ describe("Pi docs compliance", () => {
 		expect(rendered).not.toContain("xhigh");
 	});
 
+	it("passes user messages through registered markdown transformers", () => {
+		installUserMessageStyle(
+			() => makeTaggedTheme(),
+			() => defaultConfig,
+		);
+
+		// pi-ide-context 这类扩展靠 registerMarkdownTransformer 往 user message 里挂内容;
+		// starline 重写了 render,必须把这条官方管道接回去,否则 transformer 被旁路
+		const transformer = (markdown: string, context: { messageType: string }) =>
+			context.messageType === "user" ? `${markdown}\n\n> ↳ a.ts:1-1 · selected` : markdown;
+		const rendered = new UserMessageComponent("我看看?", undefined, 1, [transformer])
+			.render(80)
+			.map(stripPromptMarks)
+			.join("\n");
+
+		expect(rendered).toContain("我看看?");
+		expect(rendered).toContain("↳ a.ts:1-1 · selected");
+	});
+
 	it("hides previous user-message rails in copy-friendly mode", () => {
 		installUserMessageStyle(
 			() => makeTaggedTheme(),
