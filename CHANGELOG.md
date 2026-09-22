@@ -10,6 +10,19 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [0.3.6] - 2026-09-22
+
+### Fixed
+
+- **User messages go through Pi's markdown transformer pipeline again.** The
+  user-message style patch re-implements `UserMessageComponent.render` and was
+  building its own `Markdown` renderer without the `transform` option, which
+  silently dropped every extension's `registerMarkdownTransformer` output on
+  user messages — for example the selection quote that pi-ide-context 0.5.0
+  appends to your sent messages. Transformers now run per render with the
+  current width (same as upstream), and the render cache keys on the
+  transformer list.
+
 ## [0.3.5] - 2026-09-09
 
 ### Added

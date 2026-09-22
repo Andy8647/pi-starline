@@ -30,6 +30,7 @@ type UserMessageRenderCache = {
 	width?: number;
 	theme?: Theme;
 	configKey?: string;
+	transformers?: readonly unknown[];
 	renderedLines?: string[];
 };
 
@@ -67,6 +68,49 @@ function getCachedMarkdownText(instance: object): string | undefined {
 		userMessageRenderCache.set(instance, { ...cached, hasMarkdownText: true, text });
 	}
 	return text;
+}
+
+type MarkdownTransformerFn = (
+	markdown: string,
+	context: {
+		messageType: "user" | "assistant" | "assistant-thinking";
+		isStreaming: boolean;
+		availableWidth: number;
+	},
+) => unknown;
+
+/**
+ * pi 官方管道:UserMessageComponent 把扩展注册的 markdownTransformers 通过
+ * Markdown 的 transform 选项跑一遍(createMarkdownTransform)。我们重写了 render,
+ * 必须自己把这条管道接上,否则任何 registerMarkdownTransformer 的扩展
+ * (如 pi-ide-context 的选区引用行)在 starline 样式下都会被旁路。
+ */
+function getMarkdownTransformersRef(instance: object): readonly unknown[] | undefined {
+	if (!isRecord(instance)) return undefined;
+	const t = instance.markdownTransformers;
+	return Array.isArray(t) ? t : undefined;
+}
+
+function applyMarkdownTransformers(
+	text: string,
+	availableWidth: number,
+	transformers: readonly unknown[],
+): string {
+	let out = text;
+	for (const t of transformers) {
+		if (typeof t !== "function") continue;
+		try {
+			const r = (t as MarkdownTransformerFn)(out, {
+				messageType: "user",
+				isStreaming: false,
+				availableWidth,
+			});
+			if (typeof r === "string") out = r;
+		} catch {
+			// 与 pi 的 applyMarkdownTransformers 一致:单个 transformer 抛错不影响其他
+		}
+	}
+	return out;
 }
 
 function getUserMessageConfigKey(config: PolishedTuiConfig): string {
@@ -161,12 +205,14 @@ function renderStarlineUserMessage(
 	if (width <= 0) return [""];
 
 	const configKey = getUserMessageConfigKey(config);
+	const transformersRef = getMarkdownTransformersRef(instance);
 	const cached = userMessageRenderCache.get(instance);
 	if (
 		cached?.hasMarkdownText &&
 		cached.width === width &&
 		cached.theme === theme &&
 		cached.configKey === configKey &&
+		cached.transformers === transformersRef &&
 		cached.renderedLines
 	) {
 		return cached.renderedLines;
@@ -174,17 +220,30 @@ function renderStarlineUserMessage(
 
 	const railWidth = visibleWidth(renderPromptBoxRail(theme, config));
 	const contentWidth = Math.max(1, width - railWidth);
-	const renderer = new Markdown(text, 0, 0, makeMarkdownTheme(theme), {
-		color: (content) =>
-			theme && config.colors.userMessageText
-				? renderStyleForSource(
-						theme,
-						config.colorSources.userMessages,
-						config.colors.userMessageText,
-						content,
-					)
-				: themeFg(theme, "userMessageText", content),
-	});
+	const renderer = new Markdown(
+		text,
+		0,
+		0,
+		makeMarkdownTheme(theme),
+		{
+			color: (content) =>
+				theme && config.colors.userMessageText
+					? renderStyleForSource(
+							theme,
+							config.colorSources.userMessages,
+							config.colors.userMessageText,
+							content,
+						)
+					: themeFg(theme, "userMessageText", content),
+		},
+		// 接上官方 transformer 管道;Markdown 每次 render 都会按当前宽度重跑
+		{
+			transform: transformersRef?.length
+				? (markdown, availableWidth) =>
+						applyMarkdownTransformers(markdown, availableWidth, transformersRef)
+				: undefined,
+		},
+	);
 	const body = renderer.render(contentWidth);
 	const contentLines = body.length > 0 ? body : [""];
 	const border = theme
@@ -212,6 +271,7 @@ function renderStarlineUserMessage(
 		width,
 		theme,
 		configKey,
+		transformers: transformersRef,
 		renderedLines: lines,
 	});
 	return lines;
