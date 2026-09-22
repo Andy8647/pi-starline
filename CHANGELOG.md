@@ -10,7 +10,7 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
-## [Unreleased]
+## [0.3.7] - 2026-09-22
 
 Dropped Starline's own click-to-expand for tool boxes. Pi 0.86.0 ships the
 same behaviour natively — a click anywhere in a tool box's result region
