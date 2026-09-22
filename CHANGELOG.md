@@ -384,7 +384,10 @@ What this fork adds over upstream:
   selection
 - Paste collapsing, with paste-again-to-expand
 
-[Unreleased]: https://github.com/Andy8647/pi-starline/compare/v0.3.4...HEAD
+[Unreleased]: https://github.com/Andy8647/pi-starline/compare/v0.3.7...HEAD
+[0.3.7]: https://github.com/Andy8647/pi-starline/compare/v0.3.6...v0.3.7
+[0.3.6]: https://github.com/Andy8647/pi-starline/compare/v0.3.5...v0.3.6
+[0.3.5]: https://github.com/Andy8647/pi-starline/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/Andy8647/pi-starline/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/Andy8647/pi-starline/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/Andy8647/pi-starline/compare/v0.3.1...v0.3.2
