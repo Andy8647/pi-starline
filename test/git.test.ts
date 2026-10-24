@@ -1,4 +1,5 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -7,6 +8,7 @@ import {
 	emptyGitStatus,
 	parseGitNumstat,
 	parseGitStatusPorcelain,
+	readGitStatus,
 } from "../extensions/starline/git";
 
 describe("parseGitStatusPorcelain", () => {
@@ -208,5 +210,62 @@ describe("detectGitState", () => {
 
 	it("returns empty when no state files exist", () => {
 		expect(detectGitState({})).toEqual({});
+	});
+});
+
+/**
+ * Git refreshes the index's stat information while answering `status` and
+ * `diff`, which takes `.git/index.lock` and rewrites `.git/index`. A footer that
+ * polls every thirty seconds doing that is churn on the user's repository, and a
+ * lock that can collide with their own `git commit`.
+ */
+describe("git probes never write to the repository", () => {
+	function repoWithEditedFile(): string {
+		const root = mkdtempSync(join(tmpdir(), "starline-git-quiet-"));
+		const run = (...args: string[]) =>
+			execFileSync("git", args, { cwd: root, env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" } });
+		run("init", "--quiet");
+		run("config", "user.email", "test@example.com");
+		run("config", "user.name", "Test");
+		writeFileSync(join(root, "file.txt"), "one\n");
+		run("add", "file.txt");
+		run("commit", "--quiet", "-m", "initial");
+		// A changed file is what makes git want to refresh the index on the next
+		// status: without the opt-out, `status` rewrites it.
+		writeFileSync(join(root, "file.txt"), "one\ntwo\n");
+		return root;
+	}
+
+	it("leaves .git/index alone while reading the status", async () => {
+		const root = repoWithEditedFile();
+		const indexPath = join(root, ".git", "index");
+		const before = statSync(indexPath).mtimeMs;
+
+		await readGitStatus(root, { readExactTag: true, readMetrics: true });
+
+		expect(statSync(indexPath).mtimeMs).toBe(before);
+	});
+
+	it("never leaves an index lock behind", async () => {
+		const root = repoWithEditedFile();
+
+		await readGitStatus(root, { readExactTag: true, readMetrics: true });
+
+		expect(readdirSync(join(root, ".git")).filter((name) => name.endsWith(".lock"))).toEqual([]);
+	});
+
+	// The control: without the opt-out git does rewrite the index, so the test
+	// above is measuring the behaviour it claims to.
+	it("would rewrite it without GIT_OPTIONAL_LOCKS=0", () => {
+		const root = repoWithEditedFile();
+		const indexPath = join(root, ".git", "index");
+		const before = statSync(indexPath).mtimeMs;
+
+		execFileSync("git", ["status", "--porcelain=2", "--branch"], {
+			cwd: root,
+			env: { ...process.env, GIT_OPTIONAL_LOCKS: undefined },
+		});
+
+		expect(statSync(indexPath).mtimeMs).not.toBe(before);
 	});
 });

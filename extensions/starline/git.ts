@@ -6,6 +6,20 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const GIT_COMMAND_TIMEOUT_MS = 2_000;
 
+/**
+ * Read the repository without writing to it.
+ *
+ * `status` and `diff` refresh the index's stat information as a side effect,
+ * which means taking `.git/index.lock` and rewriting `.git/index`. From a footer
+ * that polls every thirty seconds that is churn on the user's repository, and a
+ * lock that can collide with their own `git commit`. `GIT_OPTIONAL_LOCKS=0` tells
+ * git to skip every lock it does not need to answer the question (git 2.15+).
+ *
+ * An environment variable rather than `--no-optional-locks`: an older git ignores
+ * a variable it does not know, and fails on a flag it does not know.
+ */
+const GIT_READ_ENV: NodeJS.ProcessEnv = { ...process.env, GIT_OPTIONAL_LOCKS: "0" };
+
 export type GitOperationState =
 	| "REBASING"
 	| "MERGING"
@@ -233,6 +247,7 @@ async function resolveGitPath(cwd: string, pathSpec: string): Promise<string | u
 	try {
 		const { stdout } = await execFileAsync("git", ["rev-parse", "--git-path", pathSpec], {
 			cwd,
+			env: GIT_READ_ENV,
 			timeout: GIT_COMMAND_TIMEOUT_MS,
 		});
 		const resolved = (typeof stdout === "string" ? stdout : String(stdout)).trim();
@@ -309,15 +324,18 @@ export async function readGitStatus(
 		const [{ stdout: statusStdout }, stashResult, tagResult, metricsResult] = await Promise.all([
 			execFileAsync("git", ["status", "--porcelain=2", "--branch"], {
 				cwd,
+				env: GIT_READ_ENV,
 				timeout: GIT_COMMAND_TIMEOUT_MS,
 			}),
 			execFileAsync("git", ["stash", "list"], {
 				cwd,
+				env: GIT_READ_ENV,
 				timeout: GIT_COMMAND_TIMEOUT_MS,
 			}).catch(() => ({ stdout: "" })),
 			readExactTag
 				? execFileAsync("git", ["describe", "--tags", "--exact-match", "HEAD"], {
 						cwd,
+						env: GIT_READ_ENV,
 						timeout: GIT_COMMAND_TIMEOUT_MS,
 					}).then(
 						(r) => ({ stdout: typeof r.stdout === "string" ? r.stdout : String(r.stdout) }),
@@ -327,6 +345,7 @@ export async function readGitStatus(
 			readMetrics
 				? execFileAsync("git", numstatArgs, {
 						cwd,
+						env: GIT_READ_ENV,
 						timeout: GIT_COMMAND_TIMEOUT_MS,
 					}).then(
 						(r) => ({ stdout: typeof r.stdout === "string" ? r.stdout : String(r.stdout) }),
@@ -371,6 +390,7 @@ export async function readGitStatus(
 		try {
 			const { stdout } = await execFileAsync("git", ["rev-parse", "--is-inside-work-tree"], {
 				cwd,
+				env: GIT_READ_ENV,
 				timeout: GIT_COMMAND_TIMEOUT_MS,
 			});
 			const inside = (typeof stdout === "string" ? stdout : String(stdout)).trim();
@@ -435,6 +455,7 @@ export async function readGitHost(cwd: string): Promise<GitHost | undefined> {
 	try {
 		const { stdout } = await execFileAsync("git", ["remote", "get-url", "origin"], {
 			cwd,
+			env: GIT_READ_ENV,
 			timeout: GIT_COMMAND_TIMEOUT_MS,
 		});
 		host = parseGitRemoteHost(typeof stdout === "string" ? stdout : String(stdout));
