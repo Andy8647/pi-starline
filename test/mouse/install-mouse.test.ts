@@ -286,7 +286,7 @@ function makeTranscriptFixture() {
 }
 
 describe("installMouse over a real framed transcript", () => {
-	it("counts the cleaned text in the hint, matching what the copy key delivers", () => {
+	it("counts the cleaned text in the hint, matching what the copy key delivers", async () => {
 		// The hint promises "N characters selected"; N has to be what the copy
 		// key actually puts on the clipboard. Over a framed transcript that is
 		// the *cleaned* text now — the frame is chrome, and the count must not
@@ -302,7 +302,7 @@ describe("installMouse over a real framed transcript", () => {
 
 		// The copy key's path: Pi's `handleCopyCommand` reaches
 		// `copyActiveSelectionToClipboard`, and the clean copy answers it.
-		prototype.copyActiveSelectionToClipboard();
+		await prototype.copyActiveSelectionToClipboard();
 		expect(decodeOsc52(written[0])).toBe("hello");
 		dispose();
 	});
@@ -557,5 +557,88 @@ describe("installMouse gating for editorClickToCaret", () => {
 		dispose();
 		// dispose removes the patch again.
 		expect(prototype.handleViewportInput).toBe(originalViewportInput);
+	});
+});
+
+/**
+ * Pi injects a native clipboard implementation when the host wired one; it knows
+ * about macOS Terminal.app, tmux without OSC 52 passthrough and WSL, where a bare
+ * OSC 52 write reports success and leaves the clipboard untouched. Starline's two
+ * copy paths used to write OSC 52 themselves, which skipped all of that.
+ */
+describe("clipboard delegation", () => {
+	it("hands the cleaned text to Pi's implementation and skips the terminal write", async () => {
+		const { prototype, written, flashes } = makeTranscriptFixture();
+		const copied: string[] = [];
+		Object.assign(prototype, {
+			copySelection: async (text: string) => {
+				copied.push(text);
+				return true;
+			},
+		});
+		const dispose = installMouse(prototype, { getConfig: makeConfig(true) });
+		registerReceiver(prototype);
+
+		await prototype.copyActiveSelectionToClipboard();
+
+		expect(copied).toEqual(["hello"]);
+		expect(written).toEqual([]);
+		expect(flashes).toContain("Copied!");
+		dispose();
+	});
+
+	it("falls back to the terminal write when Pi's implementation fails", async () => {
+		const { prototype, written } = makeTranscriptFixture();
+		Object.assign(prototype, { copySelection: () => "Copy failed" });
+		const dispose = installMouse(prototype, { getConfig: makeConfig(true) });
+		registerReceiver(prototype);
+
+		await prototype.copyActiveSelectionToClipboard();
+
+		expect(decodeOsc52(written[0])).toBe("hello");
+		dispose();
+	});
+
+	it("falls back when Pi's implementation throws", async () => {
+		const { prototype, written } = makeTranscriptFixture();
+		Object.assign(prototype, {
+			copySelection: () => {
+				throw new Error("no display");
+			},
+		});
+		const dispose = installMouse(prototype, { getConfig: makeConfig(true) });
+		registerReceiver(prototype);
+
+		await prototype.copyActiveSelectionToClipboard();
+
+		expect(decodeOsc52(written[0])).toBe("hello");
+		dispose();
+	});
+
+	it("still honours copyNotice when Pi's implementation answers", async () => {
+		const { prototype, flashes } = makeTranscriptFixture();
+		Object.assign(prototype, { copySelection: () => true });
+		const config = {
+			...makeConfig(true)(),
+			mouse: { ...makeConfig(true)().mouse, copyNotice: false },
+		};
+		const dispose = installMouse(prototype, { getConfig: () => config });
+		registerReceiver(prototype);
+
+		await prototype.copyActiveSelectionToClipboard();
+
+		expect(flashes).toEqual([]);
+		dispose();
+	});
+
+	it("keeps the OSC 52 path when no implementation is injected", async () => {
+		const { prototype, written } = makeTranscriptFixture();
+		const dispose = installMouse(prototype, { getConfig: makeConfig(true) });
+		registerReceiver(prototype);
+
+		await prototype.copyActiveSelectionToClipboard();
+
+		expect(decodeOsc52(written[0])).toBe("hello");
+		dispose();
 	});
 });

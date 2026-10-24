@@ -143,6 +143,13 @@ type MouseCapablePrototype = {
 	 */
 	copyActiveSelectionToClipboard(this: unknown): Promise<boolean>;
 	/**
+	 * Pi's injected native clipboard (`tui-alt-screen.js:1236`). Present when the
+	 * host app wired one — it knows about macOS Terminal.app, tmux without OSC 52
+	 * passthrough and WSL, where a bare OSC 52 write reports success and leaves
+	 * the clipboard empty. Returns true on success, or a message to show.
+	 */
+	copySelection?: (text: string) => boolean | string | Promise<boolean | string>;
+	/**
 	 * Pi 0.84.4's select-without-copy state. The hint reads it to decide
 	 * whether a selection is waiting for the copy key or was already copied on
 	 * release.
@@ -394,7 +401,45 @@ function editorTextForSelection(
 	}
 }
 
-function copyEditorSelection(receiver: MouseCapablePrototype, config: PolishedTuiConfig): boolean {
+/**
+ * Put text on the clipboard the way Pi does.
+ *
+ * Pi injects a native implementation when the host wired one; a bare OSC 52 write
+ * reports success while leaving the clipboard untouched in the places that
+ * implementation exists for. The terminal write stays as the fallback for a build
+ * that injects nothing — which is exactly what Starline did before this existed —
+ * so a copy still lands somewhere rather than being dropped.
+ */
+async function writeSelectionToClipboard(
+	receiver: MouseCapablePrototype,
+	text: string,
+	config: PolishedTuiConfig,
+): Promise<boolean> {
+	const copy = receiver.copySelection;
+	if (typeof copy === "function") {
+		try {
+			const result = await copy.call(receiver, text);
+			if (result === true) {
+				if (config.mouse.copyNotice) receiver.flash("Copied!");
+				return true;
+			}
+			// A string is Pi's own failure message. The terminal write below is
+			// still worth trying; only the flash is skipped when nothing landed.
+		} catch {
+			// Fall through to the terminal write.
+		}
+	}
+	const write = receiver.terminal?.write;
+	if (typeof write !== "function") return false;
+	write.call(receiver.terminal, `\x1b]52;c;${Buffer.from(text).toString("base64")}\x07`);
+	if (config.mouse.copyNotice) receiver.flash("Copied!");
+	return true;
+}
+
+async function copyEditorSelection(
+	receiver: MouseCapablePrototype,
+	config: PolishedTuiConfig,
+): Promise<boolean> {
 	try {
 		const bounds = receiver.getSelectionBounds();
 		if (!bounds) return false;
@@ -404,11 +449,7 @@ function copyEditorSelection(receiver: MouseCapablePrototype, config: PolishedTu
 		// of a blank row.
 		if (text === undefined) return false;
 		if (text.length === 0) return true;
-		const write = receiver.terminal?.write;
-		if (typeof write !== "function") return false;
-		write.call(receiver.terminal, `\x1b]52;c;${Buffer.from(text).toString("base64")}\x07`);
-		if (config.mouse.copyNotice) receiver.flash("Copied!");
-		return true;
+		return await writeSelectionToClipboard(receiver, text, config);
 	} catch {
 		// Reading the editor and the layout is best effort. Anything this trips
 		// over means Pi's own copy should run.
@@ -495,21 +536,17 @@ function transcriptSelectionText(
  * clipboard write — Pi's own copy has the same shape (`if (text.length === 0)
  * return`), it just gets there after building a string of rails.
  */
-function copyTranscriptSelection(
+async function copyTranscriptSelection(
 	receiver: MouseCapablePrototype,
 	config: PolishedTuiConfig,
-): boolean {
+): Promise<boolean> {
 	try {
 		const bounds = receiver.getSelectionBounds();
 		if (!bounds) return false;
 		const text = transcriptSelectionText(receiver, config, bounds);
 		if (text === undefined) return false;
 		if (text.length === 0) return true;
-		const write = receiver.terminal?.write;
-		if (typeof write !== "function") return false;
-		write.call(receiver.terminal, `\x1b]52;c;${Buffer.from(text).toString("base64")}\x07`);
-		if (config.mouse.copyNotice) receiver.flash("Copied!");
-		return true;
+		return await writeSelectionToClipboard(receiver, text, config);
 	} catch {
 		// Cleaning reads the layout and the selection, both best effort.
 		// Anything this trips over means Pi's own copy should run.
@@ -651,14 +688,14 @@ function installCopying(
 				prototype,
 				"copyActiveSelectionToClipboard",
 				"mouse-copy",
-				({ predecessor, receiver, args }) => {
+				async ({ predecessor, receiver, args }) => {
 					const typedReceiver = receiver as MouseCapablePrototype;
 					const config = deps.getConfig();
-					if (bufferCopy && copyEditorSelection(typedReceiver, config)) return true;
+					if (bufferCopy && (await copyEditorSelection(typedReceiver, config))) return true;
 					if (
 						cleanCopy &&
 						config.mouse.transcriptCleanCopy &&
-						copyTranscriptSelection(typedReceiver, config)
+						(await copyTranscriptSelection(typedReceiver, config))
 					) {
 						return true;
 					}

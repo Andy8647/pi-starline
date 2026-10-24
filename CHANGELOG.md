@@ -63,6 +63,11 @@ transcript and the animation lands where you are already looking.
   keeps the first marker per line and drops the copies. Upstream issue
   [#9332](https://github.com/earendil-works/pi/issues/9332); once the fix in
   [#9441](https://github.com/earendil-works/pi/pull/9441) ships this goes away.
+- **Copies go through Pi's own clipboard implementation when the host injects
+  one.** Both clean-copy paths wrote OSC 52 themselves, which reports success and
+  leaves the clipboard empty on macOS Terminal.app, in tmux without OSC 52
+  passthrough and on WSL — the places Pi's native implementation exists for. The
+  terminal write is still the fallback when nothing is injected.
 
 ## [0.3.7] - 2026-09-22
 
