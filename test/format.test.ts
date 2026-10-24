@@ -8,6 +8,7 @@ import {
 	buildCostLabel,
 	buildSessionDurationLabel,
 	buildTokenLabel,
+	compactionFailureNotice,
 	contextColorTier,
 	formatCount,
 	formatCwdLabel,
@@ -686,5 +687,33 @@ describe("usage totals cover every paid call", () => {
 			{ type: "label", label: "x" },
 		]);
 		expect(totals).toMatchObject({ input: 0, output: 0, cost: 0 });
+	});
+});
+
+describe("compactionFailureNotice", () => {
+	it("stays silent when the user aborted it", () => {
+		expect(compactionFailureNotice({ aborted: true, reason: "manual" })).toBeUndefined();
+	});
+
+	it("names the reason it fired for", () => {
+		expect(compactionFailureNotice({ reason: "threshold" })).toBe(
+			"Compaction failed (context threshold)",
+		);
+		expect(compactionFailureNotice({ reason: "overflow" })).toBe(
+			"Compaction failed (context was full)",
+		);
+		expect(compactionFailureNotice({ reason: "manual" })).toBe("Compaction failed");
+	});
+
+	it("carries Pi's error text when there is one", () => {
+		expect(compactionFailureNotice({ reason: "manual", errorMessage: " model overloaded " })).toBe(
+			"Compaction failed: model overloaded",
+		);
+	});
+
+	it("does not end in a dangling colon", () => {
+		expect(compactionFailureNotice({ reason: "manual", errorMessage: "   " })).toBe(
+			"Compaction failed",
+		);
 	});
 });

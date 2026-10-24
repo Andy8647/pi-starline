@@ -41,6 +41,7 @@ import {
 import { installFooter } from "./footer";
 import {
 	buildSessionDurationLabel,
+	compactionFailureNotice,
 	invalidateUsageTotalsCache,
 	resolveSessionStartEpoch,
 } from "./format";
@@ -681,6 +682,12 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_compact", (event, ctx) => {
 		liveContext.clear();
 		syncInteractiveAndProjectStateWithUsage(event, ctx);
+	});
+	// Pi emits this and draws nothing for it: a failed compaction late in a long
+	// session otherwise looks like the agent forgetting the conversation.
+	pi.on("session_compact_failed", (event, ctx) => {
+		const notice = compactionFailureNotice(event);
+		if (notice) ctx.ui.notify(notice, "error");
 	});
 	pi.on("session_tree", (event, ctx) => {
 		liveContext.clear();

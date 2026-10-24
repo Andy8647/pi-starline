@@ -75,6 +75,11 @@ transcript and the animation lands where you are already looking.
   accumulation now follows Pi's own footer entry for entry; the cache hit rate
   still comes from assistant turns, which are the only ones with a prompt to
   measure.
+- **A failed compaction says so.** Pi emits \`session_compact_failed\` and draws
+  nothing for it, so a failure late in a long session read as the agent quietly
+  forgetting the conversation. Starline raises an error notification naming the
+  reason (threshold, overflow, manual) and Pi's message; an abort, which is the
+  user's own doing, stays silent.
 
 ## [0.3.7] - 2026-09-22
 

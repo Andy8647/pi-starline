@@ -319,6 +319,30 @@ export function buildSessionDurationLabel(startEpoch: number): string {
  * continues, so the elapsed-time segment has to read that instead of the moment
  * this process attached to it — otherwise every resumed session reads `0s`.
  */
+/**
+ * What to tell the user when compaction fails, or undefined when there is nothing
+ * to say.
+ *
+ * Pi emits \`session_compact_failed\` but draws nothing for it, so a failure late in
+ * a long session looks like the agent simply forgetting the conversation. An
+ * abort is the user's own doing and stays silent.
+ */
+export function compactionFailureNotice(event: {
+	aborted?: boolean;
+	errorMessage?: string;
+	reason?: string;
+}): string | undefined {
+	if (event.aborted) return undefined;
+	const reason =
+		event.reason === "overflow"
+			? " (context was full)"
+			: event.reason === "manual"
+				? ""
+				: " (context threshold)";
+	const detail = event.errorMessage?.trim();
+	return detail ? `Compaction failed${reason}: ${detail}` : `Compaction failed${reason}`;
+}
+
 export function resolveSessionStartEpoch(
 	header: { timestamp?: string } | null | undefined,
 	now = Date.now(),
