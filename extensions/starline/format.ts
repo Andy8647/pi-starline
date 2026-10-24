@@ -150,6 +150,37 @@ function buildUsageFingerprint(entries: readonly SessionEntry[]): string {
 	return `${entries.length}\0${entryIdentity(first)}\0${entryIdentity(last)}`;
 }
 
+/** The slice of an entry's usage this footer reads. */
+type UsageShape = {
+	input?: number;
+	output?: number;
+	cacheRead?: number;
+	cacheWrite?: number;
+	cost?: { total?: number };
+};
+
+/**
+ * An entry as far as usage goes. Read structurally rather than through
+ * `SessionEntry`: Pi 1.4 added a `usage` entry type that the type surface this
+ * package builds against does not know about, and a footer that silently stopped
+ * counting it would be worse than one that reads the field defensively.
+ */
+type UsageEntryShape = {
+	type?: string;
+	usage?: UsageShape;
+	message?: { role?: string; usage?: UsageShape };
+};
+
+/**
+ * Everything the session spent, following Pi's own footer.
+ *
+ * A usage entry, an assistant message, a tool result and the summaries that
+ * compaction and branching write are all LLM calls the user paid for, and Pi
+ * counts all of them (`dist/modes/interactive/components/footer.js:99-114`).
+ * Counting only assistant messages undercounted every session that compacted,
+ * branched or ran a tool that reports its own usage — and compaction is exactly
+ * the kind of call you do not want to hide from a budget.
+ */
 function computeUsageTotals(entries: readonly SessionEntry[]): UsageTotals {
 	usageTotalsComputeCount += 1;
 	let input = 0;
@@ -159,19 +190,42 @@ function computeUsageTotals(entries: readonly SessionEntry[]): UsageTotals {
 	let latestCacheHitRate: number | undefined;
 	let cost = 0;
 
-	for (const entry of entries) {
-		if (entry.type !== "message" || entry.message?.role !== "assistant") continue;
-		const usage = entry.message.usage;
-		const entryInput = usage?.input ?? 0;
-		const entryCacheRead = usage?.cacheRead ?? 0;
-		const entryCacheWrite = usage?.cacheWrite ?? 0;
+	const addUsage = (usage: UsageShape | undefined) => {
+		if (!usage) return;
+		input += usage.input ?? 0;
+		output += usage.output ?? 0;
+		cacheRead += usage.cacheRead ?? 0;
+		cacheWrite += usage.cacheWrite ?? 0;
+		cost += usage.cost?.total ?? 0;
+	};
 
-		input += entryInput;
-		output += usage?.output ?? 0;
-		cacheRead += entryCacheRead;
-		cacheWrite += entryCacheWrite;
-		cost += usage?.cost?.total ?? 0;
-		latestCacheHitRate = calculateCacheHitRate(entryInput, entryCacheRead, entryCacheWrite);
+	for (const entry of entries) {
+		const record = entry as unknown as UsageEntryShape;
+		switch (record.type) {
+			case "usage":
+				addUsage(record.usage);
+				break;
+			case "message":
+				if (record.message?.role === "assistant") {
+					addUsage(record.message.usage);
+					// Only a real assistant turn tells you how well the prompt cache
+					// did; a tool result's usage carries no prompt of its own.
+					latestCacheHitRate = calculateCacheHitRate(
+						record.message.usage?.input ?? 0,
+						record.message.usage?.cacheRead ?? 0,
+						record.message.usage?.cacheWrite ?? 0,
+					);
+				} else if (record.message?.role === "toolResult") {
+					addUsage(record.message.usage);
+				}
+				break;
+			case "compaction":
+			case "branch_summary":
+				addUsage(record.usage);
+				break;
+			default:
+				break;
+		}
 	}
 
 	return Object.freeze({ input, output, cacheRead, cacheWrite, latestCacheHitRate, cost });
@@ -256,6 +310,45 @@ export function buildSessionDurationLabel(startEpoch: number): string {
 	if (hours > 0) return `${hours}h ${minutes}m`;
 	if (minutes > 0) return `${minutes}m ${seconds}s`;
 	return `${seconds}s`;
+}
+
+/**
+ * When the session really started.
+ *
+ * A resumed session (`--continue`, `--resume`) keeps the header of the session it
+ * continues, so the elapsed-time segment has to read that instead of the moment
+ * this process attached to it — otherwise every resumed session reads `0s`.
+ */
+/**
+ * What to tell the user when compaction fails, or undefined when there is nothing
+ * to say.
+ *
+ * Pi emits \`session_compact_failed\` but draws nothing for it, so a failure late in
+ * a long session looks like the agent simply forgetting the conversation. An
+ * abort is the user's own doing and stays silent.
+ */
+export function compactionFailureNotice(event: {
+	aborted?: boolean;
+	errorMessage?: string;
+	reason?: string;
+}): string | undefined {
+	if (event.aborted) return undefined;
+	const reason =
+		event.reason === "overflow"
+			? " (context was full)"
+			: event.reason === "manual"
+				? ""
+				: " (context threshold)";
+	const detail = event.errorMessage?.trim();
+	return detail ? `Compaction failed${reason}: ${detail}` : `Compaction failed${reason}`;
+}
+
+export function resolveSessionStartEpoch(
+	header: { timestamp?: string } | null | undefined,
+	now = Date.now(),
+): number {
+	const parsed = header?.timestamp ? Date.parse(header.timestamp) : Number.NaN;
+	return Number.isFinite(parsed) && parsed > 0 ? parsed : now;
 }
 
 export function contextColorTier(

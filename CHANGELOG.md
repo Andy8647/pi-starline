@@ -10,6 +10,77 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [0.3.8] - 2026-10-25
+
+The working spinner moved out of its own row above the editor and into the model
+pill. Pi 0.87 added the hook that makes this possible: a custom editor that
+advertises `embedWorkingStatus` takes over status rendering, and Pi stops drawing
+its own line. Starline now does that, so there is one less row of chrome under the
+transcript and the animation lands where you are already looking.
+
+**Changed**
+
+- **The model pill's icon becomes the spinner while the agent works.** It takes the
+  icon's slot at the icon's own display width, so the pill keeps its size and the
+  pill bar never reflows. An icon-less model pill gains the two cells the spinner
+  needs; a wider icon is padded to match. The pill uses a filled braille set rather
+  than Pi's sparse one, whose top-left dot reads as sitting high above the model
+  name; frames a session customized with `ctx.ui.setWorkingIndicator({ frames })`
+  pass through untouched.
+- **Retry, compaction and branch-summary statuses keep Pi's layout, now on
+  Starline's top border** — `── Retrying (1/3) in 4s... ────` — because they spell
+  a sentence and carry an interrupt hint a pill cannot hold. The same fallback
+  catches the spinner when the status line is off or the model segment is hidden,
+  so the indicator never disappears.
+- Needs Pi 0.87.0 or newer for the spinner to move; older builds never hand the
+  indicator to the editor and keep Pi's own row, exactly as before.
+
+**Fixed**
+
+- **The draft's scroll cue is back on the frame.** Pi caps the input box at a third
+  of the terminal and paints `↑ 3 more` / `↓ 2 more` into the borders it draws;
+  Starline redraws both borders, so those counts are now read back out of Pi's
+  frame and re-emitted, sharing the top rule with a status when both are present.
+- **The wheel step follows `fullscreenWheelScrollLines` again.** Pi 1.4 hands the
+  finished line count to `routeWheel` as its second argument (it moved the setting
+  into a private accelerator), and the editor's own notch scroll was reading a
+  field that no longer exists — so every notch moved exactly one line.
+- **`/starline` can toggle the model, thinking and cache-hit segments.** Both
+  hand-written key whitelists had drifted from `FooterSegmentsConfig`, so those
+  three rows did nothing and their patches were dropped on save. Both are now
+  derived from the defaults.
+- **A config file that cannot be parsed says so** instead of silently reverting
+  every setting to its default for the session.
+- **`icons.mode: "ascii"` covers the pill spinner**, which was braille regardless
+  and grew the pill by two cells in terminals without a Nerd Font.
+
+- **Drag-selecting the row the caret is on no longer garbles the display.** Pi's
+  `applySelection` reassembles a selected row from three column slices, and
+  `sliceWithWidth` carries the escape sequences before each slice into it — the
+  editor's zero-width caret marker included, so one marker became two or three.
+  Pi strips only the first per line, and the rest reach the terminal; a terminal
+  that ends APC only on `ESC \` (Ghostty) swallows the text after them. Starline
+  keeps the first marker per line and drops the copies. Upstream issue
+  [#9332](https://github.com/earendil-works/pi/issues/9332); once the fix in
+  [#9441](https://github.com/earendil-works/pi/pull/9441) ships this goes away.
+- **Copies go through Pi's own clipboard implementation when the host injects
+  one.** Both clean-copy paths wrote OSC 52 themselves, which reports success and
+  leaves the clipboard empty on macOS Terminal.app, in tmux without OSC 52
+  passthrough and on WSL — the places Pi's native implementation exists for. The
+  terminal write is still the fallback when nothing is injected.
+- **Cost and token totals count every paid call.** They summed assistant messages
+  only, which quietly skipped `usage` entries, a tool result's own usage, and the
+  summary calls that compaction and branching make — so a session that compacted
+  read cheaper than it was, and compaction is the call you least want hidden. The
+  accumulation now follows Pi's own footer entry for entry; the cache hit rate
+  still comes from assistant turns, which are the only ones with a prompt to
+  measure.
+- **A failed compaction says so.** Pi emits \`session_compact_failed\` and draws
+  nothing for it, so a failure late in a long session read as the agent quietly
+  forgetting the conversation. Starline raises an error notification naming the
+  reason (threshold, overflow, manual) and Pi's message; an abort, which is the
+  user's own doing, stays silent.
+
 ## [0.3.7] - 2026-09-22
 
 Dropped Starline's own click-to-expand for tool boxes. Pi 0.86.0 ships the

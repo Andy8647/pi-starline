@@ -39,7 +39,12 @@ import {
 	markEditorFactory,
 } from "./editor-factory-marker";
 import { installFooter } from "./footer";
-import { buildSessionDurationLabel, invalidateUsageTotalsCache } from "./format";
+import {
+	buildSessionDurationLabel,
+	compactionFailureNotice,
+	invalidateUsageTotalsCache,
+	resolveSessionStartEpoch,
+} from "./format";
 import { emptyGitStatus, readGitHost, readGitStatus } from "./git";
 import { LiveContextController } from "./live-context";
 import { installMouse } from "./mouse";
@@ -60,6 +65,7 @@ import { registerStarlineSettingsCommand } from "./settings-command";
 import { createInitialState, type FooterState, syncState } from "./state";
 import { PolishedEditor, WrappedPolishedEditor } from "./ui";
 import { installUserMessageStyle } from "./user-message";
+import { setWorkingIndicator } from "./working-indicator";
 
 type EditorFactory = NonNullable<Parameters<ExtensionContext["ui"]["setEditorComponent"]>[0]>;
 
@@ -106,6 +112,18 @@ export default function (pi: ExtensionAPI) {
 	const liveContext = new LiveContextController(sessionLifecycle, refresh);
 	const getActiveTheme = () => activeTheme;
 	const getCurrentConfig = () => currentConfig;
+	/**
+	 * The session's own header, or nothing. Read through a guard because this runs on
+	 * whatever `sessionManager` the running Pi build provides — the header is where a
+	 * resumed session keeps its original start time.
+	 */
+	const readSessionHeader = (ctx: ExtensionContext): { timestamp?: string } | undefined => {
+		try {
+			return ctx.sessionManager.getHeader() ?? undefined;
+		} catch {
+			return undefined;
+		}
+	};
 	const getThinkingLevel = () =>
 		sessionLifecycle.isCurrent() ? pi.getThinkingLevel() : ("off" as const);
 	const syncFooterState = (ctx: ExtensionContext) =>
@@ -415,6 +433,10 @@ export default function (pi: ExtensionAPI) {
 		installedEditorFactory = undefined;
 		editorInstallMode = "none";
 		editorInstalled = false;
+		// Pi only clears the indicator it handed to the editor it is replacing, and
+		// this editor is on its way out; leaving the stale reference behind would
+		// keep a spinner in the footer forever.
+		setWorkingIndicator(undefined);
 		// Pi rebuilds the editor from whatever factory is now in place, and that
 		// one is not ours. Leaving the old instance registered would point the
 		// wheel patch at an editor no longer on screen.
@@ -507,6 +529,7 @@ export default function (pi: ExtensionAPI) {
 		try {
 			uninstallMouse();
 			uninstallPrototypePatches();
+			setWorkingIndicator(undefined);
 			stopSessionTimer();
 			stopProjectRefresh();
 			requestFooterRender = undefined;
@@ -544,7 +567,9 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_start", async (_event, ctx) => {
 		sessionLifecycle.start();
 		liveContext.clear();
-		state.sessionStartEpoch = Date.now();
+		// A resumed session keeps its original header, and reporting the moment this
+		// process attached to it would make the elapsed-time segment read 0s forever.
+		state.sessionStartEpoch = resolveSessionStartEpoch(readSessionHeader(ctx));
 		invalidateUsageTotalsCache();
 		lastProjectCwd = undefined;
 		installUi(ctx);
@@ -657,6 +682,12 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_compact", (event, ctx) => {
 		liveContext.clear();
 		syncInteractiveAndProjectStateWithUsage(event, ctx);
+	});
+	// Pi emits this and draws nothing for it: a failed compaction late in a long
+	// session otherwise looks like the agent forgetting the conversation.
+	pi.on("session_compact_failed", (event, ctx) => {
+		const notice = compactionFailureNotice(event);
+		if (notice) ctx.ui.notify(notice, "error");
 	});
 	pi.on("session_tree", (event, ctx) => {
 		liveContext.clear();

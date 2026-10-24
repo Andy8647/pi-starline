@@ -80,6 +80,7 @@ import {
 	type MouseFeature,
 	probeCapabilities,
 } from "./capabilities";
+import { installCursorMarkerDedupe } from "./cursor-marker";
 import {
 	activeEditorViewport,
 	deleteEditorSelection,
@@ -142,6 +143,13 @@ type MouseCapablePrototype = {
 	 */
 	copyActiveSelectionToClipboard(this: unknown): Promise<boolean>;
 	/**
+	 * Pi's injected native clipboard (`tui-alt-screen.js:1236`). Present when the
+	 * host app wired one — it knows about macOS Terminal.app, tmux without OSC 52
+	 * passthrough and WSL, where a bare OSC 52 write reports success and leaves
+	 * the clipboard empty. Returns true on success, or a message to show.
+	 */
+	copySelection?: (text: string) => boolean | string | Promise<boolean | string>;
+	/**
 	 * Pi 0.84.4's select-without-copy state. The hint reads it to decide
 	 * whether a selection is waiting for the copy key or was already copied on
 	 * release.
@@ -186,6 +194,10 @@ type MouseCapablePrototype = {
 	 * How many lines one notch moves, `max(1, options.wheelScrollLines ?? 1)`
 	 * (`tui-alt-screen.js:73`). Read so the editor scrolls by the same amount
 	 * the transcript would have.
+	 *
+	 * Legacy fallback only: Pi 1.4 moved this into a private accelerator and now
+	 * hands the finished line count to `routeWheel` as its second argument, so the
+	 * field is undefined there and `fullscreenWheelScrollLines` arrives with it.
 	 */
 	wheelScrollLines?: number;
 };
@@ -389,7 +401,45 @@ function editorTextForSelection(
 	}
 }
 
-function copyEditorSelection(receiver: MouseCapablePrototype, config: PolishedTuiConfig): boolean {
+/**
+ * Put text on the clipboard the way Pi does.
+ *
+ * Pi injects a native implementation when the host wired one; a bare OSC 52 write
+ * reports success while leaving the clipboard untouched in the places that
+ * implementation exists for. The terminal write stays as the fallback for a build
+ * that injects nothing — which is exactly what Starline did before this existed —
+ * so a copy still lands somewhere rather than being dropped.
+ */
+async function writeSelectionToClipboard(
+	receiver: MouseCapablePrototype,
+	text: string,
+	config: PolishedTuiConfig,
+): Promise<boolean> {
+	const copy = receiver.copySelection;
+	if (typeof copy === "function") {
+		try {
+			const result = await copy.call(receiver, text);
+			if (result === true) {
+				if (config.mouse.copyNotice) receiver.flash("Copied!");
+				return true;
+			}
+			// A string is Pi's own failure message. The terminal write below is
+			// still worth trying; only the flash is skipped when nothing landed.
+		} catch {
+			// Fall through to the terminal write.
+		}
+	}
+	const write = receiver.terminal?.write;
+	if (typeof write !== "function") return false;
+	write.call(receiver.terminal, `\x1b]52;c;${Buffer.from(text).toString("base64")}\x07`);
+	if (config.mouse.copyNotice) receiver.flash("Copied!");
+	return true;
+}
+
+async function copyEditorSelection(
+	receiver: MouseCapablePrototype,
+	config: PolishedTuiConfig,
+): Promise<boolean> {
 	try {
 		const bounds = receiver.getSelectionBounds();
 		if (!bounds) return false;
@@ -399,11 +449,7 @@ function copyEditorSelection(receiver: MouseCapablePrototype, config: PolishedTu
 		// of a blank row.
 		if (text === undefined) return false;
 		if (text.length === 0) return true;
-		const write = receiver.terminal?.write;
-		if (typeof write !== "function") return false;
-		write.call(receiver.terminal, `\x1b]52;c;${Buffer.from(text).toString("base64")}\x07`);
-		if (config.mouse.copyNotice) receiver.flash("Copied!");
-		return true;
+		return await writeSelectionToClipboard(receiver, text, config);
 	} catch {
 		// Reading the editor and the layout is best effort. Anything this trips
 		// over means Pi's own copy should run.
@@ -490,21 +536,17 @@ function transcriptSelectionText(
  * clipboard write — Pi's own copy has the same shape (`if (text.length === 0)
  * return`), it just gets there after building a string of rails.
  */
-function copyTranscriptSelection(
+async function copyTranscriptSelection(
 	receiver: MouseCapablePrototype,
 	config: PolishedTuiConfig,
-): boolean {
+): Promise<boolean> {
 	try {
 		const bounds = receiver.getSelectionBounds();
 		if (!bounds) return false;
 		const text = transcriptSelectionText(receiver, config, bounds);
 		if (text === undefined) return false;
 		if (text.length === 0) return true;
-		const write = receiver.terminal?.write;
-		if (typeof write !== "function") return false;
-		write.call(receiver.terminal, `\x1b]52;c;${Buffer.from(text).toString("base64")}\x07`);
-		if (config.mouse.copyNotice) receiver.flash("Copied!");
-		return true;
+		return await writeSelectionToClipboard(receiver, text, config);
 	} catch {
 		// Cleaning reads the layout and the selection, both best effort.
 		// Anything this trips over means Pi's own copy should run.
@@ -646,14 +688,14 @@ function installCopying(
 				prototype,
 				"copyActiveSelectionToClipboard",
 				"mouse-copy",
-				({ predecessor, receiver, args }) => {
+				async ({ predecessor, receiver, args }) => {
 					const typedReceiver = receiver as MouseCapablePrototype;
 					const config = deps.getConfig();
-					if (bufferCopy && copyEditorSelection(typedReceiver, config)) return true;
+					if (bufferCopy && (await copyEditorSelection(typedReceiver, config))) return true;
 					if (
 						cleanCopy &&
 						config.mouse.transcriptCleanCopy &&
-						copyTranscriptSelection(typedReceiver, config)
+						(await copyTranscriptSelection(typedReceiver, config))
 					) {
 						return true;
 					}
@@ -823,9 +865,30 @@ function isWheelEvent(event: unknown): event is WheelEventLike {
  * boundary in the wrong place. Without a row count there is nothing to compute
  * it from, so the notch falls through.
  */
+/**
+ * How many lines one notch moves.
+ *
+ * Pi 1.4 works this out itself and hands it over: `routeWheel(event, delta)`, where
+ * the delta already carries the direction, `fullscreenWheelScrollLines` and the
+ * alt-wheel multiplier. Older builds passed only the event and left the caller to
+ * read `wheelScrollLines` off the instance — a field that moved into a private
+ * accelerator on 1.4 — so that reading is now only the fallback it looks like.
+ */
+function wheelLines(
+	event: WheelEventLike,
+	wheelDelta: unknown,
+	receiver: MouseCapablePrototype,
+): number {
+	if (typeof wheelDelta === "number" && Number.isFinite(wheelDelta) && wheelDelta !== 0) {
+		return wheelDelta;
+	}
+	return event.direction * Math.max(1, receiver.wheelScrollLines ?? 1);
+}
+
 function scrollEditorForWheel(
 	receiver: MouseCapablePrototype,
 	event: unknown,
+	wheelDelta: unknown,
 	deps: InstallMouseDeps,
 ): boolean {
 	try {
@@ -843,7 +906,7 @@ function scrollEditorForWheel(
 		) {
 			return false;
 		}
-		const lines = event.direction * Math.max(1, receiver.wheelScrollLines ?? 1);
+		const lines = wheelLines(event, wheelDelta, receiver);
 		return scrollEditorBy(editor.scrollable, lines, rows);
 	} catch {
 		// Routing is a best-effort read of Pi's internals and of an editor this
@@ -877,7 +940,7 @@ function installEditorWheelScroll(
 		"mouse-wheel",
 		({ predecessor, receiver, args }) => {
 			const typedReceiver = receiver as MouseCapablePrototype;
-			if (!scrollEditorForWheel(typedReceiver, args[0], deps)) {
+			if (!scrollEditorForWheel(typedReceiver, args[0], args[1], deps)) {
 				return Reflect.apply(predecessor, receiver, args);
 			}
 			// Pi's own `routeWheel` repaints at the end of every notch; consuming
@@ -938,6 +1001,11 @@ export function installMouse(prototype: object, deps: InstallMouseDeps): () => v
 	if (enabled.has("editorWheelScroll")) {
 		cleanups.push(installEditorWheelScroll(typedPrototype, deps));
 	}
+	// Not a feature and not gated on the table above: Pi's cursor marker leaks into
+	// selection slices on every build that paints a selection, and this only removes
+	// the duplicates. See mouse/cursor-marker.ts for the upstream issue.
+	const dedupe = installCursorMarkerDedupe(typedPrototype);
+	if (dedupe) cleanups.push(dedupe);
 
 	if (cleanups.length === 0) return () => {};
 	return () => {

@@ -26,6 +26,9 @@ pieces of one product, not a theme:
 - `[!?↑]` — git status indicators (modified, untracked, ahead/behind, stashed, etc.)
 - `via  v5.5.0` — runtime detection with version and Starship-style Nerd Font runtime/language modules
 - Optional segments (off by default): session name, `user@host`, current time, OS icon, session duration, and the **project package version** (e.g. `package.json` → `0.6.0`) — distinct from the runtime segment, which shows the installed toolchain
+- The model pill's icon becomes a spinner while the agent works — same cell, no
+  reflow — and long statuses (`Retrying (1/3) in 4s...`) keep Pi's
+  `── … ────` line on the editor's top border
 - Right side shows context usage, token counts, and cost
 - Built-in footer segments can be shown or hidden individually from `/starline`
 - Fully custom Starship-style layout via a `footerFormat` template string — see [Footer Format Template](https://github.com/Andy8647/pi-starline/blob/main/docs/configuration.md#footer-format-template)

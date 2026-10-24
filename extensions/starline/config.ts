@@ -849,25 +849,15 @@ function isUiFeatureKey(value: string): value is keyof UiFeaturesConfig {
 	return value === "editor" || value === "statusLine" || value === "copyFriendly";
 }
 
+/**
+ * Derived from the defaults rather than restated. The hand-written list had
+ * drifted: `model`, `thinking` and `cacheHit` were missing, so every patch for
+ * them was dropped without a word.
+ */
+const footerSegmentKeys: ReadonlySet<string> = new Set(Object.keys(defaultConfig.footerSegments));
+
 function isFooterSegmentKey(value: string): value is keyof FooterSegmentsConfig {
-	return (
-		value === "cwd" ||
-		value === "sessionName" ||
-		value === "gitBranch" ||
-		value === "gitStatus" ||
-		value === "gitCounts" ||
-		value === "runtime" ||
-		value === "context" ||
-		value === "tokens" ||
-		value === "cost" ||
-		value === "sessionDuration" ||
-		value === "username" ||
-		value === "time" ||
-		value === "os" ||
-		value === "packageVersion" ||
-		value === "gitCommit" ||
-		value === "gitMetrics"
-	);
+	return footerSegmentKeys.has(value);
 }
 
 function validColorSourceEntries(record: Record<string, unknown>): Partial<ColorSourcesConfig> {
@@ -1090,16 +1080,16 @@ export function getExtensionStatusColorMode(
 	return config.extensionStatuses.colorModes[key] ?? DEFAULT_EXTENSION_STATUS_COLOR_MODE;
 }
 
-export function loadConfig(): PolishedTuiConfig {
+export function loadConfig(path = configPath): PolishedTuiConfig {
 	try {
-		if (!existsSync(configPath)) return mergeConfig({});
-		const parsed = JSON.parse(readFileSync(configPath, "utf8"));
+		if (!existsSync(path)) return mergeConfig({});
+		const parsed = JSON.parse(readFileSync(path, "utf8"));
 		if (!isRecord(parsed)) return mergeConfig(parsed);
 
 		const { config, migrated } = migrateFixedEditorKeys(parsed);
 		if (migrated) {
 			try {
-				writeConfigAtomically(configPath, config);
+				writeConfigAtomically(path, config);
 			} catch {
 				// Best effort: still use the migrated config for this run even if
 				// the write-back fails (e.g. read-only filesystem).
@@ -1109,7 +1099,13 @@ export function loadConfig(): PolishedTuiConfig {
 			);
 		}
 		return mergeConfig(config);
-	} catch {
+	} catch (error) {
+		// Falling back to defaults is right — a broken config must not block a
+		// session — but silently forgetting every setting is not. `mutateConfig`
+		// refuses loudly on the same file, so say which file was given up on.
+		console.warn(
+			`[starline] Could not read ${path}; using defaults for this session. ${error instanceof Error ? error.message : String(error)}`,
+		);
 		return mergeConfig({});
 	}
 }

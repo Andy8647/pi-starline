@@ -21,6 +21,11 @@ import {
 	renderStyleForSourceOrFallback,
 	safeThemeFg,
 } from "./style";
+import {
+	setWorkingIndicator,
+	type WorkingIndicator,
+	workingStatusForBorder,
+} from "./working-indicator";
 
 const SPLIT_POLISHED_FRAME: unique symbol = Symbol.for("pi-starline.polished-frame");
 
@@ -88,6 +93,13 @@ type PolishedFrameOptions = {
 	rightStatus?: string;
 	/** Third-party statuses placed on the editor row (`placement: "editor"`). */
 	editorStatus?: string;
+	/** Pi's status text for the top rule (retry, compaction, …). */
+	borderStatus?: string;
+	/** Draft lines scrolled out of view above / below, for Pi's `↑ N more` cue. */
+	scrollTop?: number;
+	scrollBottom?: number;
+	/** Reports how many text rows the frame drew, so `handleMouse` can bound clicks. */
+	onEditorLines?: (count: number) => void;
 	splitBaseFrame?: (lines: string[]) => PolishedFrameSplit | undefined;
 };
 
@@ -295,6 +307,118 @@ function vimModeColor(mode: string): string {
 	}
 }
 
+/**
+ * A frame rule with things riding on it.
+ *
+ * Two things can share the rule: Pi's status text on the left (`── ⠋ Retrying (1/3)
+ * ────`), and the draft's scroll position, centred in Pi's own ` ↑ 3 more `
+ * wording. The status wins when both cannot fit — it is the one carrying a cancel
+ * hint — and the scroll label is dropped rather than pushed off-centre.
+ *
+ * The status arrives already coloured by Pi, so only the rule and the label are
+ * painted here.
+ */
+function composeBorderLine(
+	width: number,
+	parts: { status?: string; scroll?: string },
+	border: (text: string) => string,
+): string {
+	const rule = (count: number) => border("─".repeat(Math.max(0, count)));
+	if (width <= 0) return rule(width);
+
+	const status = parts.status ? truncateToWidth(parts.status, Math.max(1, width - 5), "") : "";
+	const statusWidth = visibleWidth(status);
+	const leftWidth = statusWidth > 0 ? statusWidth + 4 : 0;
+
+	const label = parts.scroll ? ` ${parts.scroll} ` : "";
+	const labelWidth = visibleWidth(label);
+	const labelStart = labelWidth > 0 ? Math.floor((width - labelWidth) / 2) : -1;
+	const centred =
+		labelWidth > 0 && labelStart >= leftWidth + 1 && labelStart + labelWidth <= width - 1;
+	// A label that cannot be centred still beats dropping it, but only when there
+	// is no status competing for the left of the rule.
+	const rightAligned = labelWidth > 0 && !centred && leftWidth === 0 && labelWidth + 2 <= width;
+
+	let out = statusWidth > 0 ? `${border("── ")}${status}${border(" ")}` : "";
+	let cursor = leftWidth;
+	if (centred) {
+		out += rule(labelStart - cursor) + border(label);
+		cursor = labelStart + labelWidth;
+	} else if (rightAligned) {
+		out += rule(width - labelWidth) + border(label);
+		cursor = width;
+	}
+	return out + rule(width - cursor);
+}
+
+/** Pi's own wording for the border scroll cue. */
+function scrollLabel(direction: "↑" | "↓", count: number | undefined): string | undefined {
+	return count && count > 0 ? `${direction} ${count} more` : undefined;
+}
+
+/**
+ * Read back the count Pi painted into a border line. The wrapped editor drops the
+ * base's frame lines, so this is how a base editor's scroll cue survives.
+ */
+function readScrollCount(line: string | undefined, direction: "↑" | "↓"): number {
+	if (!line) return 0;
+	const match = new RegExp(`${direction}\\s+(\\d+)\\s+more`).exec(plainRenderedText(line));
+	return match ? Number(match[1]) : 0;
+}
+
+/** The shape of a Pi TUI mouse event, local so it survives an older pi-tui type surface. */
+export type FrameMouseEvent = {
+	type?: string;
+	button?: string;
+	x: number;
+	y: number;
+	width: number;
+	height?: number;
+	[key: string]: unknown;
+};
+
+/**
+ * Map a click in Starline's frame onto the coordinates Pi's own editor expects.
+ *
+ * Pi counts from its own frame: `y = 1` is the first text row, `x = 0` is the box's
+ * left edge, and `width` is the whole box. Starline's frame puts a rail (or a
+ * copy-friendly prompt) in front of every row, pads above the text when
+ * `editorPaddingY` is on, and adds a metadata row below it.
+ *
+ * Returns undefined for anything outside the text block. The borders and the
+ * metadata row are Starline's, and Pi would otherwise read a click on the bottom
+ * rule as a click in its autocomplete list — which it draws immediately after that
+ * rule in its own frame, but two rows earlier in ours.
+ */
+export function translateEditorMouse(
+	event: FrameMouseEvent,
+	geometry: { railWidth: number; padTop: number; editorLineCount: number },
+): FrameMouseEvent | undefined {
+	const { railWidth, padTop, editorLineCount } = geometry;
+	if (editorLineCount <= 0) return undefined;
+	const y = event.y - padTop;
+	if (!Number.isFinite(y) || y < 1 || y > editorLineCount) return undefined;
+	return {
+		...event,
+		x: event.x - railWidth,
+		y,
+		width: Math.max(1, event.width - railWidth),
+	};
+}
+
+/**
+ * Pi's own click handling, resolved once at load.
+ *
+ * `Editor.handleMouse` only exists from pi-tui 1.4, which is newer than the type
+ * surface this package builds against, so the lookup walks the prototype chain by
+ * hand and simply stays undefined on older builds.
+ */
+const baseHandleMouse = (
+	CustomEditor.prototype as unknown as {
+		handleMouse?: (this: unknown, event: FrameMouseEvent) => unknown;
+	}
+).handleMouse;
+
 function readVimStatus(editor: WrappedEditor, uiTheme: Theme): string | undefined {
 	const mode = editor.getMode?.();
 	if (typeof mode !== "string") return undefined;
@@ -314,6 +438,10 @@ function renderPolishedFrame({
 	thinkingLevel,
 	rightStatus,
 	editorStatus,
+	borderStatus,
+	scrollTop,
+	scrollBottom,
+	onEditorLines,
 	splitBaseFrame,
 }: PolishedFrameOptions): string[] {
 	if (width <= 2) return clampRenderedLines(baseRendered, width);
@@ -351,6 +479,7 @@ function renderPolishedFrame({
 		ownedFrame?.editorLines ?? editorFrame.slice(1, -1),
 		config.editorCursor,
 	);
+	onEditorLines?.(editorLines.length);
 	const meta = renderEditorMetadataFormat(
 		config.editorMetadataFormat,
 		{
@@ -368,20 +497,20 @@ function renderPolishedFrame({
 	const copyFriendlyMeta = composeMetadataLine(meta, status, Math.max(0, width - 1));
 	const railedMeta = composeMetadataLine(meta, status, innerWidth);
 
-	const top = renderStyleForSourceOrFallback(
-		uiTheme,
-		colorSource,
-		config.colors.editorBorder,
-		EDITOR_BORDER_FALLBACK,
-		"─".repeat(width),
+	const borderPaint = (text: string) =>
+		renderStyleForSourceOrFallback(
+			uiTheme,
+			colorSource,
+			config.colors.editorBorder,
+			EDITOR_BORDER_FALLBACK,
+			text,
+		);
+	const top = composeBorderLine(
+		width,
+		{ status: borderStatus, scroll: scrollLabel("↑", scrollTop) },
+		borderPaint,
 	);
-	const bottom = renderStyleForSourceOrFallback(
-		uiTheme,
-		colorSource,
-		config.colors.editorBorder,
-		EDITOR_BORDER_FALLBACK,
-		"─".repeat(width),
-	);
+	const bottom = composeBorderLine(width, { scroll: scrollLabel("↓", scrollBottom) }, borderPaint);
 	// The metadata row stays even when it renders blank: splitPolishedFrame parses
 	// the frame back by position, so changing the line count breaks the wrapped
 	// editor path. An empty editorMetadataFormat leaves a blank row, not no row.
@@ -416,6 +545,16 @@ export class PolishedEditor extends CustomEditor {
 	private readonly getConfig: () => PolishedTuiConfig;
 	private readonly uiTheme: Theme;
 	private readonly getExtensionStatuses: (() => ReadonlyMap<string, string>) | undefined;
+	/** Text rows the last frame drew; bounds what `handleMouse` is allowed to translate. */
+	private editorLineCount = 0;
+	/**
+	 * Pi only routes a status to the editor when it advertises this flag, and stops
+	 * drawing its own row above the editor. Starline wants that deal so the plain
+	 * spinner can sit in the model pill; see `working-indicator.ts`. The base class
+	 * never sees the indicator (starline does not forward it), so the border it
+	 * would draw stays a plain rule and this frame stays the only one.
+	 */
+	readonly embedWorkingStatus = true;
 
 	constructor(
 		tui: TUI,
@@ -455,8 +594,41 @@ export class PolishedEditor extends CustomEditor {
 			modelMeta,
 			thinkingLevel: this.getThinkingLevel(),
 			editorStatus: editorStatusText(config, this.uiTheme, this.getExtensionStatuses?.()),
+			borderStatus: workingStatusForBorder(config, Math.max(1, width - 5)),
+			// Pi paints the draft's scroll position into the borders it draws, and both
+			// of those lines are dropped when Starline redraws the frame, so the counts
+			// are read back out of them here. Works whether the base inlines the cue
+			// (Pi 0.84) or routes it through renderTopBorder (Pi 1.4+).
+			scrollTop: readScrollCount(rendered[0], "↑"),
+			scrollBottom: readScrollCount(rendered.at(-1), "↓"),
+			onEditorLines: (count) => {
+				this.editorLineCount = count;
+			},
 		});
 		return result;
+	}
+
+	/**
+	 * Pi 1.4 turns a click into a caret move itself (`Editor.handleMouse`), counting
+	 * rows from its own frame. Starline's frame is not that frame, so the press is
+	 * translated back before Pi sees it — grapheme-accurate columns, autocomplete
+	 * clicks and focus then come from Pi rather than from a patched press handler.
+	 */
+	handleMouse(event: FrameMouseEvent): unknown {
+		if (typeof baseHandleMouse !== "function") return undefined;
+		const config = this.getConfig();
+		const { railWidth } = getEditorChromeWidths(config, this.uiTheme, "\x1b[0m");
+		const translated = translateEditorMouse(event, {
+			railWidth,
+			padTop: config.editorPaddingY > 0 ? 1 : 0,
+			editorLineCount: this.editorLineCount,
+		});
+		if (!translated) return undefined;
+		return baseHandleMouse.call(this, translated);
+	}
+
+	setWorkingStatusIndicator(indicator: WorkingIndicator | undefined): void {
+		setWorkingIndicator(indicator);
 	}
 
 	[SPLIT_POLISHED_FRAME](lines: string[]): PolishedFrameSplit | undefined {
@@ -469,6 +641,12 @@ export class PolishedEditor extends CustomEditor {
 	PolishedEditor.prototype[SPLIT_POLISHED_FRAME];
 
 export class WrappedPolishedEditor implements EditorComponent {
+	/**
+	 * Same contract as `PolishedEditor`: see the note there. The wrapper is what Pi
+	 * mounts, so the wrapper is what has to advertise it.
+	 */
+	readonly embedWorkingStatus = true;
+
 	constructor(
 		private readonly base: WrappedEditor,
 		private readonly uiTheme: Theme,
@@ -574,10 +752,19 @@ export class WrappedPolishedEditor implements EditorComponent {
 			thinkingLevel: this.getThinkingLevel(),
 			rightStatus: vimStatus,
 			editorStatus: editorStatusText(config, this.uiTheme, this.getExtensionStatuses?.()),
+			borderStatus: workingStatusForBorder(config, Math.max(1, width - 5)),
+			// The base's frame lines are dropped, so its scroll cues are read back
+			// from them and redrawn by Starline's own borders.
+			scrollTop: readScrollCount(rendered[0], "↑"),
+			scrollBottom: readScrollCount(rendered.at(-1), "↓"),
 			splitBaseFrame: (
 				this.base[SPLIT_POLISHED_FRAME] ?? this.base[LEGACY_SPLIT_POLISHED_FRAME]
 			)?.bind(this.base),
 		});
+	}
+
+	setWorkingStatusIndicator(indicator: WorkingIndicator | undefined): void {
+		setWorkingIndicator(indicator);
 	}
 
 	[SPLIT_POLISHED_FRAME](lines: string[]): PolishedFrameSplit | undefined {

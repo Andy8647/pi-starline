@@ -34,6 +34,7 @@ import type { LiveContextOverride } from "./live-context";
 import { collectPillInputs, renderPillBar } from "./pill";
 import type { FooterState } from "./state";
 import { renderStyleForSource } from "./style";
+import { modelPillIcon, readWorkingFrame } from "./working-indicator";
 
 const separatorText: Record<SeparatorStyle, string> = {
 	pipe: " | ",
@@ -254,7 +255,12 @@ export function installFooter(
 							theme,
 							colorSource,
 							config.colors.model,
-							withIcon(config.icons.model, state.modelLabel),
+							// While the agent works the spinner takes the icon's slot at the same
+							// display width, so the pill never resizes.
+							withIcon(
+								modelPillIcon(config.icons.model, readWorkingFrame(iconMode === "ascii")),
+								state.modelLabel,
+							),
 						)
 					: "";
 				// "off" reads as no thinking at all, matching the editor metadata line.
