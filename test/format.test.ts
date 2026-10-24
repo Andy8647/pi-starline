@@ -613,3 +613,78 @@ describe("resolveSessionStartEpoch", () => {
 		expect(resolveSessionStartEpoch({ timestamp: "" }, now)).toBe(now);
 	});
 });
+
+describe("usage totals cover every paid call", () => {
+	function totalsFor(entries: unknown[]) {
+		invalidateUsageTotalsCache();
+		return getUsageTotals(makeSessionContext(entries) as never);
+	}
+
+	it("counts a usage entry", () => {
+		const totals = totalsFor([
+			{
+				type: "usage",
+				usage: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, cost: { total: 0.5 } },
+			},
+		]);
+		expect(totals).toMatchObject({ input: 10, output: 5, cost: 0.5 });
+	});
+
+	it("counts a tool result's own usage", () => {
+		const totals = totalsFor([
+			{
+				type: "message",
+				message: {
+					role: "toolResult",
+					usage: { input: 3, output: 4, cacheRead: 0, cacheWrite: 0, cost: { total: 0.2 } },
+				},
+			},
+		]);
+		expect(totals).toMatchObject({ input: 3, output: 4, cost: 0.2 });
+	});
+
+	it("counts what compaction and branching cost", () => {
+		const totals = totalsFor([
+			{
+				type: "compaction",
+				usage: { input: 900, output: 100, cacheRead: 0, cacheWrite: 0, cost: { total: 1.5 } },
+			},
+			{
+				type: "branch_summary",
+				usage: { input: 40, output: 10, cacheRead: 0, cacheWrite: 0, cost: { total: 0.25 } },
+			},
+		]);
+		expect(totals).toMatchObject({ input: 940, output: 110, cost: 1.75 });
+	});
+
+	it("adds them to assistant turns instead of replacing them", () => {
+		const totals = totalsFor([
+			makeAssistantEntry(100, 20, 1, 20, 0),
+			{
+				type: "compaction",
+				usage: { input: 50, output: 60, cacheRead: 0, cacheWrite: 0, cost: { total: 2 } },
+			},
+		]);
+		expect(totals).toMatchObject({ input: 150, output: 80, cost: 3 });
+	});
+
+	it("still takes the cache hit rate from the assistant turn, not a summary", () => {
+		const totals = totalsFor([
+			makeAssistantEntry(100, 20, 1, 100, 0),
+			{
+				type: "compaction",
+				usage: { input: 0, output: 0, cacheRead: 500, cacheWrite: 0, cost: { total: 1 } },
+			},
+		]);
+		// 100 cache reads out of 100 input + 100 cache reads.
+		expect(totals.latestCacheHitRate).toBeCloseTo(50, 5);
+	});
+
+	it("ignores entries that carry no usage at all", () => {
+		const totals = totalsFor([
+			{ type: "model_change", provider: "p", modelId: "m" },
+			{ type: "label", label: "x" },
+		]);
+		expect(totals).toMatchObject({ input: 0, output: 0, cost: 0 });
+	});
+});

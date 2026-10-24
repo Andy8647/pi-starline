@@ -68,6 +68,13 @@ transcript and the animation lands where you are already looking.
   leaves the clipboard empty on macOS Terminal.app, in tmux without OSC 52
   passthrough and on WSL — the places Pi's native implementation exists for. The
   terminal write is still the fallback when nothing is injected.
+- **Cost and token totals count every paid call.** They summed assistant messages
+  only, which quietly skipped `usage` entries, a tool result's own usage, and the
+  summary calls that compaction and branching make — so a session that compacted
+  read cheaper than it was, and compaction is the call you least want hidden. The
+  accumulation now follows Pi's own footer entry for entry; the cache hit rate
+  still comes from assistant turns, which are the only ones with a prompt to
+  measure.
 
 ## [0.3.7] - 2026-09-22
 
