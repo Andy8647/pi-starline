@@ -95,6 +95,9 @@ type PolishedFrameOptions = {
 	editorStatus?: string;
 	/** Pi's status text for the top rule (retry, compaction, …). */
 	borderStatus?: string;
+	/** Draft lines scrolled out of view above / below, for Pi's `↑ N more` cue. */
+	scrollTop?: number;
+	scrollBottom?: number;
 	splitBaseFrame?: (lines: string[]) => PolishedFrameSplit | undefined;
 };
 
@@ -303,26 +306,62 @@ function vimModeColor(mode: string): string {
 }
 
 /**
- * The frame's top rule, optionally carrying a status.
+ * A frame rule with things riding on it.
  *
- * Mirrors Pi's own `renderTopBorder` layout (`── status ────`) so a retry or a
- * compaction reads the same whether the editor is Pi's or starline's. The status
- * arrives already coloured by Pi, so only the rule is painted here.
+ * Two things can share the rule: Pi's status text on the left (`── ⠋ Retrying (1/3)
+ * ────`), and the draft's scroll position, centred in Pi's own ` ↑ 3 more `
+ * wording. The status wins when both cannot fit — it is the one carrying a cancel
+ * hint — and the scroll label is dropped rather than pushed off-centre.
+ *
+ * The status arrives already coloured by Pi, so only the rule and the label are
+ * painted here.
  */
-function composeTopBorder(
+function composeBorderLine(
 	width: number,
-	status: string | undefined,
+	parts: { status?: string; scroll?: string },
 	border: (text: string) => string,
 ): string {
 	const rule = (count: number) => border("─".repeat(Math.max(0, count)));
-	if (!status || width <= 0) return rule(width);
+	if (width <= 0) return rule(width);
 
-	const text = truncateToWidth(status, Math.max(1, width - 5), "");
-	const textWidth = visibleWidth(text);
-	if (textWidth === 0) return rule(width);
+	const status = parts.status ? truncateToWidth(parts.status, Math.max(1, width - 5), "") : "";
+	const statusWidth = visibleWidth(status);
+	const leftWidth = statusWidth > 0 ? statusWidth + 4 : 0;
 
-	const tail = width - textWidth - 4;
-	return tail > 0 ? `${border("── ")}${text}${rule(tail + 1)}` : `${border("── ")}${text}`;
+	const label = parts.scroll ? ` ${parts.scroll} ` : "";
+	const labelWidth = visibleWidth(label);
+	const labelStart = labelWidth > 0 ? Math.floor((width - labelWidth) / 2) : -1;
+	const centred =
+		labelWidth > 0 && labelStart >= leftWidth + 1 && labelStart + labelWidth <= width - 1;
+	// A label that cannot be centred still beats dropping it, but only when there
+	// is no status competing for the left of the rule.
+	const rightAligned = labelWidth > 0 && !centred && leftWidth === 0 && labelWidth + 2 <= width;
+
+	let out = statusWidth > 0 ? `${border("── ")}${status}${border(" ")}` : "";
+	let cursor = leftWidth;
+	if (centred) {
+		out += rule(labelStart - cursor) + border(label);
+		cursor = labelStart + labelWidth;
+	} else if (rightAligned) {
+		out += rule(width - labelWidth) + border(label);
+		cursor = width;
+	}
+	return out + rule(width - cursor);
+}
+
+/** Pi's own wording for the border scroll cue. */
+function scrollLabel(direction: "↑" | "↓", count: number | undefined): string | undefined {
+	return count && count > 0 ? `${direction} ${count} more` : undefined;
+}
+
+/**
+ * Read back the count Pi painted into a border line. The wrapped editor drops the
+ * base's frame lines, so this is how a base editor's scroll cue survives.
+ */
+function readScrollCount(line: string | undefined, direction: "↑" | "↓"): number {
+	if (!line) return 0;
+	const match = new RegExp(`${direction}\\s+(\\d+)\\s+more`).exec(plainRenderedText(line));
+	return match ? Number(match[1]) : 0;
 }
 
 function readVimStatus(editor: WrappedEditor, uiTheme: Theme): string | undefined {
@@ -345,6 +384,8 @@ function renderPolishedFrame({
 	rightStatus,
 	editorStatus,
 	borderStatus,
+	scrollTop,
+	scrollBottom,
 	splitBaseFrame,
 }: PolishedFrameOptions): string[] {
 	if (width <= 2) return clampRenderedLines(baseRendered, width);
@@ -407,14 +448,12 @@ function renderPolishedFrame({
 			EDITOR_BORDER_FALLBACK,
 			text,
 		);
-	const top = composeTopBorder(width, borderStatus, borderPaint);
-	const bottom = renderStyleForSourceOrFallback(
-		uiTheme,
-		colorSource,
-		config.colors.editorBorder,
-		EDITOR_BORDER_FALLBACK,
-		"─".repeat(width),
+	const top = composeBorderLine(
+		width,
+		{ status: borderStatus, scroll: scrollLabel("↑", scrollTop) },
+		borderPaint,
 	);
+	const bottom = composeBorderLine(width, { scroll: scrollLabel("↓", scrollBottom) }, borderPaint);
 	// The metadata row stays even when it renders blank: splitPolishedFrame parses
 	// the frame back by position, so changing the line count breaks the wrapped
 	// editor path. An empty editorMetadataFormat leaves a blank row, not no row.
@@ -497,6 +536,12 @@ export class PolishedEditor extends CustomEditor {
 			thinkingLevel: this.getThinkingLevel(),
 			editorStatus: editorStatusText(config, this.uiTheme, this.getExtensionStatuses?.()),
 			borderStatus: workingStatusForBorder(config, Math.max(1, width - 5)),
+			// Pi paints the draft's scroll position into the borders it draws, and both
+			// of those lines are dropped when Starline redraws the frame, so the counts
+			// are read back out of them here. Works whether the base inlines the cue
+			// (Pi 0.84) or routes it through renderTopBorder (Pi 1.4+).
+			scrollTop: readScrollCount(rendered[0], "↑"),
+			scrollBottom: readScrollCount(rendered.at(-1), "↓"),
 		});
 		return result;
 	}
@@ -627,6 +672,10 @@ export class WrappedPolishedEditor implements EditorComponent {
 			rightStatus: vimStatus,
 			editorStatus: editorStatusText(config, this.uiTheme, this.getExtensionStatuses?.()),
 			borderStatus: workingStatusForBorder(config, Math.max(1, width - 5)),
+			// The base's frame lines are dropped, so its scroll cues are read back
+			// from them and redrawn by Starline's own borders.
+			scrollTop: readScrollCount(rendered[0], "↑"),
+			scrollBottom: readScrollCount(rendered.at(-1), "↓"),
 			splitBaseFrame: (
 				this.base[SPLIT_POLISHED_FRAME] ?? this.base[LEGACY_SPLIT_POLISHED_FRAME]
 			)?.bind(this.base),

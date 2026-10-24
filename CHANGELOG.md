@@ -35,6 +35,25 @@ transcript and the animation lands where you are already looking.
 - Needs Pi 0.87.0 or newer for the spinner to move; older builds never hand the
   indicator to the editor and keep Pi's own row, exactly as before.
 
+**Fixed**
+
+- **The draft's scroll cue is back on the frame.** Pi caps the input box at a third
+  of the terminal and paints `↑ 3 more` / `↓ 2 more` into the borders it draws;
+  Starline redraws both borders, so those counts are now read back out of Pi's
+  frame and re-emitted, sharing the top rule with a status when both are present.
+- **The wheel step follows `fullscreenWheelScrollLines` again.** Pi 1.4 hands the
+  finished line count to `routeWheel` as its second argument (it moved the setting
+  into a private accelerator), and the editor's own notch scroll was reading a
+  field that no longer exists — so every notch moved exactly one line.
+- **`/starline` can toggle the model, thinking and cache-hit segments.** Both
+  hand-written key whitelists had drifted from `FooterSegmentsConfig`, so those
+  three rows did nothing and their patches were dropped on save. Both are now
+  derived from the defaults.
+- **A config file that cannot be parsed says so** instead of silently reverting
+  every setting to its default for the session.
+- **`icons.mode: "ascii"` covers the pill spinner**, which was braille regardless
+  and grew the pill by two cells in terminals without a Nerd Font.
+
 ## [0.3.7] - 2026-09-22
 
 Dropped Starline's own click-to-expand for tool boxes. Pi 0.86.0 ships the

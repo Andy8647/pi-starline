@@ -72,16 +72,19 @@ const PI_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇"
  */
 const PILL_FRAMES = ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"];
 
+/** `icons.mode: "ascii"` exists for terminals without a Nerd Font; braille is no safer. */
+const ASCII_PILL_FRAMES = ["|", "/", "-", "\\"];
+
 /**
  * Swap Pi's frame for the pill's, keeping Pi's cadence: the frame arrives from the
  * loader's own tick, so its index in Pi's set is the phase to reuse. Anything the
  * session customized is passed through untouched.
  */
-function pillFrame(frame: string): string {
+function pillFrame(frame: string, frames: string[]): string {
 	const index = PI_FRAMES.indexOf(frame);
 	if (index < 0) return frame;
-	const scaled = Math.floor((index * PILL_FRAMES.length) / PI_FRAMES.length) % PILL_FRAMES.length;
-	return PILL_FRAMES[scaled] ?? frame;
+	const scaled = Math.floor((index * frames.length) / PI_FRAMES.length) % frames.length;
+	return frames[scaled] ?? frame;
 }
 
 /** Long statuses still clip, but to what the border can hold rather than to nothing. */
@@ -105,13 +108,13 @@ function borderStatus(indicator: WorkingIndicator, width: number): string | unde
  * colour), so the colour is stripped here and the footer paints it like any
  * other segment text.
  */
-export function readWorkingFrame(): string | undefined {
+export function readWorkingFrame(ascii = false): string | undefined {
 	const indicator = currentIndicator;
 	if (!indicator || !isSpinnerOnly(indicator)) return undefined;
 	try {
 		const frame = stripVTControlCharacters(indicator.renderSpinnerInBorder?.(1) ?? "");
 		if (visibleWidth(frame) === 0) return undefined;
-		return pillFrame(frame);
+		return pillFrame(frame, ascii ? ASCII_PILL_FRAMES : PILL_FRAMES);
 	} catch {
 		return undefined;
 	}

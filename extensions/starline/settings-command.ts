@@ -13,6 +13,7 @@ import {
 	type ColorSource,
 	type ColorSourcesConfig,
 	type ContextStyle,
+	defaultConfig,
 	type ExtensionStatusColorMode,
 	type ExtensionStatusPlacement,
 	type FooterSegmentsConfig,
@@ -216,25 +217,17 @@ function isFeatureSettingId(value: string): value is FeatureSettingId {
 	return value === "editor" || value === "statusLine" || value === "copyFriendly";
 }
 
+/**
+ * Derived from the defaults, so a segment cannot exist in the config and go
+ * missing from the menu. The three that used to be missing here rendered as rows
+ * that did nothing when toggled.
+ */
+const footerSegmentSettingIds: ReadonlySet<string> = new Set(
+	Object.keys(defaultConfig.footerSegments),
+);
+
 function isFooterSegmentSettingId(value: string): value is FooterSegmentSettingId {
-	return (
-		value === "cwd" ||
-		value === "sessionName" ||
-		value === "gitBranch" ||
-		value === "gitStatus" ||
-		value === "gitCounts" ||
-		value === "sessionDuration" ||
-		value === "runtime" ||
-		value === "context" ||
-		value === "tokens" ||
-		value === "cost" ||
-		value === "username" ||
-		value === "time" ||
-		value === "os" ||
-		value === "packageVersion" ||
-		value === "gitCommit" ||
-		value === "gitMetrics"
-	);
+	return footerSegmentSettingIds.has(value);
 }
 
 function isFeatureState(value: string): value is FeatureState {

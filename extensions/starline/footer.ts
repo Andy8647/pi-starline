@@ -257,7 +257,10 @@ export function installFooter(
 							config.colors.model,
 							// While the agent works the spinner takes the icon's slot at the same
 							// display width, so the pill never resizes.
-							withIcon(modelPillIcon(config.icons.model, readWorkingFrame()), state.modelLabel),
+							withIcon(
+								modelPillIcon(config.icons.model, readWorkingFrame(iconMode === "ascii")),
+								state.modelLabel,
+							),
 						)
 					: "";
 				// "off" reads as no thinking at all, matching the editor metadata line.

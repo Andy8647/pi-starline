@@ -186,6 +186,10 @@ type MouseCapablePrototype = {
 	 * How many lines one notch moves, `max(1, options.wheelScrollLines ?? 1)`
 	 * (`tui-alt-screen.js:73`). Read so the editor scrolls by the same amount
 	 * the transcript would have.
+	 *
+	 * Legacy fallback only: Pi 1.4 moved this into a private accelerator and now
+	 * hands the finished line count to `routeWheel` as its second argument, so the
+	 * field is undefined there and `fullscreenWheelScrollLines` arrives with it.
 	 */
 	wheelScrollLines?: number;
 };
@@ -823,9 +827,30 @@ function isWheelEvent(event: unknown): event is WheelEventLike {
  * boundary in the wrong place. Without a row count there is nothing to compute
  * it from, so the notch falls through.
  */
+/**
+ * How many lines one notch moves.
+ *
+ * Pi 1.4 works this out itself and hands it over: `routeWheel(event, delta)`, where
+ * the delta already carries the direction, `fullscreenWheelScrollLines` and the
+ * alt-wheel multiplier. Older builds passed only the event and left the caller to
+ * read `wheelScrollLines` off the instance — a field that moved into a private
+ * accelerator on 1.4 — so that reading is now only the fallback it looks like.
+ */
+function wheelLines(
+	event: WheelEventLike,
+	wheelDelta: unknown,
+	receiver: MouseCapablePrototype,
+): number {
+	if (typeof wheelDelta === "number" && Number.isFinite(wheelDelta) && wheelDelta !== 0) {
+		return wheelDelta;
+	}
+	return event.direction * Math.max(1, receiver.wheelScrollLines ?? 1);
+}
+
 function scrollEditorForWheel(
 	receiver: MouseCapablePrototype,
 	event: unknown,
+	wheelDelta: unknown,
 	deps: InstallMouseDeps,
 ): boolean {
 	try {
@@ -843,7 +868,7 @@ function scrollEditorForWheel(
 		) {
 			return false;
 		}
-		const lines = event.direction * Math.max(1, receiver.wheelScrollLines ?? 1);
+		const lines = wheelLines(event, wheelDelta, receiver);
 		return scrollEditorBy(editor.scrollable, lines, rows);
 	} catch {
 		// Routing is a best-effort read of Pi's internals and of an editor this
@@ -877,7 +902,7 @@ function installEditorWheelScroll(
 		"mouse-wheel",
 		({ predecessor, receiver, args }) => {
 			const typedReceiver = receiver as MouseCapablePrototype;
-			if (!scrollEditorForWheel(typedReceiver, args[0], deps)) {
+			if (!scrollEditorForWheel(typedReceiver, args[0], args[1], deps)) {
 				return Reflect.apply(predecessor, receiver, args);
 			}
 			// Pi's own `routeWheel` repaints at the end of every notch; consuming
