@@ -10,6 +10,31 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [0.3.8] - 2026-10-25
+
+The working spinner moved out of its own row above the editor and into the model
+pill. Pi 0.87 added the hook that makes this possible: a custom editor that
+advertises `embedWorkingStatus` takes over status rendering, and Pi stops drawing
+its own line. Starline now does that, so there is one less row of chrome under the
+transcript and the animation lands where you are already looking.
+
+**Changed**
+
+- **The model pill's icon becomes the spinner while the agent works.** It takes the
+  icon's slot at the icon's own display width, so the pill keeps its size and the
+  pill bar never reflows. An icon-less model pill gains the two cells the spinner
+  needs; a wider icon is padded to match. The pill uses a filled braille set rather
+  than Pi's sparse one, whose top-left dot reads as sitting high above the model
+  name; frames a session customized with `ctx.ui.setWorkingIndicator({ frames })`
+  pass through untouched.
+- **Retry, compaction and branch-summary statuses keep Pi's layout, now on
+  Starline's top border** — `── Retrying (1/3) in 4s... ────` — because they spell
+  a sentence and carry an interrupt hint a pill cannot hold. The same fallback
+  catches the spinner when the status line is off or the model segment is hidden,
+  so the indicator never disappears.
+- Needs Pi 0.87.0 or newer for the spinner to move; older builds never hand the
+  indicator to the editor and keep Pi's own row, exactly as before.
+
 ## [0.3.7] - 2026-09-22
 
 Dropped Starline's own click-to-expand for tool boxes. Pi 0.86.0 ships the

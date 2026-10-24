@@ -60,6 +60,7 @@ import { registerStarlineSettingsCommand } from "./settings-command";
 import { createInitialState, type FooterState, syncState } from "./state";
 import { PolishedEditor, WrappedPolishedEditor } from "./ui";
 import { installUserMessageStyle } from "./user-message";
+import { setWorkingIndicator } from "./working-indicator";
 
 type EditorFactory = NonNullable<Parameters<ExtensionContext["ui"]["setEditorComponent"]>[0]>;
 
@@ -415,6 +416,10 @@ export default function (pi: ExtensionAPI) {
 		installedEditorFactory = undefined;
 		editorInstallMode = "none";
 		editorInstalled = false;
+		// Pi only clears the indicator it handed to the editor it is replacing, and
+		// this editor is on its way out; leaving the stale reference behind would
+		// keep a spinner in the footer forever.
+		setWorkingIndicator(undefined);
 		// Pi rebuilds the editor from whatever factory is now in place, and that
 		// one is not ours. Leaving the old instance registered would point the
 		// wheel patch at an editor no longer on screen.
@@ -507,6 +512,7 @@ export default function (pi: ExtensionAPI) {
 		try {
 			uninstallMouse();
 			uninstallPrototypePatches();
+			setWorkingIndicator(undefined);
 			stopSessionTimer();
 			stopProjectRefresh();
 			requestFooterRender = undefined;

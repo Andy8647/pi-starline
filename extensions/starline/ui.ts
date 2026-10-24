@@ -21,6 +21,11 @@ import {
 	renderStyleForSourceOrFallback,
 	safeThemeFg,
 } from "./style";
+import {
+	setWorkingIndicator,
+	type WorkingIndicator,
+	workingStatusForBorder,
+} from "./working-indicator";
 
 const SPLIT_POLISHED_FRAME: unique symbol = Symbol.for("pi-starline.polished-frame");
 
@@ -88,6 +93,8 @@ type PolishedFrameOptions = {
 	rightStatus?: string;
 	/** Third-party statuses placed on the editor row (`placement: "editor"`). */
 	editorStatus?: string;
+	/** Pi's status text for the top rule (retry, compaction, …). */
+	borderStatus?: string;
 	splitBaseFrame?: (lines: string[]) => PolishedFrameSplit | undefined;
 };
 
@@ -295,6 +302,29 @@ function vimModeColor(mode: string): string {
 	}
 }
 
+/**
+ * The frame's top rule, optionally carrying a status.
+ *
+ * Mirrors Pi's own `renderTopBorder` layout (`── status ────`) so a retry or a
+ * compaction reads the same whether the editor is Pi's or starline's. The status
+ * arrives already coloured by Pi, so only the rule is painted here.
+ */
+function composeTopBorder(
+	width: number,
+	status: string | undefined,
+	border: (text: string) => string,
+): string {
+	const rule = (count: number) => border("─".repeat(Math.max(0, count)));
+	if (!status || width <= 0) return rule(width);
+
+	const text = truncateToWidth(status, Math.max(1, width - 5), "");
+	const textWidth = visibleWidth(text);
+	if (textWidth === 0) return rule(width);
+
+	const tail = width - textWidth - 4;
+	return tail > 0 ? `${border("── ")}${text}${rule(tail + 1)}` : `${border("── ")}${text}`;
+}
+
 function readVimStatus(editor: WrappedEditor, uiTheme: Theme): string | undefined {
 	const mode = editor.getMode?.();
 	if (typeof mode !== "string") return undefined;
@@ -314,6 +344,7 @@ function renderPolishedFrame({
 	thinkingLevel,
 	rightStatus,
 	editorStatus,
+	borderStatus,
 	splitBaseFrame,
 }: PolishedFrameOptions): string[] {
 	if (width <= 2) return clampRenderedLines(baseRendered, width);
@@ -368,13 +399,15 @@ function renderPolishedFrame({
 	const copyFriendlyMeta = composeMetadataLine(meta, status, Math.max(0, width - 1));
 	const railedMeta = composeMetadataLine(meta, status, innerWidth);
 
-	const top = renderStyleForSourceOrFallback(
-		uiTheme,
-		colorSource,
-		config.colors.editorBorder,
-		EDITOR_BORDER_FALLBACK,
-		"─".repeat(width),
-	);
+	const borderPaint = (text: string) =>
+		renderStyleForSourceOrFallback(
+			uiTheme,
+			colorSource,
+			config.colors.editorBorder,
+			EDITOR_BORDER_FALLBACK,
+			text,
+		);
+	const top = composeTopBorder(width, borderStatus, borderPaint);
 	const bottom = renderStyleForSourceOrFallback(
 		uiTheme,
 		colorSource,
@@ -416,6 +449,14 @@ export class PolishedEditor extends CustomEditor {
 	private readonly getConfig: () => PolishedTuiConfig;
 	private readonly uiTheme: Theme;
 	private readonly getExtensionStatuses: (() => ReadonlyMap<string, string>) | undefined;
+	/**
+	 * Pi only routes a status to the editor when it advertises this flag, and stops
+	 * drawing its own row above the editor. Starline wants that deal so the plain
+	 * spinner can sit in the model pill; see `working-indicator.ts`. The base class
+	 * never sees the indicator (starline does not forward it), so the border it
+	 * would draw stays a plain rule and this frame stays the only one.
+	 */
+	readonly embedWorkingStatus = true;
 
 	constructor(
 		tui: TUI,
@@ -455,8 +496,13 @@ export class PolishedEditor extends CustomEditor {
 			modelMeta,
 			thinkingLevel: this.getThinkingLevel(),
 			editorStatus: editorStatusText(config, this.uiTheme, this.getExtensionStatuses?.()),
+			borderStatus: workingStatusForBorder(config, Math.max(1, width - 5)),
 		});
 		return result;
+	}
+
+	setWorkingStatusIndicator(indicator: WorkingIndicator | undefined): void {
+		setWorkingIndicator(indicator);
 	}
 
 	[SPLIT_POLISHED_FRAME](lines: string[]): PolishedFrameSplit | undefined {
@@ -469,6 +515,12 @@ export class PolishedEditor extends CustomEditor {
 	PolishedEditor.prototype[SPLIT_POLISHED_FRAME];
 
 export class WrappedPolishedEditor implements EditorComponent {
+	/**
+	 * Same contract as `PolishedEditor`: see the note there. The wrapper is what Pi
+	 * mounts, so the wrapper is what has to advertise it.
+	 */
+	readonly embedWorkingStatus = true;
+
 	constructor(
 		private readonly base: WrappedEditor,
 		private readonly uiTheme: Theme,
@@ -574,10 +626,15 @@ export class WrappedPolishedEditor implements EditorComponent {
 			thinkingLevel: this.getThinkingLevel(),
 			rightStatus: vimStatus,
 			editorStatus: editorStatusText(config, this.uiTheme, this.getExtensionStatuses?.()),
+			borderStatus: workingStatusForBorder(config, Math.max(1, width - 5)),
 			splitBaseFrame: (
 				this.base[SPLIT_POLISHED_FRAME] ?? this.base[LEGACY_SPLIT_POLISHED_FRAME]
 			)?.bind(this.base),
 		});
+	}
+
+	setWorkingStatusIndicator(indicator: WorkingIndicator | undefined): void {
+		setWorkingIndicator(indicator);
 	}
 
 	[SPLIT_POLISHED_FRAME](lines: string[]): PolishedFrameSplit | undefined {
