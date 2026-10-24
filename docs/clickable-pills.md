@@ -41,32 +41,35 @@ Four actions motivated this, in the order they are worth building:
   today; `extensionStatus:<key>` in `pill.segments` already renders one. A bridge
   for `pi-subagents` (which never calls `setStatus`) is a ~30 line extension with
   **zero** changes here.
+- **A `Container` forwards to its children.** `Container.handleMouse` (`tui.js:116`)
+  walks its children by rendered height and re-dispatches with `y` rebased to the
+  child, `x` unchanged. A component mounted inside one of Pi's container slots —
+  footer, widget, status — therefore receives clicks without declaring a layout
+  node of its own. Verified against 1.4.0: a two-row container delivers
+  `{x: 7, y: 0}` to its second child for a click at `{x: 7, y: 1}`, and delivers
+  nothing to that child for a click on the first row.
 
 ## Why the footer is not clickable today
 
-`installFooter` hands Pi a plain object with `render` / `invalidate` / `dispose`.
-It declares no layout node, so the box under the footer belongs to Pi's
-`footerContainer`, whose `handleMouse` is `Container.prototype.handleMouse` — and
-`dispatchMouseToLayout` skips exactly that case. A click on the footer therefore
-lands nowhere. Starline's mouse suite patches only `TuiAltScreen` methods (mouse
-routing, selection, copy, viewport input); the footer has never been part of it.
-
-The same reason makes this cheap to add: nothing has to be unwound, only a node and
-a hit map have to be declared.
+`installFooter` hands Pi a plain object with `render` / `invalidate` / `dispose`
+and no `handleMouse`. Pi's `footerContainer` would forward a click to it — the
+container does that for every child — but there is nothing to forward to, so the
+event stops at the container. Nothing is patched, nothing is in the way: the
+handler simply does not exist yet.
 
 ## Design
 
-### 1. The frame declares one leaf node
+### 1. The footer component implements `handleMouse`
 
-The footer component gains `[LAYOUT_NODE]()` returning a leaf whose height is the
-rendered line count (1 for pill mode, 1–2 for the text footer). `handleMouse` then
-receives `x` / `y` relative to the footer, and only events that actually land on a
-pill are consumed.
+No layout node, no wrapper. The footer already owns the one line it renders, and
+Pi's container rebases `y` into it, so `handleMouse(event)` receives exactly the
+coordinates the pill spans are measured in. An event that lands on no pill returns
+`undefined`, so a click on empty footer space falls through and swallows nothing.
 
-Rejected: wrapping the footer in `MouseRegion`. It would work, but the wrapper needs
-the same node declaration anyway, and starline renders its own hit map from the
-same pass that renders the bar — two sources of truth for pill geometry is exactly
-how these things drift.
+Rejected: `MouseRegion`. It is the right tool when a handler wants to wrap
+*someone else's* component; here the footer and the handler are the same object,
+and the extra layer would only separate the hit map from the render that produced
+it.
 
 ### 2. The renderer records the pill spans
 
@@ -120,7 +123,7 @@ overlay handling.
 
 | Phase | Content | Effort |
 | --- | --- | --- |
-| 1 | Layout node, pill span sink, action table, `/starline` action commands, one action (queue status → popover explaining what is queued) | M |
+| 1 | Footer `handleMouse`, pill span sink, action table, `/starline` action commands, one action (queue status → popover explaining what is queued) | M |
 | 2 | Model picker via `ModelSelectorComponent` | M |
 | 3 | Branch switcher (list local branches, confirm on a dirty worktree, `git checkout`) | M |
 | 4 | Extension-status click hook: a status key opts in by publishing structured data | S–M |
@@ -128,6 +131,17 @@ overlay handling.
 
 Phase 1 is the only one that touches rendering; phases 2–4 are actions added to a
 table that already works, which is the point of doing it in that order.
+
+## What this does not need
+
+- **No `@xzzpig/pi-mouse-events`.** That extension patches `TuiAltScreen` to
+  expose a global mouse channel with screen coordinates. A component that renders
+  its own pills gets precise, already-rebased events from Pi's own dispatch, so the
+  channel would be a worse source for the same information. It stays useful for
+  extensions that need to watch the mouse *globally*, which is not this.
+- **No new prototype patch.** The whole feature is one method on a component
+  Starline already owns.
+- **No upstream API.** Everything above is public surface in Pi 1.4.
 
 ## Risks and open questions
 
