@@ -90,6 +90,7 @@ import {
 import { activeEditor, wheelTarget } from "./editor-mouse";
 import { scrollEditorBy } from "./editor-scroll";
 import { editorVisualRowCount } from "./editor-text-cursor";
+import { externalMouseLayer } from "./external-layer";
 import { type BoxLike, scrollContentLinesFor } from "./hit-test";
 import { keyTextFor } from "./key-text";
 import { externalEditorName, selectionHintText } from "./selection-state";
@@ -219,6 +220,7 @@ export type InstallMouseDeps = {
 
 /** Logged at most once per process — see `disabledFeatureWarning`. */
 let hasWarned = false;
+let hasWarnedAboutExternalLayer = false;
 
 /**
  * The live renderer the hint reads. `installMouse` receives only the
@@ -957,6 +959,23 @@ function installEditorWheelScroll(
  * removes every patch this call installed.
  */
 export function installMouse(prototype: object, deps: InstallMouseDeps): () => void {
+	// Another extension may already own this prototype. Two layers answering the
+	// same event is worse than either alone — every notch would scroll twice, every
+	// click would move the caret twice, every copy would write the clipboard twice
+	// — so this one stands down and says why. The selection-marker cleanup above is
+	// a render pass, not mouse input, and stays installed.
+	const external = externalMouseLayer();
+	if (external) {
+		if (!hasWarnedAboutExternalLayer) {
+			hasWarnedAboutExternalLayer = true;
+			console.warn(
+				`[starline] ${external.name} owns Pi's mouse layer, so Starline's mouse features are off — two layers would handle every event twice. Wheel-over-draft, click-to-caret, clean copies and the selection hint come from that extension instead.`,
+			);
+		}
+		const dedupe = installCursorMarkerDedupe(prototype);
+		return dedupe ? () => dedupe() : () => {};
+	}
+
 	const available = probeCapabilities(prototype);
 	const enabled = enabledFeatures(available);
 

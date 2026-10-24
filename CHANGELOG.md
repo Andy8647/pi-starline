@@ -10,7 +10,10 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
-## [Unreleased]
+## [0.3.9] - 2026-10-25
+
+Two things about repositories being written to and events being handled twice —
+both of them noticed by someone else first.
 
 **Fixed**
 
@@ -21,6 +24,21 @@ npm.
   collide with your own `git commit` — read-only probes now run with
   `GIT_OPTIONAL_LOCKS=0`. (An env var rather than `--no-optional-locks`: an older
   git ignores a variable it does not know and fails on a flag it does not know.)
+
+  Thanks to [@xzzpig](https://github.com/xzzpig): this came from their fork
+  [`@xzzpig/pi-starline`](https://www.npmjs.com/package/@xzzpig/pi-starline),
+  which runs the same probes with `--no-optional-locks`.
+
+- **Starline stands down when another extension owns Pi's mouse layer.**
+  [`@xzzpig/pi-mouse-events`](https://www.npmjs.com/package/@xzzpig/pi-mouse-events)
+  patches the same `TuiAltScreen` methods Starline does, so with both installed
+  every wheel notch scrolled twice, every click moved the caret twice and every
+  copy wrote the clipboard twice. Starline detects the API object that extension
+  publishes under `Symbol.for("pi-mouse-events.api.v2")` and leaves the mouse
+  layer alone, with one console note saying where the features went. The
+  selection-marker cleanup is a render pass rather than mouse input, so it stays.
+  Same thanks: the coexistence problem only exists because their split showed what
+  a shared mouse layer would look like.
 
 ## [0.3.8] - 2026-10-25
 
