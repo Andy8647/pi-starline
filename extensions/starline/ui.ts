@@ -98,6 +98,8 @@ type PolishedFrameOptions = {
 	/** Draft lines scrolled out of view above / below, for Pi's `↑ N more` cue. */
 	scrollTop?: number;
 	scrollBottom?: number;
+	/** Reports how many text rows the frame drew, so `handleMouse` can bound clicks. */
+	onEditorLines?: (count: number) => void;
 	splitBaseFrame?: (lines: string[]) => PolishedFrameSplit | undefined;
 };
 
@@ -364,6 +366,59 @@ function readScrollCount(line: string | undefined, direction: "↑" | "↓"): nu
 	return match ? Number(match[1]) : 0;
 }
 
+/** The shape of a Pi TUI mouse event, local so it survives an older pi-tui type surface. */
+export type FrameMouseEvent = {
+	type?: string;
+	button?: string;
+	x: number;
+	y: number;
+	width: number;
+	height?: number;
+	[key: string]: unknown;
+};
+
+/**
+ * Map a click in Starline's frame onto the coordinates Pi's own editor expects.
+ *
+ * Pi counts from its own frame: `y = 1` is the first text row, `x = 0` is the box's
+ * left edge, and `width` is the whole box. Starline's frame puts a rail (or a
+ * copy-friendly prompt) in front of every row, pads above the text when
+ * `editorPaddingY` is on, and adds a metadata row below it.
+ *
+ * Returns undefined for anything outside the text block. The borders and the
+ * metadata row are Starline's, and Pi would otherwise read a click on the bottom
+ * rule as a click in its autocomplete list — which it draws immediately after that
+ * rule in its own frame, but two rows earlier in ours.
+ */
+export function translateEditorMouse(
+	event: FrameMouseEvent,
+	geometry: { railWidth: number; padTop: number; editorLineCount: number },
+): FrameMouseEvent | undefined {
+	const { railWidth, padTop, editorLineCount } = geometry;
+	if (editorLineCount <= 0) return undefined;
+	const y = event.y - padTop;
+	if (!Number.isFinite(y) || y < 1 || y > editorLineCount) return undefined;
+	return {
+		...event,
+		x: event.x - railWidth,
+		y,
+		width: Math.max(1, event.width - railWidth),
+	};
+}
+
+/**
+ * Pi's own click handling, resolved once at load.
+ *
+ * `Editor.handleMouse` only exists from pi-tui 1.4, which is newer than the type
+ * surface this package builds against, so the lookup walks the prototype chain by
+ * hand and simply stays undefined on older builds.
+ */
+const baseHandleMouse = (
+	CustomEditor.prototype as unknown as {
+		handleMouse?: (this: unknown, event: FrameMouseEvent) => unknown;
+	}
+).handleMouse;
+
 function readVimStatus(editor: WrappedEditor, uiTheme: Theme): string | undefined {
 	const mode = editor.getMode?.();
 	if (typeof mode !== "string") return undefined;
@@ -386,6 +441,7 @@ function renderPolishedFrame({
 	borderStatus,
 	scrollTop,
 	scrollBottom,
+	onEditorLines,
 	splitBaseFrame,
 }: PolishedFrameOptions): string[] {
 	if (width <= 2) return clampRenderedLines(baseRendered, width);
@@ -423,6 +479,7 @@ function renderPolishedFrame({
 		ownedFrame?.editorLines ?? editorFrame.slice(1, -1),
 		config.editorCursor,
 	);
+	onEditorLines?.(editorLines.length);
 	const meta = renderEditorMetadataFormat(
 		config.editorMetadataFormat,
 		{
@@ -488,6 +545,8 @@ export class PolishedEditor extends CustomEditor {
 	private readonly getConfig: () => PolishedTuiConfig;
 	private readonly uiTheme: Theme;
 	private readonly getExtensionStatuses: (() => ReadonlyMap<string, string>) | undefined;
+	/** Text rows the last frame drew; bounds what `handleMouse` is allowed to translate. */
+	private editorLineCount = 0;
 	/**
 	 * Pi only routes a status to the editor when it advertises this flag, and stops
 	 * drawing its own row above the editor. Starline wants that deal so the plain
@@ -542,8 +601,30 @@ export class PolishedEditor extends CustomEditor {
 			// (Pi 0.84) or routes it through renderTopBorder (Pi 1.4+).
 			scrollTop: readScrollCount(rendered[0], "↑"),
 			scrollBottom: readScrollCount(rendered.at(-1), "↓"),
+			onEditorLines: (count) => {
+				this.editorLineCount = count;
+			},
 		});
 		return result;
+	}
+
+	/**
+	 * Pi 1.4 turns a click into a caret move itself (`Editor.handleMouse`), counting
+	 * rows from its own frame. Starline's frame is not that frame, so the press is
+	 * translated back before Pi sees it — grapheme-accurate columns, autocomplete
+	 * clicks and focus then come from Pi rather than from a patched press handler.
+	 */
+	handleMouse(event: FrameMouseEvent): unknown {
+		if (typeof baseHandleMouse !== "function") return undefined;
+		const config = this.getConfig();
+		const { railWidth } = getEditorChromeWidths(config, this.uiTheme, "\x1b[0m");
+		const translated = translateEditorMouse(event, {
+			railWidth,
+			padTop: config.editorPaddingY > 0 ? 1 : 0,
+			editorLineCount: this.editorLineCount,
+		});
+		if (!translated) return undefined;
+		return baseHandleMouse.call(this, translated);
 	}
 
 	setWorkingStatusIndicator(indicator: WorkingIndicator | undefined): void {
