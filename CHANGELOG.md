@@ -10,6 +10,18 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [Unreleased]
+
+**Fixed**
+
+- **The git probes no longer write to your repository.** `status` and `diff`
+  refresh the index's stat information as a side effect: they take
+  `.git/index.lock` and rewrite `.git/index`. From a footer that polls every
+  thirty seconds that is churn on every repository you open, and a lock that can
+  collide with your own `git commit` — read-only probes now run with
+  `GIT_OPTIONAL_LOCKS=0`. (An env var rather than `--no-optional-locks`: an older
+  git ignores a variable it does not know and fails on a flag it does not know.)
+
 ## [0.3.8] - 2026-10-25
 
 The working spinner moved out of its own row above the editor and into the model
@@ -59,7 +71,7 @@ transcript and the animation lands where you are already looking.
   `sliceWithWidth` carries the escape sequences before each slice into it — the
   editor's zero-width caret marker included, so one marker became two or three.
   Pi strips only the first per line, and the rest reach the terminal; a terminal
-  that ends APC only on `ESC \` (Ghostty) swallows the text after them. Starline
+  that ends APC only on `ESC ` (Ghostty) swallows the text after them. Starline
   keeps the first marker per line and drops the copies. Upstream issue
   [#9332](https://github.com/earendil-works/pi/issues/9332); once the fix in
   [#9441](https://github.com/earendil-works/pi/pull/9441) ships this goes away.
@@ -75,7 +87,7 @@ transcript and the animation lands where you are already looking.
   accumulation now follows Pi's own footer entry for entry; the cache hit rate
   still comes from assistant turns, which are the only ones with a prompt to
   measure.
-- **A failed compaction says so.** Pi emits \`session_compact_failed\` and draws
+- **A failed compaction says so.** Pi emits `session_compact_failed` and draws
   nothing for it, so a failure late in a long session read as the agent quietly
   forgetting the conversation. Starline raises an error notification naming the
   reason (threshold, overflow, manual) and Pi's message; an abort, which is the
