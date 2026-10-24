@@ -39,7 +39,11 @@ import {
 	markEditorFactory,
 } from "./editor-factory-marker";
 import { installFooter } from "./footer";
-import { buildSessionDurationLabel, invalidateUsageTotalsCache } from "./format";
+import {
+	buildSessionDurationLabel,
+	invalidateUsageTotalsCache,
+	resolveSessionStartEpoch,
+} from "./format";
 import { emptyGitStatus, readGitHost, readGitStatus } from "./git";
 import { LiveContextController } from "./live-context";
 import { installMouse } from "./mouse";
@@ -107,6 +111,18 @@ export default function (pi: ExtensionAPI) {
 	const liveContext = new LiveContextController(sessionLifecycle, refresh);
 	const getActiveTheme = () => activeTheme;
 	const getCurrentConfig = () => currentConfig;
+	/**
+	 * The session's own header, or nothing. Read through a guard because this runs on
+	 * whatever `sessionManager` the running Pi build provides — the header is where a
+	 * resumed session keeps its original start time.
+	 */
+	const readSessionHeader = (ctx: ExtensionContext): { timestamp?: string } | undefined => {
+		try {
+			return ctx.sessionManager.getHeader() ?? undefined;
+		} catch {
+			return undefined;
+		}
+	};
 	const getThinkingLevel = () =>
 		sessionLifecycle.isCurrent() ? pi.getThinkingLevel() : ("off" as const);
 	const syncFooterState = (ctx: ExtensionContext) =>
@@ -550,7 +566,9 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_start", async (_event, ctx) => {
 		sessionLifecycle.start();
 		liveContext.clear();
-		state.sessionStartEpoch = Date.now();
+		// A resumed session keeps its original header, and reporting the moment this
+		// process attached to it would make the elapsed-time segment read 0s forever.
+		state.sessionStartEpoch = resolveSessionStartEpoch(readSessionHeader(ctx));
 		invalidateUsageTotalsCache();
 		lastProjectCwd = undefined;
 		installUi(ctx);

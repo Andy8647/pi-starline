@@ -258,6 +258,21 @@ export function buildSessionDurationLabel(startEpoch: number): string {
 	return `${seconds}s`;
 }
 
+/**
+ * When the session really started.
+ *
+ * A resumed session (`--continue`, `--resume`) keeps the header of the session it
+ * continues, so the elapsed-time segment has to read that instead of the moment
+ * this process attached to it — otherwise every resumed session reads `0s`.
+ */
+export function resolveSessionStartEpoch(
+	header: { timestamp?: string } | null | undefined,
+	now = Date.now(),
+): number {
+	const parsed = header?.timestamp ? Date.parse(header.timestamp) : Number.NaN;
+	return Number.isFinite(parsed) && parsed > 0 ? parsed : now;
+}
+
 export function contextColorTier(
 	percent: number | null | undefined,
 	thresholds: ContextThresholds = { warning: 70, error: 90 },

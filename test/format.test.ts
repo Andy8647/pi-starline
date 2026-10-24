@@ -18,6 +18,7 @@ import {
 	formatPackageVersionSegment,
 	getUsageTotals,
 	invalidateUsageTotalsCache,
+	resolveSessionStartEpoch,
 } from "../extensions/starline/format";
 import {
 	ASCII_DEFAULT_ICONS,
@@ -590,5 +591,25 @@ describe("formatPackageVersionSegment", () => {
 		);
 		expect(out).toContain("#");
 		expect(out).not.toContain("\u{f487}");
+	});
+});
+
+describe("resolveSessionStartEpoch", () => {
+	const now = Date.parse("2026-10-25T12:00:00.000Z");
+
+	it("keeps a resumed session's original start time", () => {
+		const header = { timestamp: "2026-10-24T09:30:00.000Z" };
+		expect(resolveSessionStartEpoch(header, now)).toBe(Date.parse(header.timestamp));
+	});
+
+	it("falls back to now when there is no header", () => {
+		expect(resolveSessionStartEpoch(undefined, now)).toBe(now);
+		expect(resolveSessionStartEpoch(null, now)).toBe(now);
+	});
+
+	it("falls back to now when the header has no usable timestamp", () => {
+		expect(resolveSessionStartEpoch({}, now)).toBe(now);
+		expect(resolveSessionStartEpoch({ timestamp: "not a date" }, now)).toBe(now);
+		expect(resolveSessionStartEpoch({ timestamp: "" }, now)).toBe(now);
 	});
 });
