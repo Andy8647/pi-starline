@@ -80,6 +80,7 @@ import {
 	type MouseFeature,
 	probeCapabilities,
 } from "./capabilities";
+import { installCursorMarkerDedupe } from "./cursor-marker";
 import {
 	activeEditorViewport,
 	deleteEditorSelection,
@@ -963,6 +964,11 @@ export function installMouse(prototype: object, deps: InstallMouseDeps): () => v
 	if (enabled.has("editorWheelScroll")) {
 		cleanups.push(installEditorWheelScroll(typedPrototype, deps));
 	}
+	// Not a feature and not gated on the table above: Pi's cursor marker leaks into
+	// selection slices on every build that paints a selection, and this only removes
+	// the duplicates. See mouse/cursor-marker.ts for the upstream issue.
+	const dedupe = installCursorMarkerDedupe(typedPrototype);
+	if (dedupe) cleanups.push(dedupe);
 
 	if (cleanups.length === 0) return () => {};
 	return () => {

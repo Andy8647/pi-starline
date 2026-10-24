@@ -18,7 +18,8 @@ type PrototypePatchAdapter =
 	| "mouse-viewport-input"
 	| "mouse-wheel"
 	| "mouse-selection-event"
-	| "mouse-copy";
+	| "mouse-copy"
+	| "selection-marker-dedupe";
 
 type PrototypeMethodName = string;
 

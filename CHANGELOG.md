@@ -54,6 +54,16 @@ transcript and the animation lands where you are already looking.
 - **`icons.mode: "ascii"` covers the pill spinner**, which was braille regardless
   and grew the pill by two cells in terminals without a Nerd Font.
 
+- **Drag-selecting the row the caret is on no longer garbles the display.** Pi's
+  `applySelection` reassembles a selected row from three column slices, and
+  `sliceWithWidth` carries the escape sequences before each slice into it — the
+  editor's zero-width caret marker included, so one marker became two or three.
+  Pi strips only the first per line, and the rest reach the terminal; a terminal
+  that ends APC only on `ESC \` (Ghostty) swallows the text after them. Starline
+  keeps the first marker per line and drops the copies. Upstream issue
+  [#9332](https://github.com/earendil-works/pi/issues/9332); once the fix in
+  [#9441](https://github.com/earendil-works/pi/pull/9441) ships this goes away.
+
 ## [0.3.7] - 2026-09-22
 
 Dropped Starline's own click-to-expand for tool boxes. Pi 0.86.0 ships the
