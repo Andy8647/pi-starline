@@ -19,7 +19,8 @@ type PrototypePatchAdapter =
 	| "mouse-wheel"
 	| "mouse-selection-event"
 	| "mouse-copy"
-	| "selection-marker-dedupe";
+	| "selection-marker-dedupe"
+	| "agent-session-capture";
 
 type PrototypeMethodName = string;
 

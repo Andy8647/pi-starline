@@ -33,6 +33,8 @@ import { type ResolvedIcons, resolveRuntimeSymbol } from "./icons";
 import type { LiveContextOverride } from "./live-context";
 import { collectPillInputs, type PillSpan, renderPillBar } from "./pill";
 import { pillActionFor, queuedSegmentText, runPillAction } from "./pill-actions";
+import { clearPillAnchors, setPillAnchors } from "./pill-anchors";
+import type { PillAnchor } from "./pill-bubble";
 import type { FooterState } from "./state";
 import { renderStyleForSource } from "./style";
 import { modelPillIcon, readWorkingFrame } from "./working-indicator";
@@ -274,14 +276,25 @@ export function installFooter(
 			lineWidth: number,
 		) => {
 			const visibleSpans: PillSpan[] = [];
+			const anchors = new Map<string, PillAnchor>();
 			for (const span of spans) {
 				// The bar is drawn after a one-column pad, and the line may have been cut
 				// again after the bar was; clamp to what the terminal actually shows.
 				const startColumn = Math.min(lineWidth, span.startColumn + columnOffset);
 				const endColumn = Math.min(lineWidth, span.endColumn + columnOffset);
-				if (endColumn > startColumn) visibleSpans.push({ ...span, startColumn, endColumn });
+				if (endColumn <= startColumn) continue;
+				visibleSpans.push({ ...span, startColumn, endColumn });
+				// Same columns, plus the colours, for anything that wants to sit next to
+				// this pill later — a bubble today, whatever the next action needs.
+				anchors.set(span.key, {
+					centerColumn: Math.floor((startColumn + endColumn - 1) / 2),
+					terminalWidth: width,
+					background: span.bg,
+					foreground: span.fg,
+				});
 			}
 			pillSpansByWidth.set(width, visibleSpans);
+			setPillAnchors(anchors);
 			if (pillSpansByWidth.size > PILL_HIT_MAP_LIMIT) {
 				const oldest = pillSpansByWidth.keys().next();
 				if (!oldest.done) pillSpansByWidth.delete(oldest.value);
@@ -317,17 +330,22 @@ export function installFooter(
 				const spans = pillSpansByWidth.get(width);
 				if (!spans) return undefined;
 
-				const key = spans.find(
-					(span) => event.x >= span.startColumn && event.x < span.endColumn,
-				)?.key;
-				const action = key === undefined ? undefined : pillActionFor(key);
-				if (!action) return undefined;
+				const hit = spans.find((span) => event.x >= span.startColumn && event.x < span.endColumn);
+				const action = hit === undefined ? undefined : pillActionFor(hit.key);
+				if (!hit || !action) return undefined;
 
 				// Pi synthesizes a `click` only for a press a component handled, so the press
 				// is claimed here and the action runs on the click that follows it. A press
 				// that turns into a drag never produces one, which is what keeps a stray
-				// gesture from opening a panel.
-				if (event.type === "click") runPillAction(action, ctx);
+				// gesture from opening a bubble.
+				if (event.type === "click") {
+					runPillAction(action, ctx, {
+						centerColumn: Math.floor((hit.startColumn + hit.endColumn - 1) / 2),
+						terminalWidth: width,
+						background: hit.bg,
+						foreground: hit.fg,
+					});
+				}
 				return { handled: true };
 			},
 			render(width: number): string[] {
@@ -843,6 +861,7 @@ export function installFooter(
 						return [line];
 					}
 					pillSpansByWidth.delete(width);
+					clearPillAnchors();
 				}
 
 				const renderExtensionStatus = (segment: ExtensionStatusSegment) =>
@@ -863,8 +882,9 @@ export function installFooter(
 					innerWidth,
 				);
 				const framed = width > 2 ? ` ${truncateToWidth(content, width - 2, "")} ` : content;
-				// This width is drawn as text: no pills, nothing to hit.
+				// This width is drawn as text: no pills, nothing to hit, nothing to point at.
 				pillSpansByWidth.delete(width);
+				clearPillAnchors();
 				return [truncateToWidth(framed, width, "")];
 			},
 		};

@@ -35,6 +35,7 @@ import {
 import { sanitizeExtensionStatusText } from "./extension-status";
 import { isIconMode } from "./icons";
 import { pillActionFor, runPillAction } from "./pill-actions";
+import { getPillAnchor } from "./pill-anchors";
 import type { SessionLifecycle } from "./session-lifecycle";
 import { EDITOR_BORDER_STYLE, renderChromeBorder, safeThemeFg } from "./style";
 
@@ -666,12 +667,13 @@ export function registerStarlineSettingsCommand(pi: ExtensionAPI, deps: Settings
 				return;
 			}
 
-			// The keyboard half of a clickable pill: same action, same code. Only the
-			// segments that have an action resolve, so an unknown word still falls
-			// through to the usage warning below.
-			const action = pillActionFor(args.trim().toLowerCase());
+			// The keyboard half of a clickable pill: same action, same bubble, pointed at
+			// the pill the footer last drew. Only segments with an action resolve, so an
+			// unknown word still falls through to the usage warning below.
+			const actionKey = args.trim().toLowerCase();
+			const action = pillActionFor(actionKey);
 			if (action) {
-				runPillAction(action, ctx);
+				runPillAction(action, ctx, getPillAnchor(actionKey));
 				return;
 			}
 

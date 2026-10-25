@@ -47,6 +47,7 @@ import {
 } from "./format";
 import { emptyGitStatus, readGitHost, readGitStatus } from "./git";
 import { LiveContextController } from "./live-context";
+import { forgetLiveSession, installLiveSessionCapture } from "./live-session";
 import { installMouse } from "./mouse";
 import { setActiveEditor } from "./mouse/editor-mouse";
 import { readPackageVersionResult } from "./package-version";
@@ -105,6 +106,7 @@ export default function (pi: ExtensionAPI) {
 	let lastProjectCwd: string | undefined;
 	let disposePasteCollapse: (() => void) | undefined;
 	let disposeMouse: (() => void) | undefined;
+	let cleanupSessionCapture: (() => void) | undefined;
 
 	const refresh = () => {
 		if (sessionLifecycle.isCurrent()) requestFooterRender?.();
@@ -251,6 +253,22 @@ export default function (pi: ExtensionAPI) {
 	const uninstallMouse = () => {
 		disposeMouse?.();
 		disposeMouse = undefined;
+	};
+
+	/**
+	 * Capture the live `AgentSession` so the queue bubble can list what is waiting.
+	 * The context only carries a boolean; the messages are on the session, and one
+	 * wrapper on its `prompt` is enough to hold the instance. See `live-session.ts`.
+	 */
+	const installSessionCapture = () => {
+		cleanupSessionCapture?.();
+		cleanupSessionCapture = installLiveSessionCapture();
+	};
+
+	const uninstallSessionCapture = () => {
+		cleanupSessionCapture?.();
+		cleanupSessionCapture = undefined;
+		forgetLiveSession();
 	};
 
 	/**
@@ -507,6 +525,7 @@ export default function (pi: ExtensionAPI) {
 		currentConfig = loadConfig();
 		syncFooterState(ctx);
 		stopProjectRefresh();
+		installSessionCapture();
 		applyConfiguredUi(ctx);
 		installMousePatches();
 		refresh();
@@ -528,6 +547,7 @@ export default function (pi: ExtensionAPI) {
 		sessionLifecycle.shutdown();
 		try {
 			uninstallMouse();
+			uninstallSessionCapture();
 			uninstallPrototypePatches();
 			setWorkingIndicator(undefined);
 			stopSessionTimer();

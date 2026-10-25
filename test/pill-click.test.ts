@@ -1,9 +1,11 @@
 import { stripVTControlCharacters } from "node:util";
+import { AgentSession } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { defaultConfig, mergeConfig } from "../extensions/starline/config";
 import { installFooter } from "../extensions/starline/footer";
 import { emptyGitStatus } from "../extensions/starline/git";
+import { forgetLiveSession, installLiveSessionCapture } from "../extensions/starline/live-session";
 import { type PillInput, type PillSpan, renderPillBar } from "../extensions/starline/pill";
 import { hasQueuedMessages, pillActionFor } from "../extensions/starline/pill-actions";
 import { DEFAULT_PILL_CONFIG, type PillConfig } from "../extensions/starline/pill-config";
@@ -19,6 +21,10 @@ const theme: ThemeLike = {
 
 const plain = (text: string) => stripVTControlCharacters(text);
 
+afterEach(() => {
+	forgetLiveSession();
+});
+
 function spansOf(
 	inputs: PillInput[],
 	config: Partial<PillConfig>,
@@ -33,6 +39,11 @@ function spansOf(
 	return { bar, spans };
 }
 
+/** Spans carry the pill's colours too; column tests do not care about them. */
+function columns(spans: PillSpan[]): Array<Pick<PillSpan, "key" | "startColumn" | "endColumn">> {
+	return spans.map(({ key, startColumn, endColumn }) => ({ key, startColumn, endColumn }));
+}
+
 const aa: PillInput = { key: "aa", text: "aa", spec: "" };
 const bbb: PillInput = { key: "bbb", text: "bbb", spec: "" };
 
@@ -41,7 +52,7 @@ describe("pill spans", () => {
 		const { bar, spans } = spansOf([aa, bbb], { caps: "none", separator: "none" }, 80);
 		// ascii drops caps and arrows, so the bar is exactly the padded pill text.
 		expect(plain(bar)).toBe(" aa  bbb ");
-		expect(spans).toEqual([
+		expect(columns(spans)).toEqual([
 			{ key: "aa", startColumn: 0, endColumn: 4 },
 			{ key: "bbb", startColumn: 4, endColumn: 9 },
 		]);
@@ -61,7 +72,7 @@ describe("pill spans", () => {
 		const wide: PillInput = { key: "queue", text: "排队", spec: "" };
 		const { bar, spans } = spansOf([wide, bbb], { caps: "none", separator: "none" }, 80);
 		// " 排队 " is six cells: two ideographs, two spaces, two columns each.
-		expect(spans[0]).toEqual({ key: "queue", startColumn: 0, endColumn: 6 });
+		expect(columns(spans)[0]).toEqual({ key: "queue", startColumn: 0, endColumn: 6 });
 		expect(spans[1]?.startColumn).toBe(6);
 		expect(visibleWidth(bar)).toBe(11);
 	});
@@ -69,13 +80,13 @@ describe("pill spans", () => {
 	it("keeps a clipped pill's visible cells and drops one clipped away entirely", () => {
 		const clipped = spansOf([aa, bbb], { caps: "none", separator: "none" }, 6);
 		expect(plain(clipped.bar)).toBe(" aa  b");
-		expect(clipped.spans).toEqual([
+		expect(columns(clipped.spans)).toEqual([
 			{ key: "aa", startColumn: 0, endColumn: 4 },
 			{ key: "bbb", startColumn: 4, endColumn: 6 },
 		]);
 
 		const gone = spansOf([aa, bbb], { caps: "none", separator: "none" }, 4);
-		expect(gone.spans).toEqual([{ key: "aa", startColumn: 0, endColumn: 4 }]);
+		expect(columns(gone.spans)).toEqual([{ key: "aa", startColumn: 0, endColumn: 4 }]);
 	});
 
 	it("never reports a column the terminal does not draw", () => {
@@ -147,6 +158,13 @@ function makeFooter(options: { queued?: boolean; config?: ReturnType<typeof merg
 	if (!footer) throw new Error("footer factory was not registered");
 	return { footer, custom, notify, ctx };
 }
+
+type BubbleFactory = (
+	tui: unknown,
+	theme: unknown,
+	keybindings: unknown,
+	done: (result: void) => void,
+) => { render(width: number): string[]; handleInput(data: string): void };
 
 /** Column of `needle` in a rendered footer line; SGR sequences have no width. */
 function columnOf(line: string, needle: string): number {
@@ -250,33 +268,80 @@ describe("queue action", () => {
 		).toBe(false);
 	});
 
-	it("explains the queue without inventing a count, and closes on escape", async () => {
+	it("points the bubble at the pill it was opened from", () => {
+		const { footer, custom } = makeFooter({ queued: true });
+		const line = footer.render(80)[0] ?? "";
+		const x = columnOf(line, "queued");
+		footer.handleMouse?.({ type: "click", x, y: 0, width: 80 });
+
+		const [factory, options] = custom.mock.calls[0] ?? [];
+		expect(factory).toBeTypeOf("function");
+		const overlay = (options as { overlayOptions?: Record<string, unknown> }).overlayOptions;
+		// Lifted one row off the footer so the tail can sit above the pill.
+		expect(overlay?.offsetY).toBe(-1);
+		expect(overlay?.anchor).toBe("bottom-left");
+		const width = overlay?.width as number;
+		const left = overlay?.offsetX as number;
+		expect(left).toBeLessThanOrEqual(x);
+		expect(x - left).toBeGreaterThanOrEqual(2);
+		expect(x - left).toBeLessThanOrEqual(width - 3);
+	});
+
+	it("falls back to explaining the wait when the session is not readable", () => {
 		const { footer, custom } = makeFooter({ queued: true });
 		const line = footer.render(80)[0] ?? "";
 		footer.handleMouse?.({ type: "click", x: columnOf(line, "queued"), y: 0, width: 80 });
 
-		const factory = custom.mock.calls[0]?.[0] as
-			| ((
-					tui: unknown,
-					theme: unknown,
-					keybindings: unknown,
-					done: (result: void) => void,
-			  ) => { render(width: number): string[]; handleInput(data: string): void })
-			| undefined;
-		expect(factory).toBeTypeOf("function");
-
+		const [factory, options] = custom.mock.calls[0] ?? [];
 		const done = vi.fn();
-		const panel = factory?.({ requestRender() {} }, theme, {}, done);
-		const lines = panel?.render(50) ?? [];
+		const width = (options as { overlayOptions?: { width?: number } }).overlayOptions?.width ?? 64;
+		const bubble = (factory as BubbleFactory)({}, theme, {}, done);
+		const lines = bubble.render(width);
 		const text = lines.map(plain).join("\n");
 
 		expect(text).toContain("Queued messages");
 		expect(text).toContain("esc to close");
-		expect(text).not.toMatch(/\b\d+\s+queued/);
-		expect(lines.every((entry) => visibleWidth(entry) <= 50)).toBe(true);
+		expect(lines.every((entry) => visibleWidth(entry) === width)).toBe(true);
 
-		panel?.handleInput("\x1b");
+		bubble.handleInput("\x1b");
 		expect(done).toHaveBeenCalledTimes(1);
+	});
+
+	it("lists the queued messages when the live session is readable", async () => {
+		// Patch over a stub predecessor, so calling the wrapper captures a fake
+		// session without running Pi's real prompt.
+		const prototype = AgentSession.prototype as unknown as { prompt: unknown };
+		const originalPrompt = prototype.prompt;
+		prototype.prompt = vi.fn(async () => {});
+		const dispose = installLiveSessionCapture();
+		try {
+			const session = {
+				getSteeringMessages: () => ["first  thing", "second"],
+				getFollowUpMessages: () => [],
+			};
+			await (prototype.prompt as (this: unknown, text: string) => Promise<void>).call(
+				session,
+				"hi",
+			);
+
+			const { footer, custom } = makeFooter({ queued: true });
+			const line = footer.render(80)[0] ?? "";
+			footer.handleMouse?.({ type: "click", x: columnOf(line, "queued"), y: 0, width: 80 });
+
+			const [factory, options] = custom.mock.calls[0] ?? [];
+			const width =
+				(options as { overlayOptions?: { width?: number } }).overlayOptions?.width ?? 64;
+			const bubble = (factory as BubbleFactory)({}, theme, {}, vi.fn());
+			const text = bubble.render(width).map(plain).join("\n");
+
+			expect(text).toContain("2 messages queued");
+			expect(text).toContain("first thing");
+			expect(text).toContain("second");
+		} finally {
+			dispose();
+			prototype.prompt = originalPrompt;
+			forgetLiveSession();
+		}
 	});
 
 	it("is reachable from the keyboard as /starline queue", async () => {

@@ -30,9 +30,9 @@ pieces of one product, not a theme:
   reflow — and long statuses (`Retrying (1/3) in 4s...`) keep Pi's
   `── … ────` line on the editor's top border
 - **Clickable queue pill** — while messages wait for the current turn, the pill bar
-  gains a `queued` pill; click it (or run `/starline queue`) for an explanation of
-  what happens to them. Pi exposes only *whether* something is queued, so the pill
-  says a word rather than inventing a count
+  gains a `queued` pill; click it (or run `/starline queue`) and a speech bubble in
+  the pill's own colour opens above it, listing how many messages are waiting and
+  their first lines
 - Right side shows context usage, token counts, and cost
 - Built-in footer segments can be shown or hidden individually from `/starline`
 - Fully custom Starship-style layout via a `footerFormat` template string — see [Footer Format Template](https://github.com/Andy8647/pi-starline/blob/main/docs/configuration.md#footer-format-template)

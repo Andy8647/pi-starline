@@ -59,6 +59,10 @@ export type PillSpan = {
 	key: string;
 	startColumn: number;
 	endColumn: number;
+	/** Background SGR the pill was painted with, for anything that has to match it. */
+	bg: string;
+	/** Foreground SGR, or "" when the text carried its own styling. */
+	fg: string;
 };
 
 export type PillRenderOptions = {
@@ -329,7 +333,7 @@ export function renderPillBar(
 
 		// The arrow (or cap) is emitted before the span closes, so it belongs to
 		// the pill that points out of itself.
-		spans.push({ key: pill.key, startColumn, endColumn: column });
+		spans.push({ key: pill.key, startColumn, endColumn: column, bg: pill.bg, fg: pill.fg });
 	});
 
 	const rendered = width > 0 ? truncateToWidth(out, width, "") : out;
@@ -340,7 +344,9 @@ export function renderPillBar(
 		for (const span of spans) {
 			const startColumn = Math.min(span.startColumn, visible);
 			const endColumn = Math.min(span.endColumn, visible);
-			if (endColumn > startColumn) options.onSpan({ key: span.key, startColumn, endColumn });
+			if (endColumn > startColumn) {
+				options.onSpan({ ...span, startColumn, endColumn });
+			}
 		}
 	}
 

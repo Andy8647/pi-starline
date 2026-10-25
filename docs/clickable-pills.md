@@ -1,9 +1,10 @@
 # Clickable pills — design note
 
 Status: **phase 1 implemented.** The footer has a `handleMouse`, the pill renderer
-records hit areas, actions live in one table, and the queue pill plus
-`/starline queue` are the first (mouse + keyboard) pair. Phases 2–4 are still
-design, and each of them is now an entry in that table rather than new plumbing.
+records hit areas and colours, actions live in one table, and the queue pill plus
+`/starline queue` are the first (mouse + keyboard) pair. Popovers are a shared
+speech bubble that points at the pill it belongs to, so phases 2–4 add content
+rather than plumbing.
 
 This document was written before the code so the pieces could be argued about
 separately. Paragraphs marked **As built** were corrected against Pi 1.4.0 while
@@ -132,34 +133,48 @@ export function pillActionFor(key: string): PillAction | undefined;
 
 ### 4. Popovers are overlays, not layout
 
-The queue list, the branch switcher and any future panel open through
+The queue bubble, the branch switcher and any future panel open through
 `ctx.ui.custom(..., { overlay: true })`. The footer stays one line; nothing about
 the layout changes when a popover is open.
 
-**As built:** the panel closes on Escape (and Enter) through its own `handleInput`.
-Pi owns the overlay, but not the meaning of Escape inside it, so the dismiss key is
-part of the component rather than something the overlay stack does for us.
+**As built:** the popover is a speech bubble that points at the pill it belongs to.
+`pill-bubble.ts` is the shared component: an action passes its content plus the
+`PillAnchor` the footer recorded for that pill (centre column, terminal width, the
+pill's own background and foreground SGR), and gets a rounded box in the pill's
+colours. Placement is `anchor: "bottom-left"` + `offsetX` at the pill's centre and
+`offsetY: -1`, so the bubble sits on the row above the footer and its tail (a `▽`
+cut into the bottom border) lands over the pill. Without an anchor — the
+`/starline` command when the pill is not drawn — the bubble centres and drops the
+tail. Opening a second bubble closes the first, so clicking another pill swaps the
+popover instead of stacking overlays.
 
-## The two things that cannot be built yet
+The panel closes on Escape (and Enter) through its own `handleInput`. Pi owns the
+overlay, but not the meaning of Escape inside it, so the dismiss key is part of the
+component rather than something the overlay stack does for us.
 
-1. **A queued-message count.** The public surface is
-   `ctx.hasPendingMessages(): boolean`. The count and the messages themselves live
-   on `AgentSession` (`pendingMessageCount`, `getSteeringMessages()`,
-   `getFollowUpMessages()`), which interactive-mode does not put on the extension
-   context, and there is no queue event to reconstruct them from. A pill can show
-   `queued` truthfully; a number needs an upstream change (a `pendingMessageCount`
-   on `ctx` would do).
-2. **Hiding Pi's own pending-messages rows above the editor.** That is Pi's
-   `pendingMessagesContainer`; no extension API reaches it. Doing it from here means
-   patching Pi's renderables by position, the same class of hack the fixed-editor
-   era ran on. Recommendation: leave Pi's rows alone until Pi offers a switch, and
-   add the pill as an *additional* signal rather than a replacement.
+## What the queue bubble shows
+
+`ctx.hasPendingMessages()` is a boolean, but the data behind it is public on
+`AgentSession`: `pendingMessageCount`, `getSteeringMessages()`,
+`getFollowUpMessages()`. What interactive mode does not hand out is the session
+instance — the context has the session manager, not the session.
+
+**As built:** `live-session.ts` captures the instance by wrapping
+`AgentSession.prompt` through the same prototype-patch registry the mouse layer
+uses; the first prompt of a session records its receiver. The queue bubble then
+lists the count and up to three messages, followed by `+N more`. When the wrapper
+is not in place (older Pi, or a session that never prompted after Starline loaded)
+the bubble falls back to explaining the wait, and the pill still says `queued`.
+
+This is the one place phase 1 gained a patch, and it is meant to be temporary: the
+upstream fix is a `pendingMessages` field on the extension context, after which
+`live-session.ts` can be deleted without touching the bubble.
 
 ## Phasing
 
 | Phase | Content | Effort |
 | --- | --- | --- |
-| 1 ✅ | Footer `handleMouse`, pill span sink, action table, `/starline` action commands, one action (queue status → popover explaining what is queued) | M |
+| 1 ✅ | Footer `handleMouse`, pill span sink, action table, `/starline` action commands, speech-bubble popover, one action (queue status → bubble listing what is queued) | M |
 | 2 | Model picker via `ModelSelectorComponent` | M |
 | 3 | Branch switcher (list local branches, confirm on a dirty worktree, `git checkout`) | M |
 | 4 | Extension-status click hook: a status key opts in by publishing structured data | S–M |
@@ -168,7 +183,8 @@ part of the component rather than something the overlay stack does for us.
 Phase 1 was the only phase that touched rendering; phases 2–4 are actions added to a
 table that already works, which is the point of doing it in that order. Phase 1
 landed as `extensions/starline/pill-actions.ts` (the table and the queue action),
-`PillSpan` in `pill.ts`, and `handleMouse` in `footer.ts`.
+`pill-bubble.ts` (the shared popover), `PillSpan` in `pill.ts`, and `handleMouse` in
+`footer.ts`, with `live-session.ts` as the temporary bridge to the queue contents.
 
 ## What this does not need
 
@@ -177,9 +193,11 @@ landed as `extensions/starline/pill-actions.ts` (the table and the queue action)
   its own pills gets precise, already-rebased events from Pi's own dispatch, so the
   channel would be a worse source for the same information. It stays useful for
   extensions that need to watch the mouse *globally*, which is not this.
-- **No new prototype patch.** The whole feature is one method on a component
-  Starline already owns.
-- **No upstream API.** Everything above is public surface in Pi 1.4.
+- **No layout work.** The footer is one line and an overlay is composited on top;
+  neither the hit map nor the bubble declares a layout node.
+- **No upstream API for rendering.** Everything in that half is public surface in
+  Pi 1.4. Reading the queued messages is the one exception, and it is a transitional
+  wrapper (`live-session.ts`) rather than a dependency on internals.
 
 ## Risks and open questions
 
@@ -195,6 +213,11 @@ landed as `extensions/starline/pill-actions.ts` (the table and the queue action)
 - **Which segments are safe to make clickable.** `gitStatus`, `tokens` and `context`
   are read-outs; a click that does nothing is worse than an inert pill, so they
   stay inert until there is something to show.
+- **The session capture is a patch.** `AgentSession.prompt` is public and the wrap
+  only records `this`, but a future Pi could move the queue off the session or make
+  `prompt` an instance field. The wrapper is installed through the registry with a
+  guard and the bubble falls back to the boolean text, so the failure mode is a less
+  detailed bubble rather than a broken pill.
 - **Terminal mouse reporting is per-frame.** A terminal that drops mouse reporting
   (some multiplexers) leaves the pills dead but harmless: no keyboard path is
   removed, so the feature degrades to today's behaviour.

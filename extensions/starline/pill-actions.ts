@@ -6,22 +6,27 @@
  * inert pill swallows nothing. Every entry also answers to a `/starline`
  * subcommand of the same name, which is what makes the keyboard path real rather
  * than aspirational.
+ *
+ * An action receives the anchor of the pill it was called for, so anything it
+ * shows can be placed against that pill. The bubble itself lives in
+ * `pill-bubble.ts` and is shared: this file only decides what goes in it.
  */
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import {
-	Key,
-	matchesKey,
-	truncateToWidth,
-	visibleWidth,
-	wrapTextWithAnsi,
-} from "@earendil-works/pi-tui";
+import { truncateToWidth } from "@earendil-works/pi-tui";
+import { readPendingMessages } from "./live-session";
+import { type PillAnchor, type PillBubbleContent, showPillBubble } from "./pill-bubble";
 import { PILL_SEGMENT_VARIABLES } from "./pill-config";
-import { safeThemeFg } from "./style";
 
-/** What an action gets. Deliberately small: an action is a UI verb, not a service. */
+/** What an action gets: the session, and where the pill is if a click found it. */
 export type PillActionContext = {
 	ctx: ExtensionContext;
+	/**
+	 * Geometry and colours of the pill this action belongs to. Absent when the
+	 * command path runs while the pill is not on screen (text footer, or the
+	 * segment removed from `pill.segments`); bubbles then fall back to centred.
+	 */
+	pill?: PillAnchor;
 };
 
 export type PillAction = (context: PillActionContext) => void | Promise<void>;
@@ -29,11 +34,9 @@ export type PillAction = (context: PillActionContext) => void | Promise<void>;
 /**
  * Whether the session is holding messages for the running turn.
  *
- * The public surface is a boolean: the count and the messages themselves live on
- * `AgentSession`, which interactive mode does not put on the extension context.
- * Guarded rather than assumed — a build without it, or a context that has gone
- * stale after a session swap, must leave the pill out instead of taking the
- * footer's render down with it.
+ * The public surface is a boolean. Guarded rather than assumed: a build without
+ * it, or a context that has gone stale after a session swap, must leave the pill
+ * out instead of taking the footer's render down with it.
  */
 export function hasQueuedMessages(ctx: ExtensionContext): boolean {
 	try {
@@ -46,72 +49,62 @@ export function hasQueuedMessages(ctx: ExtensionContext): boolean {
 }
 
 /**
- * The queue pill's text: a word, never a number. `2 queued` would need
- * `pendingMessageCount` on the context, which does not exist yet.
+ * The queue pill's text: a word, never a number — the pill is the signal, the
+ * bubble is where the detail goes.
  */
 export function queuedSegmentText(ctx: ExtensionContext): string {
 	return hasQueuedMessages(ctx) ? "queued" : "";
 }
 
 /**
- * Explain the queue without inventing contents.
- *
- * Pi tells extensions that something is queued and nothing more, so the panel
- * states the behaviour instead of listing messages. When a count or the messages
- * land on the extension context, this is the one place to widen.
+ * Cap on listed messages. More than a few turns a bubble into a wall, and the
+ * count in the title already says how many there are.
  */
-function showQueuedMessages({ ctx }: PillActionContext): void {
+const MAX_LISTED_MESSAGES = 3;
+/** Roughly what fits in the widest bubble, bullet included, before wrapping. */
+const MAX_MESSAGE_COLUMNS = 58;
+
+function oneLine(message: string): string {
+	const collapsed = message.replace(/\s+/gu, " ").trim();
+	return truncateToWidth(collapsed, MAX_MESSAGE_COLUMNS, "…");
+}
+
+/**
+ * What the queue bubble says: the count and the messages when the live session
+ * is readable, and the behaviour when it is not.
+ */
+export function queuedBubbleContent(): PillBubbleContent {
+	const pending = readPendingMessages();
+	if (!pending) {
+		return {
+			title: "Queued messages",
+			body: [
+				"Messages you send while the agent is working wait until the current turn ends, then get delivered.",
+				"This build of Pi does not expose them to the extension, so the count and the text are unknown.",
+			],
+			hint: "esc to close",
+		};
+	}
+
+	const messages = [...pending.steering, ...pending.followUp];
+	const listed = messages.slice(0, MAX_LISTED_MESSAGES).map((message) => `· ${oneLine(message)}`);
+	if (messages.length > listed.length) {
+		listed.push(`· +${messages.length - listed.length} more`);
+	}
+	return {
+		title: `${messages.length} message${messages.length === 1 ? "" : "s"} queued`,
+		body: listed,
+		hint: "esc to close",
+	};
+}
+
+function showQueuedMessages({ ctx, pill }: PillActionContext): void {
 	if (!hasQueuedMessages(ctx)) {
 		// The pill only exists while something is queued; the command does not.
 		if (ctx.hasUI) ctx.ui.notify("No messages are queued", "info");
 		return;
 	}
-	if (!ctx.hasUI) return;
-
-	const title = "Queued messages";
-	const paragraphs = [
-		"Messages you send while the agent is working wait here until the current turn ends, then get delivered.",
-		"Pi does not tell extensions how many are queued or what they say yet, so this panel cannot list them.",
-	];
-	const hint = "esc to close";
-
-	void ctx.ui
-		.custom<void>(
-			(_tui, theme, _keybindings, done) => {
-				const border = (text: string) => safeThemeFg(theme, "borderMuted", text);
-				const accent = (text: string) => safeThemeFg(theme, "accent", text);
-				const muted = (text: string) => safeThemeFg(theme, "muted", text);
-				const row = (text: string, innerWidth: number) =>
-					`${border("│")} ${text}${" ".repeat(Math.max(0, innerWidth - visibleWidth(text)))} ${border("│")}`;
-
-				return {
-					render(width: number): string[] {
-						const innerWidth = Math.max(1, width - 4);
-						const heading = ` ${title} `;
-						const lines = [
-							`${border("┌─")}${accent(heading)}${border(
-								`${"─".repeat(Math.max(0, width - 3 - visibleWidth(heading)))}┐`,
-							)}`,
-							...paragraphs.flatMap((paragraph) =>
-								wrapTextWithAnsi(paragraph, innerWidth).map((line) => row(line, innerWidth)),
-							),
-							row("", innerWidth),
-							row(muted(hint), innerWidth),
-							`${border("└")}${border("─".repeat(Math.max(0, width - 2)))}${border("┘")}`,
-						];
-						return lines.map((line) => truncateToWidth(line, width, ""));
-					},
-					invalidate() {},
-					handleInput(data: string): void {
-						if (matchesKey(data, Key.escape) || matchesKey(data, Key.enter)) {
-							done(undefined);
-						}
-					},
-				};
-			},
-			{ overlay: true },
-		)
-		.catch(() => {});
+	showPillBubble(ctx, queuedBubbleContent(), pill);
 }
 
 /**
@@ -127,7 +120,7 @@ export const PILL_ACTIONS: Readonly<Partial<Record<string, PillAction>>> = {
  *
  * Extension statuses share the key space (their spans carry the status key), so
  * the builtin-segment test keeps a third-party status named `queue` from opening
- * our panel. Status actions get their own hook when they exist.
+ * our bubble. Status actions get their own hook when they exist.
  */
 export function pillActionFor(key: string): PillAction | undefined {
 	if (!(key in PILL_SEGMENT_VARIABLES)) return undefined;
@@ -139,9 +132,9 @@ export function pillActionFor(key: string): PillAction | undefined {
  * throwing action must not take down the render loop that dispatched the click,
  * and the keyboard path is still available.
  */
-export function runPillAction(action: PillAction, ctx: ExtensionContext): void {
+export function runPillAction(action: PillAction, ctx: ExtensionContext, pill?: PillAnchor): void {
 	try {
-		const pending = action({ ctx });
+		const pending = action({ ctx, pill });
 		if (pending) void pending.catch(() => {});
 	} catch {
 		// Nothing to report: the action's own guards are what keep this rare.

@@ -14,26 +14,44 @@ npm.
 
 **Added**
 
-- **The queue now shows up in the footer, and clicking it explains itself.** In the
-  pill footer a new `queue` segment appears while messages are waiting for the
+- **The queue now shows up in the footer, and clicking it shows what is queued.** In
+  the pill footer a new `queue` segment appears while messages are waiting for the
   current turn to end — a pill reading `queued`, gone again as soon as the queue
-  drains, so it costs nothing the rest of the time. Clicking it opens a short panel;
-  `/starline queue` does the same from the keyboard. The pill says a word rather
-  than a number on purpose: Pi's extension API exposes that something is queued but
-  not how many messages there are or what they say.
+  drains, so it costs nothing the rest of the time. Clicking it, or running
+  `/starline queue`, opens a speech bubble just above the pill: rounded box in the
+  pill's own colour, tail pointing at the pill, the count in the title (`2 messages
+  queued`) and the first lines of each message in the body. The pill keeps saying a
+  word rather than a number, because it is one segment wide.
 
   `queue` is part of the default pill bar. If you maintain your own
   `pill.segments`, add `"queue"` to it; `colors.queue` (default `bold yellow`)
-  colours the pill, and `$queue` renders the same word in a text `footerFormat`.
+  colours the pill and the bubble, and `$queue` renders the same word in a text
+  `footerFormat`.
 
 - **Pills can now be clicked.** The footer maps a mouse click to the pill under the
-  pointer and runs that segment's action, with no new prototype patch: the pill bar
-  records the columns each segment occupied in the render that drew it, including
-  truncation and wide characters. Pills with no action stay labels, and the click
-  falls through instead of being swallowed, so only the queue pill responds for now.
-  Every action also has a `/starline` subcommand, so nothing new is mouse-only.
-  The design and the phases still to come are in
+  pointer and runs that segment's action: the pill bar records the columns each
+  segment occupied in the render that drew it, including truncation and wide
+  characters, along with the colours it was painted in. Pills with no action stay
+  labels, and the click falls through instead of being swallowed, so only the queue
+  pill responds for now. Every action also has a `/starline` subcommand, so nothing
+  new is mouse-only.
+
+- **A speech bubble any pill action can reuse.** `pill-bubble.ts` positions an
+  overlay against a pill's anchor (its centre column, the terminal width, its
+  colours), paints the content in the pill's background and cuts a tail into the
+  bottom border at the column above the pill. Clicking a second pill swaps the
+  bubble instead of stacking overlays. The next actions (model picker, branch
+  switcher) get the popover for free. Design and phases are in
   [docs/clickable-pills.md](https://github.com/Andy8647/pi-starline/blob/main/docs/clickable-pills.md).
+
+**Changed**
+
+- Reading the queued messages themselves needs one small wrapper on
+  `AgentSession.prompt`, because the extension context only exposes a boolean. It
+  is installed with the same guarded prototype registry as the mouse layer, and if
+  a future Pi breaks it the bubble falls back to explaining the wait. A
+  `pendingMessages` field on the extension context would make the wrapper
+  unnecessary.
 
 ## [0.3.9] - 2026-10-25
 
