@@ -1,20 +1,22 @@
 /**
- * A comic-style speech bubble that points at a pill.
+ * The popover a pill opens: a block in the pill's own colour that grows up out
+ * of the pill, the way a menu drops out of a menu bar.
  *
  * This is the popover every pill action gets, not the queue's private panel: an
  * action hands over its content and the anchor the footer recorded for the pill,
- * and gets a bubble in the pill's own colour, sitting above the footer with a
- * tail aimed at the pill.
+ * and gets a block aligned to the pill's left edge, sitting directly on the
+ * footer row. Same colour and no gap is what says which pill it belongs to.
  *
- * The shape is a filled block, not an outlined box: a terminal can only colour
- * whole cells, so an outline leaves the corners square while the curve hides
- * inside them. Cutting the four corner cells with quadrant glyphs and drawing the
- * tail as a filled triangle makes the silhouette itself rounded.
+ * Deliberately square. A terminal colours whole cells, so a rounded corner or a
+ * tail has to be faked with glyphs, and every attempt (box-drawing corners over a
+ * fill, quadrant-cut corners, a separate `▼`) left visible seams at the cell
+ * edges. The only shaping left is a half-block top row, which halves the top
+ * padding without drawing anything that can misalign.
  *
  * Pi's overlay positioning is what makes the placement possible without layout
- * work: `anchor: "bottom-left"` + `offsetX` puts the bubble at a column we choose,
- * and `offsetY: -1` lifts it off the footer row so the last line can carry the
- * tail.
+ * work: `anchor: "bottom-left"` + `offsetX` puts the block at a column we choose,
+ * and `offsetY: -1` keeps it off the footer row, so its last line sits right
+ * above the pill.
  */
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -36,9 +38,9 @@ const UNDERLINE = "\x1b[4m";
 const STYLE_OFF = "\x1b[22m\x1b[24m";
 const DEFAULT_BG = "\x1b[49m";
 
-/** Quadrants that keep the inside of each corner, leaving the outside cut away. */
-const CORNERS = { topLeft: "▗", topRight: "▖", bottomLeft: "▝", bottomRight: "▘" };
-const TAIL = "▼";
+/** Half blocks that pad the block by half a row on the open sides. */
+const TOP_EDGE = "▄";
+const BOTTOM_EDGE = "▀";
 
 /** A bubble narrow enough to read as a bubble, wide enough for a sentence. */
 const MIN_BUBBLE_WIDTH = 24;
@@ -50,6 +52,11 @@ const MAX_BUBBLE_WIDTH = 64;
  * to my pill" without knowing anything about the footer.
  */
 export type PillAnchor = {
+	/**
+	 * First column painted in the pill's colour. The bubble lines its left edge up
+	 * with it; without it the bubble is centred on `centerColumn` instead.
+	 */
+	startColumn?: number;
 	/** Column of the pill's centre on the footer line. */
 	centerColumn: number;
 	/** Width the footer was rendered at, which is the terminal width. */
@@ -107,33 +114,35 @@ export function pillBubbleWidth(content: PillBubbleContent, terminalWidth: numbe
 }
 
 /**
- * Where to put the bubble, and which column inside it the tail belongs on.
+ * Where to put the bubble, and whether it sits on its pill.
  *
- * The bubble is centred over the pill but clamped to stay on screen, so the tail
- * sits at the pill's centre and may end up off-centre in a clamped bubble. With
- * no anchor (a `/starline` command, or a pill that is not in the segment list)
- * the bubble is centred and has no tail.
+ * With an anchor the bubble starts at the pill's left edge and is only pushed
+ * left when it would run off the screen; it stays on the footer row either way,
+ * so it still reads as coming out of the pill. With no anchor (a `/starline`
+ * command while the pill is not on screen) it is centred and floats, closed off
+ * at the bottom like it is at the top.
  */
 export function pillBubblePlacement(
 	anchor: PillAnchor | undefined,
 	width: number,
 	fallbackWidth: number,
-): { leftColumn: number; options: OverlayOptions; tailColumn?: number } {
+): { leftColumn: number; options: OverlayOptions; attached: boolean } {
 	const terminalWidth = Math.max(1, Math.floor(anchor?.terminalWidth ?? fallbackWidth));
+	const rightmost = Math.max(0, terminalWidth - width);
 	const leftColumn = anchor
-		? clamp(Math.round(anchor.centerColumn - width / 2), 1, Math.max(1, terminalWidth - width - 1))
-		: Math.max(1, Math.floor((terminalWidth - width) / 2));
+		? clamp(Math.round(anchor.startColumn ?? anchor.centerColumn - width / 2), 0, rightmost)
+		: Math.floor(rightmost / 2);
 	return {
 		leftColumn,
 		// Bottom-left anchors the row to the bottom; the -1 keeps the footer row
-		// free so the tail's last line can sit directly above the pill.
+		// itself visible, so the bubble's last line lands right on top of the pill.
 		options: {
 			width,
 			anchor: "bottom-left",
 			offsetX: leftColumn,
 			offsetY: -1,
 		},
-		tailColumn: anchor ? Math.round(anchor.centerColumn) - leftColumn : undefined,
+		attached: anchor !== undefined,
 	};
 }
 
@@ -146,26 +155,24 @@ function buildBubble(input: {
 	width: number;
 	background: string;
 	foreground?: string;
-	tailColumn?: number;
+	/** Sitting on its pill: the bottom stays open so the colour runs into it. */
+	attached?: boolean;
 }): { lines: string[]; targets: BubbleTarget[] } {
 	const width = Math.max(6, Math.floor(input.width));
 	const innerWidth = Math.max(1, width - 4);
 	const background = input.background;
 	const foreground = input.foreground || contrastTextSgr(background);
-	// The corner glyphs are the fill colour drawn as a foreground, on the
-	// terminal's own background, so the cell outside the curve stays empty.
+	// The half-block edges are the fill colour drawn as a foreground on the
+	// terminal's own background, so the other half of the row stays empty.
 	const fillFg = toForegroundSgr(background) ?? "";
 
-	const corner = (glyph: string) => `${DEFAULT_BG}${fillFg}${glyph}${RESET}`;
-	const fill = (count: number) => (count > 0 ? `${background}${" ".repeat(count)}${RESET}` : "");
+	const edge = (glyph: string) => `${DEFAULT_BG}${fillFg}${glyph.repeat(width)}${RESET}`;
 	const row = (text: string, style = "") =>
 		`${background}${foreground}${style}  ${text}${STYLE_OFF}${" ".repeat(
 			Math.max(0, innerWidth - visibleWidth(text)),
 		)}  ${RESET}`;
 
-	const lines: string[] = [
-		`${corner(CORNERS.topLeft)}${fill(width - 2)}${corner(CORNERS.topRight)}`,
-	];
+	const lines: string[] = [edge(TOP_EDGE)];
 	const targets: BubbleTarget[] = [];
 
 	if (input.content.title) lines.push(row(input.content.title, BOLD));
@@ -185,14 +192,7 @@ function buildBubble(input: {
 
 	if (input.content.hint) lines.push(row(input.content.hint, DIM));
 
-	lines.push(`${corner(CORNERS.bottomLeft)}${fill(width - 2)}${corner(CORNERS.bottomRight)}`);
-
-	if (input.tailColumn !== undefined) {
-		const column = clamp(Math.round(input.tailColumn), 2, width - 3);
-		lines.push(
-			`${" ".repeat(column)}${corner(TAIL)}${" ".repeat(Math.max(0, width - column - 1))}`,
-		);
-	}
+	if (!input.attached) lines.push(edge(BOTTOM_EDGE));
 
 	return { lines, targets };
 }
@@ -207,7 +207,7 @@ export function renderPillBubble(input: {
 	width: number;
 	background: string;
 	foreground?: string;
-	tailColumn?: number;
+	attached?: boolean;
 }): string[] {
 	return buildBubble(input).lines;
 }
@@ -264,7 +264,7 @@ export function showPillBubble(
 								resolveBackgroundSgr(theme as ThemeLike, "theme", "borderMuted") ??
 								"",
 							foreground: anchor?.foreground,
-							tailColumn: placement.tailColumn,
+							attached: placement.attached,
 						});
 						// Only the rows the last render drew can be clicked.
 						targets = built.targets;

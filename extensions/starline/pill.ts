@@ -59,6 +59,12 @@ export type PillSpan = {
 	key: string;
 	startColumn: number;
 	endColumn: number;
+	/**
+	 * First column painted solid in the pill's colour. The hit area starts earlier
+	 * on the first pill, whose round cap is the colour drawn on the terminal's own
+	 * background; anything that has to line up with the pill's edge uses this.
+	 */
+	bodyStartColumn: number;
 	/** Background SGR the pill was painted with, for anything that has to match it. */
 	bg: string;
 	/** Foreground SGR, or "" when the text carried its own styling. */
@@ -310,6 +316,7 @@ export function renderPillBar(
 	pills.forEach((pill, index) => {
 		// The left cap opens the bar in the first pill's colour, so it belongs to it.
 		const startColumn = index === 0 ? capStart : column;
+		const bodyStartColumn = column;
 		emit(`${pill.bg}${pill.fg}${pill.bold ? BOLD : ""} ${pill.text} ${RESET}`);
 
 		const next = pills[index + 1];
@@ -333,7 +340,14 @@ export function renderPillBar(
 
 		// The arrow (or cap) is emitted before the span closes, so it belongs to
 		// the pill that points out of itself.
-		spans.push({ key: pill.key, startColumn, endColumn: column, bg: pill.bg, fg: pill.fg });
+		spans.push({
+			key: pill.key,
+			startColumn,
+			endColumn: column,
+			bodyStartColumn,
+			bg: pill.bg,
+			fg: pill.fg,
+		});
 	});
 
 	const rendered = width > 0 ? truncateToWidth(out, width, "") : out;
@@ -345,7 +359,8 @@ export function renderPillBar(
 			const startColumn = Math.min(span.startColumn, visible);
 			const endColumn = Math.min(span.endColumn, visible);
 			if (endColumn > startColumn) {
-				options.onSpan({ ...span, startColumn, endColumn });
+				const bodyStartColumn = Math.min(span.bodyStartColumn, endColumn - 1);
+				options.onSpan({ ...span, startColumn, endColumn, bodyStartColumn });
 			}
 		}
 	}

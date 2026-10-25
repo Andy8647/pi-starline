@@ -53,38 +53,34 @@ describe("pillBubbleWidth", () => {
 });
 
 describe("pillBubblePlacement", () => {
-	it("centres over the pill and turns the offset into a tail column", () => {
-		const placement = pillBubblePlacement(anchor(), 30, 80);
-		expect(placement.leftColumn).toBe(25);
-		expect(placement.tailColumn).toBe(15);
+	it("lines the bubble up with the pill's left edge, on the footer row", () => {
+		const placement = pillBubblePlacement(anchor({ startColumn: 33 }), 30, 80);
+		expect(placement.leftColumn).toBe(33);
+		expect(placement.attached).toBe(true);
 		expect(placement.options).toMatchObject({
 			width: 30,
 			anchor: "bottom-left",
-			offsetX: 25,
+			offsetX: 33,
 			offsetY: -1,
 		});
 	});
 
-	it("clamps to the screen and lets the renderer pull the tail back inside", () => {
-		const placement = pillBubblePlacement(anchor({ centerColumn: 78 }), 30, 80);
-		expect(placement.leftColumn).toBe(49);
-		expect(placement.tailColumn).toBe(29);
-
-		const lines = renderPillBubble({
-			content,
-			width: 30,
-			background: BACKGROUND,
-			tailColumn: placement.tailColumn,
-		});
-		const tail = strip(lines.at(-1) ?? "");
-		// width - 3 is the rightmost column a tail may occupy.
-		expect(tail.indexOf("▼")).toBe(27);
+	it("pushes the bubble left only as far as it needs to stay on screen", () => {
+		const placement = pillBubblePlacement(anchor({ startColumn: 70, centerColumn: 74 }), 30, 80);
+		expect(placement.leftColumn).toBe(50);
+		expect(placement.attached).toBe(true);
 	});
 
-	it("centres and drops the tail when there is no pill to point at", () => {
+	it("centres on the pill when the anchor has no left edge", () => {
+		const placement = pillBubblePlacement(anchor(), 30, 80);
+		expect(placement.leftColumn).toBe(25);
+		expect(placement.attached).toBe(true);
+	});
+
+	it("centres and floats when there is no pill to sit on", () => {
 		const placement = pillBubblePlacement(undefined, 30, 80);
 		expect(placement.leftColumn).toBe(25);
-		expect(placement.tailColumn).toBeUndefined();
+		expect(placement.attached).toBe(false);
 	});
 });
 
@@ -95,7 +91,7 @@ describe("renderPillBubble", () => {
 			width: 40,
 			background: BACKGROUND,
 			foreground: "",
-			tailColumn: 20,
+			attached: true,
 			...overrides,
 		});
 
@@ -105,20 +101,16 @@ describe("renderPillBubble", () => {
 		for (const line of lines) {
 			expect(visibleWidth(line)).toBe(40);
 		}
-		// The corners and the tail are the fill colour drawn on the terminal's own
-		// background; the rows in between carry the pill background.
-		expect(lines[0]).toContain(BACKGROUND);
-		expect(lines[1]).toContain(BACKGROUND);
+		// The top edge is the fill colour drawn on the terminal's own background;
+		// every row below it carries the pill background.
+		expect(lines[0]).not.toContain(BACKGROUND);
+		for (const line of lines.slice(1)) expect(line).toContain(BACKGROUND);
 	});
 
-	it("cuts the corners out of the block instead of drawing a square outline", () => {
+	it("draws no corners, outline or tail, only a half-row top edge", () => {
 		const lines = render().map(strip);
-		expect(lines[0]?.startsWith("▗")).toBe(true);
-		expect(lines[0]?.endsWith("▖")).toBe(true);
-		const bottom = lines.at(-2) ?? "";
-		expect(bottom.startsWith("▝")).toBe(true);
-		expect(bottom.endsWith("▘")).toBe(true);
-		expect(lines.join("\n")).not.toContain("╭");
+		expect(lines[0]).toBe("▄".repeat(40));
+		expect(lines.join("\n")).not.toMatch(/[▗▖▝▘▼╭╮╰╯]/u);
 	});
 
 	it("puts the title inside the block", () => {
@@ -128,19 +120,15 @@ describe("renderPillBubble", () => {
 		expect(lines.join("\n")).toContain("· first");
 	});
 
-	it("hangs the tail below the block, clamped away from the corners", () => {
-		for (const tailColumn of [0, 1, 2, 20, 38, 39, 99]) {
-			const tail = strip(render({ tailColumn }).at(-1) ?? "");
-			const index = tail.indexOf("▼");
-			expect(index).toBeGreaterThanOrEqual(2);
-			expect(index).toBeLessThanOrEqual(37);
-		}
+	it("leaves the bottom open when it sits on its pill", () => {
+		const lines = render().map(strip);
+		expect(lines.at(-1)).toContain("esc to close");
 	});
 
-	it("has no tail when no column is given", () => {
-		const lines = render({ tailColumn: undefined }).map(strip);
-		expect(lines.at(-1)).not.toContain("▼");
-		expect(lines.at(-1)?.endsWith("▘")).toBe(true);
+	it("closes the bottom with a half-row edge when it floats", () => {
+		const lines = render({ attached: false });
+		expect(strip(lines.at(-1) ?? "")).toBe("▀".repeat(40));
+		expect(lines.at(-1)).not.toContain(BACKGROUND);
 	});
 
 	it("wraps long paragraphs instead of overflowing", () => {

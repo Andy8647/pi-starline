@@ -283,10 +283,12 @@ export function installFooter(
 				const startColumn = Math.min(lineWidth, span.startColumn + columnOffset);
 				const endColumn = Math.min(lineWidth, span.endColumn + columnOffset);
 				if (endColumn <= startColumn) continue;
-				visibleSpans.push({ ...span, startColumn, endColumn });
+				const bodyStartColumn = Math.min(endColumn - 1, span.bodyStartColumn + columnOffset);
+				visibleSpans.push({ ...span, startColumn, endColumn, bodyStartColumn });
 				// Same columns, plus the colours, for anything that wants to sit next to
 				// this pill later — a bubble today, whatever the next action needs.
 				anchors.set(span.key, {
+					startColumn: bodyStartColumn,
 					centerColumn: Math.floor((startColumn + endColumn - 1) / 2),
 					terminalWidth: width,
 					background: span.bg,
@@ -340,6 +342,7 @@ export function installFooter(
 				// gesture from opening a bubble.
 				if (event.type === "click") {
 					runPillAction(action, ctx, {
+						startColumn: hit.bodyStartColumn,
 						centerColumn: Math.floor((hit.startColumn + hit.endColumn - 1) / 2),
 						terminalWidth: width,
 						background: hit.bg,

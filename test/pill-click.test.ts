@@ -72,6 +72,15 @@ describe("pill spans", () => {
 		}
 	});
 
+	it("marks where each pill's own colour starts, past the first pill's cap", () => {
+		const { spans } = spansOf([aa, bbb], { caps: "round" }, 80, false);
+		// The round cap is the first pill's hit area but drawn on the terminal's
+		// background; the body starts one cell in. Later pills start solid.
+		expect(spans[0]?.startColumn).toBe(0);
+		expect(spans[0]?.bodyStartColumn).toBe(1);
+		expect(spans[1]?.bodyStartColumn).toBe(spans[1]?.startColumn);
+	});
+
 	it("counts CJK text by glyph width, not by string length", () => {
 		const wide: PillInput = { key: "queue", text: "排队", spec: "" };
 		const { bar, spans } = spansOf([wide, bbb], { caps: "none", separator: "none" }, 80);
@@ -282,14 +291,11 @@ describe("pill actions", () => {
 		const [factory, options] = custom.mock.calls[0] ?? [];
 		expect(factory).toBeTypeOf("function");
 		const overlay = (options as { overlayOptions?: Record<string, unknown> }).overlayOptions;
-		// Lifted one row off the footer so the tail can sit above the pill.
+		// One row up, so the bubble's last line sits right on top of the pill.
 		expect(overlay?.offsetY).toBe(-1);
 		expect(overlay?.anchor).toBe("bottom-left");
-		const width = overlay?.width as number;
-		const left = overlay?.offsetX as number;
-		expect(left).toBeLessThanOrEqual(x);
-		expect(x - left).toBeGreaterThanOrEqual(2);
-		expect(x - left).toBeLessThanOrEqual(width - 3);
+		// Lined up with the pill's first coloured cell: the pad before the text.
+		expect(overlay?.offsetX).toBe(x - 1);
 	});
 
 	it("falls back to explaining the wait when the session is not readable", () => {
