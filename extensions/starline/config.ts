@@ -1060,6 +1060,16 @@ export function savePathDisplayPatch(
 	});
 }
 
+export function savePillSegmentsPatch(
+	segments: readonly string[],
+	path = configPath,
+): PolishedTuiConfig {
+	return mutateConfig(path, (record) => {
+		const existing = isRecord(record.pill) ? { ...(record.pill as Record<string, unknown>) } : {};
+		record.pill = { ...existing, segments: [...segments] };
+	});
+}
+
 export function saveGitBranchPatch(
 	patch: Partial<GitBranchConfig>,
 	path = configPath,

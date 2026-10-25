@@ -55,7 +55,7 @@ What changed in each version: **[Changelog](https://github.com/Andy8647/pi-starl
 
 ## Configure
 
-`/starline` opens a menu for the everyday settings: colour sources, feature toggles, which segments show, and where other extensions' statuses go.
+`/starline` opens a menu for the everyday settings: colour sources, feature toggles, the order of the bar (`Pills`), and where other extensions' statuses go.
 
 Everything else lives in `~/.pi/agent/starline.json`. The file is optional; missing keys fall back to defaults.
 

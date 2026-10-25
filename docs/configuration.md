@@ -29,7 +29,7 @@ Every option Starline has.
 
 User config lives at `~/.pi/agent/starline.json`. The file is optional: missing or invalid known values fall back to Starline defaults, unknown keys are ignored at runtime, and `/starline` can patch color-source settings, UI feature toggles, and active third-party status placements.
 
-The interactive `/starline` menu is split into four sections. Use `Tab` and `Shift+Tab` to switch between `Coloring`, `Features`, `Layout`, and `Extension segments`.
+The interactive `/starline` menu is split into five sections. Use `Tab` and `Shift+Tab` to switch between `Coloring`, `Features`, `Layout`, `Pills`, and `Extension segments`.
 
 Useful slash-command shortcuts:
 
@@ -294,6 +294,13 @@ The footer is a bar of coloured pills joined by seamless powerline arrows. `pill
 | `bold` | `true` (default), `false` | Bold segment text |
 | `caps` | `round` (default), `right`, `none` | How the bar's ends are closed |
 | `bubbleAnimation` | `true` (default), `false` | Unfold a clicked pill's bubble upward from the pill (60 ms) instead of showing it at once. Applies from the next session or `/reload`. |
+
+Order and visibility of the bar live in `pill.segments`. The **Pills** tab in
+`/starline` edits the same list: one row per segment, and its value is the
+position it holds (`1` is leftmost, `off` is not drawn). Space cycles `off → 1
+→ 2 → …`, picking a number inserts the segment there and shifts the rest along.
+Per-status `extensionStatus:<key>` entries are JSON-only; the *Extension
+segments* tab owns those keys.
 
 Notes:
 

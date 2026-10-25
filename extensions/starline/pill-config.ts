@@ -105,6 +105,43 @@ export function isKnownPillSegment(name: string): boolean {
 	return name in PILL_SEGMENT_VARIABLES;
 }
 
+/**
+ * Every segment name `/starline` can put on the bar, in a fixed order so the
+ * rows do not move under the cursor when a position changes. Per-status
+ * `extensionStatus:<key>` entries are JSON-only: the *Extension segments* tab
+ * owns those keys.
+ */
+export const PILL_SEGMENT_NAMES: readonly string[] = [
+	...Object.keys(PILL_SEGMENT_VARIABLES),
+	EXTENSION_STATUS_SEGMENT,
+];
+
+/** 1-based position of a segment in the bar, or 0 when it is not drawn. */
+export function pillSegmentPosition(segments: readonly string[], name: string): number {
+	return segments.indexOf(name) + 1;
+}
+
+/**
+ * Apply a position edit to `pill.segments`.
+ *
+ * `value` is `off` or a 1-based position. A position is where the segment ends
+ * up: everything already there shifts along, and a position past the end
+ * appends. Moving the segment that is already in the bar works the same way,
+ * because it is removed before the index is applied.
+ */
+export function movePillSegment(
+	segments: readonly string[],
+	name: string,
+	value: string,
+): string[] {
+	const rest = segments.filter((segment) => segment !== name);
+	if (value === "off") return rest;
+	const position = Number(value);
+	if (!Number.isInteger(position) || position < 1) return [...segments];
+	const index = Math.min(position - 1, rest.length);
+	return [...rest.slice(0, index), name, ...rest.slice(index)];
+}
+
 function parseSegments(value: unknown): string[] {
 	if (!Array.isArray(value)) return DEFAULT_PILL_CONFIG.segments;
 	const segments: string[] = [];

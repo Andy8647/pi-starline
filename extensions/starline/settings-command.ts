@@ -32,6 +32,7 @@ import { sanitizeExtensionStatusText } from "./extension-status";
 import { isIconMode } from "./icons";
 import { pillActionFor, runPillAction } from "./pill-actions";
 import { getPillAnchor } from "./pill-anchors";
+import { movePillSegment, PILL_SEGMENT_NAMES, pillSegmentPosition } from "./pill-config";
 import type { SessionLifecycle } from "./session-lifecycle";
 import { EDITOR_BORDER_STYLE, renderChromeBorder, safeThemeFg } from "./style";
 
@@ -52,7 +53,7 @@ const iconModeValues: IconMode[] = ["auto", "nerd", "ascii"];
 type FeatureState = "enabled" | "disabled";
 
 const featureStateValues: FeatureState[] = ["enabled", "disabled"];
-const settingsSections = ["coloring", "features", "layout", "extensionSegments"] as const;
+const settingsSections = ["coloring", "features", "layout", "pills", "extensionSegments"] as const;
 
 type ColorSettingId = "starship" | "editorMessages";
 type FeatureSettingId = keyof UiFeaturesConfig;
@@ -71,6 +72,7 @@ type SettingsCommandDeps = {
 	setContextStyle: (style: ContextStyle) => void;
 	setPathDisplay: (patch: Partial<PathDisplayConfig>) => void;
 	setGitBranch: (patch: Partial<GitBranchConfig>) => void;
+	setPillSegments: (segments: readonly string[]) => void;
 	getActiveExtensionStatuses: () => ReadonlyMap<string, string>;
 	setExtensionStatusPlacement: (key: string, placement: ExtensionStatusPlacement) => void;
 	setExtensionStatusColorMode: (key: string, colorMode: ExtensionStatusColorMode) => void;
@@ -105,6 +107,56 @@ const featureSettingDescriptions: Record<FeatureSettingId, string> = {
 		"Hide editor and previous-message rail glyphs for cleaner native terminal selection.",
 };
 
+/** Row label per bar segment. The order rows are listed in is fixed. */
+const pillSegmentLabels: Record<string, string> = {
+	model: "Model",
+	thinking: "Thinking",
+	queue: "Queue",
+	subagents: "Subagents",
+	cwd: "Directory",
+	sessionName: "Session name",
+	gitBranch: "Git branch",
+	gitStatus: "Git status",
+	gitState: "Git state",
+	gitCommit: "Git commit",
+	gitTag: "Git tag",
+	gitMetrics: "Git line metrics",
+	runtime: "Runtime",
+	context: "Context",
+	tokens: "Tokens",
+	cacheHit: "Cache hit",
+	cost: "Cost",
+	sessionDuration: "Session duration",
+	username: "user@host",
+	time: "Time",
+	os: "OS",
+	packageVersion: "Package version",
+	extensionStatus: "Other extensions",
+};
+
+const pillSegmentSettingPrefix = "pillSegment:";
+
+function pillSegmentSettingId(name: string): string {
+	return `${pillSegmentSettingPrefix}${name}`;
+}
+
+function pillSegmentFromId(id: string): string | undefined {
+	if (!id.startsWith(pillSegmentSettingPrefix)) return undefined;
+	const name = id.slice(pillSegmentSettingPrefix.length);
+	return PILL_SEGMENT_NAMES.includes(name) ? name : undefined;
+}
+
+/**
+ * Values a row cycles through: `off`, then every position the bar can hold.
+ *
+ * One past the current length is offered so a hidden segment can be appended;
+ * for a segment already in the bar, that value is its "move to the end".
+ */
+function pillSegmentValues(shown: number): string[] {
+	const positions = Array.from({ length: shown + 1 }, (_, index) => String(index + 1));
+	return ["off", ...positions];
+}
+
 const directCommandSuggestions = [
 	"editor enable",
 	"editor disable",
@@ -127,6 +179,7 @@ const sectionLabels: Record<SettingsSection, string> = {
 	coloring: "Coloring",
 	features: "Features",
 	layout: "Layout",
+	pills: "Pills",
 	extensionSegments: "Extension segments",
 };
 
@@ -391,6 +444,21 @@ function buildItems(
 		];
 	}
 
+	if (section === "pills") {
+		const segments = config.pill.segments;
+		const values = pillSegmentValues(segments.length);
+		return PILL_SEGMENT_NAMES.map((name) => {
+			const position = pillSegmentPosition(segments, name);
+			return {
+				id: pillSegmentSettingId(name),
+				label: pillSegmentLabels[name] ?? name,
+				description: `Position in the bar (1 is leftmost). Space cycles off → 1…${segments.length + 1}.`,
+				currentValue: position > 0 ? String(position) : "off",
+				values,
+			};
+		});
+	}
+
 	const statuses = Array.from(activeStatuses.entries()).sort(([a], [b]) =>
 		a < b ? -1 : a > b ? 1 : 0,
 	);
@@ -626,6 +694,28 @@ export function registerStarlineSettingsCommand(pi: ExtensionAPI, deps: Settings
 										ctx.ui.notify(`Icon mode: ${newValue}`, "info");
 										tui.requestRender();
 									}
+									return;
+								}
+
+								const pillSegment = pillSegmentFromId(id);
+								if (pillSegment) {
+									const segments = movePillSegment(
+										deps.getConfig().pill.segments,
+										pillSegment,
+										newValue,
+									);
+									deps.setPillSegments(segments);
+									// Every row's position can change, so the list is rebuilt
+									// rather than patched — then the cursor is put back.
+									settingsList = makeSettingsList();
+									settingsList.selectItem(id);
+									deps.requestRender();
+									const label = pillSegmentLabels[pillSegment] ?? pillSegment;
+									ctx.ui.notify(
+										newValue === "off" ? `${label}: off` : `${label}: position ${newValue}`,
+										"info",
+									);
+									tui.requestRender();
 									return;
 								}
 

@@ -20,6 +20,14 @@ three settings that only existed to describe it (`footerStyle`, `footerFormat`,
 is the only list that decides what appears and in what order. Everything else —
 colours, icons, the editor row, clickable pills — works as before.
 
+**Added**
+
+- **A *Pills* tab in \`/starline\`.** One row per segment; the value is its position
+  in the bar, \`off\` hides it, and Space cycles through them. Picking a number
+  inserts the segment there and shifts the rest along. The same list is still
+  \`pill.segments\` in \`starline.json\`, so editing the file and the tab are the
+  same thing.
+
 **Removed**
 
 - **`footerStyle`.** The pill bar is the footer. A config file that still says

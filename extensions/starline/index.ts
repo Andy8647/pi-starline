@@ -25,6 +25,7 @@ import {
 	saveIconsModePatch,
 	saveMousePatch,
 	savePathDisplayPatch,
+	savePillSegmentsPatch,
 	saveUiFeaturesPatch,
 	type UiFeaturesConfig,
 } from "./config";
@@ -682,6 +683,9 @@ export default function (pi: ExtensionAPI) {
 		},
 		setGitBranch(patch: Partial<GitBranchConfig>) {
 			currentConfig = saveGitBranchPatch(patch);
+		},
+		setPillSegments(segments: readonly string[]) {
+			currentConfig = savePillSegmentsPatch(segments);
 		},
 		getActiveExtensionStatuses() {
 			return getActiveExtensionStatuses();

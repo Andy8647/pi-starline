@@ -1965,6 +1965,7 @@ describe("Pi docs compliance", () => {
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
@@ -2008,6 +2009,7 @@ describe("Pi docs compliance", () => {
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
@@ -2054,6 +2056,7 @@ describe("Pi docs compliance", () => {
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
@@ -2100,6 +2103,7 @@ describe("Pi docs compliance", () => {
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
@@ -2136,6 +2140,7 @@ describe("Pi docs compliance", () => {
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
@@ -2180,6 +2185,7 @@ describe("Pi docs compliance", () => {
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
@@ -2233,6 +2239,7 @@ describe("Pi docs compliance", () => {
 					setIconMode() {},
 					setContextStyle() {},
 					setPathDisplay() {},
+					setPillSegments() {},
 					setGitBranch() {},
 					getActiveExtensionStatuses: () => new Map<string, string>(),
 					setExtensionStatusPlacement() {},
@@ -2297,6 +2304,7 @@ describe("Pi docs compliance", () => {
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
@@ -2366,6 +2374,7 @@ describe("Pi docs compliance", () => {
 					setIconMode() {},
 					setContextStyle() {},
 					setPathDisplay() {},
+					setPillSegments() {},
 					setGitBranch() {},
 					getActiveExtensionStatuses: () => new Map<string, string>(),
 					setExtensionStatusPlacement() {},
@@ -2430,6 +2439,7 @@ describe("Pi docs compliance", () => {
 					setIconMode() {},
 					setContextStyle() {},
 					setPathDisplay() {},
+					setPillSegments() {},
 					setGitBranch() {},
 					getActiveExtensionStatuses: () => new Map<string, string>(),
 					setExtensionStatusPlacement() {},
@@ -2501,6 +2511,7 @@ describe("Pi docs compliance", () => {
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
@@ -2559,6 +2570,7 @@ describe("Pi docs compliance", () => {
 					setIconMode() {},
 					setContextStyle() {},
 					setPathDisplay() {},
+					setPillSegments() {},
 					setGitBranch(patch) {
 						if (patch.maxLength !== undefined) changes.push(patch.maxLength);
 					},
@@ -2623,6 +2635,7 @@ describe("Pi docs compliance", () => {
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
@@ -2693,6 +2706,7 @@ describe("Pi docs compliance", () => {
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
@@ -2733,7 +2747,8 @@ describe("Pi docs compliance", () => {
 	});
 
 	function navigateToExtensionSegmentsSection(component: { handleInput?: (data: string) => void }) {
-		// Coloring → Features → Layout → Extension segments
+		// Coloring → Features → Layout → Pills → Extension segments
+		component.handleInput?.("\t");
 		component.handleInput?.("\t");
 		component.handleInput?.("\t");
 		component.handleInput?.("\t");
@@ -2757,6 +2772,7 @@ describe("Pi docs compliance", () => {
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
@@ -2791,7 +2807,7 @@ describe("Pi docs compliance", () => {
 			},
 		});
 
-		expect(rendered).toContain("Context style");
+		expect(rendered).toContain("Directory");
 		expect(rendered).not.toContain("No active statuses");
 	});
 
@@ -2813,6 +2829,7 @@ describe("Pi docs compliance", () => {
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
 				getActiveExtensionStatuses: () =>
 					new Map<string, string>([
@@ -2874,6 +2891,7 @@ describe("Pi docs compliance", () => {
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement(key, placement) {
@@ -2935,6 +2953,7 @@ describe("Pi docs compliance", () => {
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
 				getActiveExtensionStatuses: () => new Map<string, string>([["alpha", "ok"]]),
 				setExtensionStatusPlacement(key, placement) {
@@ -2982,7 +3001,7 @@ describe("Pi docs compliance", () => {
 		// press from the default "right" lands on "editor".
 		expect(placements).toEqual([{ key: "alpha", placement: "editor" }]);
 		expect(dependencyRenderRequests).toBe(1);
-		expect(tuiRenderRequests).toBe(4);
+		expect(tuiRenderRequests).toBe(5);
 	});
 
 	it("does not show inactive saved placements in the extension segments tab", async () => {
@@ -3006,6 +3025,7 @@ describe("Pi docs compliance", () => {
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
 				getActiveExtensionStatuses: () => new Map<string, string>([["active", "ok"]]),
 				setExtensionStatusPlacement() {},
