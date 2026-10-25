@@ -56,6 +56,12 @@ npm.
   popover for free. Design and phases are in
   [docs/clickable-pills.md](https://github.com/Andy8647/pi-starline/blob/main/docs/clickable-pills.md).
 
+- **The pointer turns into a hand over anything clickable.** Hovering a pill that
+  has an action, or a clickable line in its bubble, switches the mouse pointer to a
+  hand, and it switches back as soon as the pointer moves off. Needs a terminal that
+  supports OSC 22 (Ghostty, kitty); others ignore it. Off under tmux, zellij and
+  screen, where Pi only reports the mouse while a button is held.
+
 - **Other extensions can make their pills clickable.** Starline publishes a pill
   API on `globalThis` under `Symbol.for("pi-starline.pill-api.v1")`. An extension
   that publishes a status with `ctx.ui.setStatus()` registers an action for that
@@ -75,6 +81,12 @@ npm.
   wrapper. If a future Pi breaks them, the bubble falls back to explaining the wait
   and the rows stay as Pi draws them. A `pendingMessages` field on the extension
   context and a switch for the rows would make all three unnecessary.
+
+- The hover pointer is a fourth wrapper, on the renderer's mouse dispatch. Pi
+  tells a component when the pointer moves onto it but not when it leaves, so the
+  shape is reset around the dispatch rather than by the footer. It only watches
+  where moves land and never handles one. The upstream fix is a `pointer` field
+  on the result of a component's `handleMouse`, written by Pi itself.
 
 ## [0.3.9] - 2026-10-25
 

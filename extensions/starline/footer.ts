@@ -31,6 +31,7 @@ import {
 import type { GitHost } from "./git";
 import { type ResolvedIcons, resolveRuntimeSymbol } from "./icons";
 import type { LiveContextOverride } from "./live-context";
+import { requestPointerShape } from "./mouse/pointer-shape";
 import { collectPillInputs, type PillSpan, renderPillBar } from "./pill";
 import { pillActionFor, queuedSegmentText, runPillAction } from "./pill-actions";
 import { clearPillAnchors, setPillAnchors } from "./pill-anchors";
@@ -335,6 +336,14 @@ export function installFooter(
 				const hit = spans.find((span) => event.x >= span.startColumn && event.x < span.endColumn);
 				const action = hit === undefined ? undefined : pillActionFor(hit.key);
 				if (!hit || !action) return undefined;
+
+				// Moving over a pill that does something turns the pointer into a hand.
+				// Pi has no leave event; mouse/pointer-shape.ts puts it back once a move
+				// lands anywhere that does not ask for it.
+				if (event.type === "move") {
+					requestPointerShape("pointer");
+					return { handled: true };
+				}
 
 				// Pi synthesizes a `click` only for a press a component handled, so the press
 				// is claimed here and the action runs on the click that follows it. A press

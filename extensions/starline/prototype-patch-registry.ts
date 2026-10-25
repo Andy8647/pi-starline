@@ -22,7 +22,8 @@ type PrototypePatchAdapter =
 	| "selection-marker-dedupe"
 	| "agent-session-capture-prompt"
 	| "agent-session-capture-usage"
-	| "pending-messages-hide";
+	| "pending-messages-hide"
+	| "mouse-pointer-shape";
 
 type PrototypeMethodName = string;
 

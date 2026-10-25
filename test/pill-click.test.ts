@@ -6,6 +6,7 @@ import { defaultConfig, mergeConfig } from "../extensions/starline/config";
 import { installFooter } from "../extensions/starline/footer";
 import { emptyGitStatus } from "../extensions/starline/git";
 import { forgetLiveSession, installLiveSessionCapture } from "../extensions/starline/live-session";
+import { installPointerShape } from "../extensions/starline/mouse/pointer-shape";
 import { type PillInput, type PillSpan, renderPillBar } from "../extensions/starline/pill";
 import {
 	hasQueuedMessages,
@@ -216,6 +217,37 @@ describe("footer pill clicks", () => {
 		expect(footer.handleMouse?.({ type: "click", x, y: 0, width })).toBeUndefined();
 		expect(footer.handleMouse?.({ type: "press", x, y: 0, width })).toBeUndefined();
 		expect(custom).not.toHaveBeenCalled();
+	});
+
+	it("asks for a hand pointer over a pill that does something, and only there", () => {
+		class Renderer {
+			terminal = { write: vi.fn() };
+			event: Record<string, unknown> = {};
+			handleMouseEvent(_raw: unknown): void {
+				footer.handleMouse?.(this.event);
+			}
+		}
+		const { footer, custom } = makeFooter({ queued: true });
+		const dispose = installPointerShape(Renderer.prototype);
+		try {
+			const line = footer.render(width)[0] ?? "";
+			const renderer = new Renderer();
+			const hover = { button: 35, x: 0, y: 0, release: false };
+
+			renderer.event = { type: "move", x: columnOf(line, "queued"), y: 0, width };
+			renderer.handleMouseEvent(hover);
+			renderer.event = { type: "move", x: columnOf(line, "kimi"), y: 0, width };
+			renderer.handleMouseEvent(hover);
+
+			expect(renderer.terminal.write.mock.calls.map(([data]) => data)).toEqual([
+				"\x1b]22;pointer\x1b\\",
+				"\x1b]22;default\x1b\\",
+			]);
+			// Hovering opens nothing.
+			expect(custom).not.toHaveBeenCalled();
+		} finally {
+			dispose?.();
+		}
 	});
 
 	it("lets a click outside the bar or off its row fall through", () => {

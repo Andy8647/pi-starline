@@ -27,6 +27,7 @@ import {
 	visibleWidth,
 	wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
+import { requestPointerShape } from "./mouse/pointer-shape";
 import { contrastTextSgr } from "./pill";
 import { resolveBackgroundSgr, type ThemeLike, toForegroundSgr } from "./style";
 
@@ -285,6 +286,10 @@ export function showPillBubble(
 							(entry) => event.y >= entry.startLine && event.y <= entry.endLine,
 						);
 						if (!target) return undefined;
+						if (event.type === "move") {
+							requestPointerShape("pointer");
+							return { handled: true };
+						}
 						if (event.type === "click") {
 							close();
 							target.onSelect();

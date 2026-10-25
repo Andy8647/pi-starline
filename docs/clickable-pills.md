@@ -168,6 +168,28 @@ The panel closes on Escape (and Enter) through its own `handleInput`. Pi owns th
 overlay, but not the meaning of Escape inside it, so the dismiss key is part of the
 component rather than something the overlay stack does for us.
 
+### 5. The pointer becomes a hand over a target
+
+Moving over a pill with an action, or over a clickable bubble line, switches the
+mouse pointer to a hand through OSC 22 (`ESC ] 22 ; pointer ST`, CSS cursor names;
+Ghostty and kitty honour it, other terminals ignore it). Pi already delivers every
+pointer movement to the component under it as a `move` (any-motion tracking; under
+tmux, zellij and screen it only reports with a button held, so there is no hover).
+
+The missing half is *leaving*: Pi has no leave event, and the move after the last
+one over a pill goes to whatever is under the pointer now. So the shape is not the
+footer's to manage. `mouse/pointer-shape.ts` wraps `TuiAltScreen.handleMouseEvent`;
+during a `move` a component calls `requestPointerShape("pointer")`, and after the
+dispatch a move nobody claimed resets to `default`. Only changes are written. The
+wrapper is uninstalled, and the pointer reset, on shutdown and on process exit.
+
+**As an upstream API** this is a field on `TuiMouseEventResult` — a component's
+`handleMouse` returns `{ handled: true, pointer: "pointer" }` and the renderer owns
+OSC 22, the reset on an unclaimed move, and the reset on exit. That would also give
+Pi's own click targets (tool boxes, thinking blocks, summaries) a hand pointer and
+the editor a text cursor. When it ships, the two callers return the field and the
+wrapper is deleted.
+
 ## A protocol for other extensions
 
 Starline already draws other extensions' status pills (`ctx.ui.setStatus(key, text)`
