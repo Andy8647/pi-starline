@@ -24,17 +24,14 @@ import {
 	buildSessionDurationLabel,
 	contextColorTier,
 	formatCwdLabel,
-	formatGitBranchText,
-	formatGitCommitSegment,
-	formatGitMetricsSegment,
 	formatOsLabel,
 	formatPackageVersionSegment,
 	formatRuntimeSegment,
 	formatTimeLabel,
 	formatUsernameHostLabel,
 } from "./format";
-import type { GitHost } from "./git";
-import { type ResolvedIcons, resolveRuntimeSymbol } from "./icons";
+import { renderGitSegments } from "./git-segments";
+import { resolveRuntimeSymbol } from "./icons";
 import type { LiveContextOverride } from "./live-context";
 import { requestPointerShape } from "./mouse/pointer-shape";
 import { collectPillInputs, type PillSpan, renderPillBar } from "./pill";
@@ -196,20 +193,6 @@ function composeFooterContent(
 	const leftPadding = Math.floor((gapWidth - middleWidth) / 2);
 	const rightPadding = gapWidth - middleWidth - leftPadding;
 	return `${left}${" ".repeat(leftPadding)}${middle}${" ".repeat(rightPadding)}${right}`;
-}
-
-/** Forge logo for the branch segment. Empty in ascii mode, which has no glyphs. */
-export function gitHostIconGlyph(icons: ResolvedIcons, host: GitHost): string {
-	switch (host) {
-		case "github":
-			return icons.gitHostGithub;
-		case "gitlab":
-			return icons.gitHostGitlab;
-		case "bitbucket":
-			return icons.gitHostBitbucket;
-		default:
-			return icons.gitHostGeneric;
-	}
 }
 
 /** Prefix a label with an icon, collapsing to the label when there is no icon. */
@@ -425,10 +408,6 @@ export function installFooter(
 					? renderStyleForSource(theme, colorSource, config.colors.sessionName, sessionName)
 					: "";
 				const builtInSessionNameLabel = sessionNameLabel ? `in ${sessionNameLabel}` : "";
-				const branch = state.branch;
-				const branchText = branch
-					? formatGitBranchText(branch, config.gitBranch.maxLength)
-					: undefined;
 				const contextUsage = ctx.getContextUsage();
 				const liveContext = hooks.getLiveContext?.();
 				const contextWindow = ctx.model?.contextWindow ?? contextUsage?.contextWindow;
@@ -457,50 +436,9 @@ export function installFooter(
 				// The cacheHit icon doubles as the tokens segment's inline cache glyph;
 				// state.cacheHitLabel already carries it, so no withIcon here.
 				const cacheHitDisplay = state.cacheHitLabel;
-				const gitColor = (text: string) =>
-					renderStyleForSource(theme, colorSource, config.colors.gitBranch, text);
-				const gitStatusColor = (text: string) =>
-					renderStyleForSource(theme, colorSource, config.colors.gitStatus, text);
-				// With gitHostIcon on, the branch icon becomes the origin remote's forge
-				// logo. Repos with no origin, and ascii mode (whose host glyphs are all
-				// empty), fall back to the plain branch icon.
-				const gitHostGlyph =
-					config.gitHostIcon && state.gitHost ? gitHostIconGlyph(config.icons, state.gitHost) : "";
-				const gitGlyph = gitHostGlyph || config.icons.git;
-				const gitIcon = gitGlyph ? gitColor(gitGlyph) : "";
-				const gitCounts = config.footerSegments.gitCounts;
-				const stashLabel =
-					state.stashed > 0
-						? gitCounts
-							? `${config.icons.stashed}${state.stashed}`
-							: config.icons.stashed
-						: "";
-				const allStatus = [
-					state.conflicted > 0 ? config.icons.conflicted : "",
-					stashLabel,
-					state.deleted > 0 ? config.icons.deleted : "",
-					state.renamed > 0 ? config.icons.renamed : "",
-					state.modified > 0 ? config.icons.modified : "",
-					state.typechanged > 0 ? config.icons.typechanged : "",
-					state.staged > 0 ? config.icons.staged : "",
-					state.untracked > 0 ? config.icons.untracked : "",
-				].join("");
-				const aheadBehind = (() => {
-					if (state.ahead > 0 && state.behind > 0) {
-						return gitCounts
-							? `${config.icons.ahead}${state.ahead}${config.icons.behind}${state.behind}`
-							: config.icons.diverged;
-					}
-					if (state.ahead > 0)
-						return gitCounts ? `${config.icons.ahead}${state.ahead}` : config.icons.ahead;
-					if (state.behind > 0)
-						return gitCounts ? `${config.icons.behind}${state.behind}` : config.icons.behind;
-					return "";
-				})();
-				const statusBlock =
-					allStatus || aheadBehind ? gitStatusColor(`[${allStatus}${aheadBehind}]`) : "";
-				const gitStateLabel = state.gitStateLabel ?? "";
-				const gitStateBlock = gitStateLabel ? gitStatusColor(gitStateLabel) : "";
+				const git = renderGitSegments(state, config, theme, colorSource, {
+					counts: config.footerSegments.gitCounts,
+				});
 				const renderVariable = (name: string): string => {
 					const canonical = FOOTER_FORMAT_ALIASES[name] ?? name;
 					switch (canonical) {
@@ -527,15 +465,11 @@ export function installFooter(
 						case "session_name":
 							return sessionNameLabel;
 						case "git_branch":
-							return branchText
-								? gitIcon
-									? `${gitIcon} ${gitColor(branchText)}`
-									: gitColor(branchText)
-								: "";
+							return git.branch;
 						case "git_status":
-							return statusBlock;
+							return git.status;
 						case "git_state":
-							return gitStateBlock;
+							return git.state;
 						case "runtime": {
 							if (!state.runtime) return "";
 							const symbol = resolveRuntimeSymbol(
@@ -607,31 +541,11 @@ export function installFooter(
 						case "sep":
 							return renderStyleForSource(theme, colorSource, config.colors.separator, " | ");
 						case "git_commit":
-							return formatGitCommitSegment(
-								theme,
-								state.commit,
-								config.gitCommit,
-								colorSource,
-								config.colors.gitCommit,
-							);
+							return git.commit;
 						case "git_tag":
-							return config.gitCommit.showTag && state.commit?.tag
-								? renderStyleForSource(
-										theme,
-										colorSource,
-										config.colors.gitCommit,
-										state.commit.tag,
-									)
-								: "";
+							return git.tag;
 						case "git_metrics":
-							return formatGitMetricsSegment(
-								theme,
-								state.metrics,
-								config.gitMetrics,
-								colorSource,
-								config.colors.gitMetricsAdded,
-								config.colors.gitMetricsDeleted,
-							);
+							return git.metrics;
 						case "git_added":
 							return state.metrics
 								? renderStyleForSource(
@@ -656,12 +570,16 @@ export function installFooter(
 				};
 				const branchParts: string[] = [];
 				if (config.footerSegments.gitBranch) {
-					if (branchText) {
-						branchParts.push("on", gitIcon, gitColor(branchText));
+					if (git.branchText) {
+						branchParts.push("on", git.icon, git.branchText);
 					} else if (state.commit?.detached) {
 						// `HEAD` uses git-branch style; `(hash)` uses git-commit style
 						// (bold green) per Starship `git_commit` format.
-						branchParts.push("on", gitIcon, gitColor("HEAD"));
+						branchParts.push(
+							"on",
+							git.icon,
+							renderStyleForSource(theme, colorSource, config.colors.gitBranch, "HEAD"),
+						);
 						if (config.footerSegments.gitCommit && state.commit.oid) {
 							const shortHash = state.commit.oid.slice(0, config.gitCommit.hashLength);
 							const tag = config.gitCommit.showTag && state.commit.tag ? state.commit.tag : "";
@@ -672,9 +590,9 @@ export function installFooter(
 						}
 					}
 				}
-				const gitStatusParts = config.footerSegments.gitStatus && statusBlock ? [statusBlock] : [];
+				const gitStatusParts = config.footerSegments.gitStatus && git.status ? [git.status] : [];
 				const showGitState = config.footerSegments.gitBranch || config.footerSegments.gitStatus;
-				const gitStateParts = showGitState && gitStateBlock ? [gitStateBlock] : [];
+				const gitStateParts = showGitState && git.state ? [git.state] : [];
 				const branchLabel = [...branchParts, ...gitStatusParts, ...gitStateParts]
 					.filter(Boolean)
 					.join(" ");
@@ -701,25 +619,8 @@ export function installFooter(
 				// branch display on detached HEAD.
 				const hashFoldedIntoBranch = state.commit?.detached && config.footerSegments.gitBranch;
 				const gitCommitLabel =
-					config.footerSegments.gitCommit && !hashFoldedIntoBranch
-						? formatGitCommitSegment(
-								theme,
-								state.commit,
-								config.gitCommit,
-								colorSource,
-								config.colors.gitCommit,
-							)
-						: "";
-				const gitMetricsLabel = config.footerSegments.gitMetrics
-					? formatGitMetricsSegment(
-							theme,
-							state.metrics,
-							config.gitMetrics,
-							colorSource,
-							config.colors.gitMetricsAdded,
-							config.colors.gitMetricsDeleted,
-						)
-					: "";
+					config.footerSegments.gitCommit && !hashFoldedIntoBranch ? git.commit : "";
+				const gitMetricsLabel = config.footerSegments.gitMetrics ? git.metrics : "";
 
 				const sessionDurationSegment = (() => {
 					if (!config.footerSegments.sessionDuration || !state.sessionStartEpoch) return "";

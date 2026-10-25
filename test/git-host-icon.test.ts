@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defaultConfig, getExtensionStatusIcon, mergeConfig } from "../extensions/starline/config";
-import { gitHostIconGlyph } from "../extensions/starline/footer";
 import { emptyGitStatus, parseGitRemoteHost } from "../extensions/starline/git";
+import { gitHostIconGlyph } from "../extensions/starline/git-segments";
 import {
 	ASCII_DEFAULT_ICONS,
 	ICON_GLYPH_KEYS,
