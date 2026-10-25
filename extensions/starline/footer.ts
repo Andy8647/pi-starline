@@ -7,26 +7,17 @@ import {
 } from "@earendil-works/pi-tui";
 import {
 	type ColorSpec,
-	FOOTER_FORMAT_ALIASES,
 	getExtensionStatusColor,
 	getExtensionStatusIcon,
 	type PolishedTuiConfig,
-	type SeparatorStyle,
 } from "./config";
-import {
-	collectExtensionStatusSegments,
-	type ExtensionStatusSegment,
-	sanitizeExtensionStatusText,
-} from "./extension-status";
-import { parseFooterFormat, renderFormatSplit, stripOrphanSeparators } from "./footer-format";
+import { collectExtensionStatusSegments, sanitizeExtensionStatusText } from "./extension-status";
 import {
 	buildContextDisplayLabel,
 	buildSessionDurationLabel,
 	contextColorTier,
 	formatCwdLabel,
 	formatOsLabel,
-	formatPackageVersionSegment,
-	formatRuntimeSegment,
 	formatTimeLabel,
 	formatUsernameHostLabel,
 } from "./format";
@@ -42,13 +33,6 @@ import type { FooterState } from "./state";
 import { renderStyleForSource } from "./style";
 import { subagentsSegmentText } from "./subagent-fleet";
 import { modelPillIcon, readWorkingFrame } from "./working-indicator";
-
-const separatorText: Record<SeparatorStyle, string> = {
-	pipe: " | ",
-	dot: " · ",
-	chevron: " › ",
-	none: " ",
-};
 
 /**
  * Pi's component mouse event and result. Pi dispatches to `handleMouse` from
@@ -76,124 +60,6 @@ type FooterComponent = {
  * will be matched against.
  */
 const PILL_HIT_MAP_LIMIT = 4;
-
-function joinStatusTexts(statusTexts: string[], separator: string): string {
-	return statusTexts.filter(Boolean).join(separator);
-}
-
-function fitStatusTexts(statusTexts: string[], maxWidth: number, separator: string): string {
-	if (maxWidth <= 0) return "";
-
-	const fitted: string[] = [];
-	for (const text of statusTexts) {
-		const candidate = joinStatusTexts([...fitted, text], separator);
-		if (visibleWidth(candidate) <= maxWidth) {
-			fitted.push(text);
-			continue;
-		}
-
-		if (fitted.length === 0) {
-			return maxWidth > 1 ? truncateToWidth(text, maxWidth, "…") : "";
-		}
-		break;
-	}
-
-	return joinStatusTexts(fitted, separator);
-}
-
-function appendStatusArea(base: string, statusText: string, separator: string): string {
-	if (!base) return statusText;
-	if (!statusText) return base;
-	return `${base}${separator}${statusText}`;
-}
-
-function prependStatusArea(base: string, statusText: string, separator: string): string {
-	if (!base) return statusText;
-	if (!statusText) return base;
-	return `${statusText}${separator}${base}`;
-}
-
-function composeBuiltInFooterContent(left: string, right: string, innerWidth: number): string {
-	const leftWidth = visibleWidth(left);
-	const rightWidth = visibleWidth(right);
-	return leftWidth >= innerWidth
-		? truncateToWidth(left, innerWidth, "")
-		: leftWidth + 1 + rightWidth <= innerWidth
-			? `${left}${" ".repeat(innerWidth - leftWidth - rightWidth)}${right}`
-			: truncateToWidth(left, innerWidth, "");
-}
-
-function composeFooterContent(
-	builtInLeft: string,
-	builtInRight: string,
-	extensionLeft: string[],
-	extensionMiddle: string[],
-	extensionRight: string[],
-	separator: string,
-	innerWidth: number,
-): string {
-	const builtInLeftWidth = visibleWidth(builtInLeft);
-	const builtInRightWidth = visibleWidth(builtInRight);
-	const minimumGap = builtInLeft && builtInRight ? 1 : 0;
-
-	if (builtInLeftWidth + minimumGap + builtInRightWidth > innerWidth) {
-		return composeBuiltInFooterContent(builtInLeft, builtInRight, innerWidth);
-	}
-
-	const available = Math.max(0, innerWidth - builtInLeftWidth - builtInRightWidth - minimumGap);
-	let remaining = available;
-	const leftConnectorWidth = builtInLeft && extensionLeft.length > 0 ? visibleWidth(separator) : 0;
-	const rightConnectorWidth =
-		builtInRight && extensionRight.length > 0 ? visibleWidth(separator) : 0;
-	let leftStatus = "";
-	let rightStatus = "";
-
-	if (extensionLeft.length > 0 && extensionRight.length > 0) {
-		const leftBudget = Math.max(0, Math.floor(available / 2) - leftConnectorWidth);
-		leftStatus = fitStatusTexts(extensionLeft, leftBudget, separator);
-		remaining -= leftStatus ? leftConnectorWidth + visibleWidth(leftStatus) : 0;
-
-		const rightBudget = Math.max(0, remaining - rightConnectorWidth);
-		rightStatus = fitStatusTexts(extensionRight, rightBudget, separator);
-		remaining -= rightStatus ? rightConnectorWidth + visibleWidth(rightStatus) : 0;
-
-		const expandedLeftBudget = Math.max(0, remaining + visibleWidth(leftStatus));
-		const expandedLeftStatus = fitStatusTexts(extensionLeft, expandedLeftBudget, separator);
-		if (visibleWidth(expandedLeftStatus) > visibleWidth(leftStatus)) {
-			remaining += leftStatus ? leftConnectorWidth + visibleWidth(leftStatus) : 0;
-			leftStatus = expandedLeftStatus;
-			remaining -= leftStatus ? leftConnectorWidth + visibleWidth(leftStatus) : 0;
-		}
-	} else if (extensionLeft.length > 0) {
-		leftStatus = fitStatusTexts(
-			extensionLeft,
-			Math.max(0, available - leftConnectorWidth),
-			separator,
-		);
-		remaining -= leftStatus ? leftConnectorWidth + visibleWidth(leftStatus) : 0;
-	} else if (extensionRight.length > 0) {
-		rightStatus = fitStatusTexts(
-			extensionRight,
-			Math.max(0, available - rightConnectorWidth),
-			separator,
-		);
-		remaining -= rightStatus ? rightConnectorWidth + visibleWidth(rightStatus) : 0;
-	}
-
-	const left = appendStatusArea(builtInLeft, leftStatus, separator);
-	const right = prependStatusArea(builtInRight, rightStatus, separator);
-	const gapWidth = Math.max(0, innerWidth - visibleWidth(left) - visibleWidth(right));
-	const middle = fitStatusTexts(extensionMiddle, gapWidth, separator);
-	const middleWidth = visibleWidth(middle);
-
-	if (!middle || middleWidth <= 0) {
-		return `${left}${" ".repeat(gapWidth)}${right}`;
-	}
-
-	const leftPadding = Math.floor((gapWidth - middleWidth) / 2);
-	const rightPadding = gapWidth - middleWidth - leftPadding;
-	return `${left}${" ".repeat(leftPadding)}${middle}${" ".repeat(rightPadding)}${right}`;
-}
 
 /** Prefix a label with an icon, collapsing to the label when there is no icon. */
 function withIcon(icon: string, label: string): string {
@@ -310,7 +176,6 @@ export function installFooter(
 			 * being swallowed by the footer.
 			 */
 			handleMouse(event: FooterMouseEvent): FooterMouseResult | undefined {
-				if (getConfig().footerStyle !== "pill") return undefined;
 				if (!Number.isFinite(event.x) || !Number.isFinite(event.y)) return undefined;
 				// The pill bar is the one and only row this component draws.
 				if (event.y !== 0) return undefined;
@@ -358,13 +223,6 @@ export function installFooter(
 				const config = getConfig();
 				const colorSource = config.colorSources.starship;
 				const iconMode = config.icons.mode;
-				const separator = renderStyleForSource(
-					theme,
-					colorSource,
-					config.colors.separator,
-					separatorText[config.separator],
-				);
-				const innerWidth = Math.max(1, width - 2);
 				const cwdLabel = renderStyleForSource(
 					theme,
 					colorSource,
@@ -398,16 +256,10 @@ export function installFooter(
 							withIcon(config.icons.thinking, thinkingText),
 						)
 					: "";
-				const needsSessionName = config.footerFormat
-					? /(?:\$session_name\b|\$\{session_name\})/.test(config.footerFormat)
-					: config.footerSegments.sessionName;
-				const sessionName = needsSessionName
-					? sanitizeExtensionStatusText(ctx.sessionManager.getSessionName() ?? "")
-					: "";
+				const sessionName = sanitizeExtensionStatusText(ctx.sessionManager.getSessionName() ?? "");
 				const sessionNameLabel = sessionName
 					? renderStyleForSource(theme, colorSource, config.colors.sessionName, sessionName)
 					: "";
-				const builtInSessionNameLabel = sessionNameLabel ? `in ${sessionNameLabel}` : "";
 				const contextUsage = ctx.getContextUsage();
 				const liveContext = hooks.getLiveContext?.();
 				const contextWindow = ctx.model?.contextWindow ?? contextUsage?.contextWindow;
@@ -436,12 +288,9 @@ export function installFooter(
 				// The cacheHit icon doubles as the tokens segment's inline cache glyph;
 				// state.cacheHitLabel already carries it, so no withIcon here.
 				const cacheHitDisplay = state.cacheHitLabel;
-				const git = renderGitSegments(state, config, theme, colorSource, {
-					counts: config.footerSegments.gitCounts,
-				});
+				const git = renderGitSegments(state, config, theme, colorSource);
 				const renderVariable = (name: string): string => {
-					const canonical = FOOTER_FORMAT_ALIASES[name] ?? name;
-					switch (canonical) {
+					switch (name) {
 						case "model":
 							return modelLabel;
 						case "thinking":
@@ -520,15 +369,6 @@ export function installFooter(
 								: "";
 						case "cost":
 							return renderStyleForSource(theme, colorSource, config.colors.cost, costDisplay);
-						case "package":
-							return formatPackageVersionSegment(
-								theme,
-								state.packageVersion,
-								colorSource,
-								iconMode,
-								config.icons.package,
-								config.colors.packageVersion,
-							);
 						case "package_version":
 							return state.packageVersion?.version
 								? renderStyleForSource(
@@ -538,286 +378,102 @@ export function installFooter(
 										state.packageVersion.version,
 									)
 								: "";
-						case "sep":
-							return renderStyleForSource(theme, colorSource, config.colors.separator, " | ");
 						case "git_commit":
 							return git.commit;
 						case "git_tag":
 							return git.tag;
 						case "git_metrics":
 							return git.metrics;
-						case "git_added":
-							return state.metrics
-								? renderStyleForSource(
-										theme,
-										colorSource,
-										config.colors.gitMetricsAdded,
-										`+${state.metrics.added}`,
-									)
-								: "";
-						case "git_deleted":
-							return state.metrics
-								? renderStyleForSource(
-										theme,
-										colorSource,
-										config.colors.gitMetricsDeleted,
-										`−${state.metrics.deleted}`,
-									)
-								: "";
 						default:
 							return "";
 					}
 				};
-				const branchParts: string[] = [];
-				if (config.footerSegments.gitBranch) {
-					if (git.branchText) {
-						branchParts.push("on", git.icon, git.branchText);
-					} else if (state.commit?.detached) {
-						// `HEAD` uses git-branch style; `(hash)` uses git-commit style
-						// (bold green) per Starship `git_commit` format.
-						branchParts.push(
-							"on",
-							git.icon,
-							renderStyleForSource(theme, colorSource, config.colors.gitBranch, "HEAD"),
-						);
-						if (config.footerSegments.gitCommit && state.commit.oid) {
-							const shortHash = state.commit.oid.slice(0, config.gitCommit.hashLength);
-							const tag = config.gitCommit.showTag && state.commit.tag ? state.commit.tag : "";
-							const inner = [shortHash, tag].filter(Boolean).join(" ");
-							branchParts.push(
-								renderStyleForSource(theme, colorSource, config.colors.gitCommit, `(${inner})`),
-							);
-						}
-					}
-				}
-				const gitStatusParts = config.footerSegments.gitStatus && git.status ? [git.status] : [];
-				const showGitState = config.footerSegments.gitBranch || config.footerSegments.gitStatus;
-				const gitStateParts = showGitState && git.state ? [git.state] : [];
-				const branchLabel = [...branchParts, ...gitStatusParts, ...gitStateParts]
-					.filter(Boolean)
-					.join(" ");
-				const runtimeLabel = config.footerSegments.runtime
-					? formatRuntimeSegment(
-							theme,
-							state.runtime,
-							config.colors.runtimePrefix,
-							colorSource,
-							iconMode,
-						)
-					: "";
-				const packageVersionLabel = config.footerSegments.packageVersion
-					? formatPackageVersionSegment(
-							theme,
-							state.packageVersion,
-							colorSource,
-							iconMode,
-							config.icons.package,
-							config.colors.packageVersion,
-						)
-					: "";
-				// Skip standalone gitCommit when hash is already folded into the
-				// branch display on detached HEAD.
-				const hashFoldedIntoBranch = state.commit?.detached && config.footerSegments.gitBranch;
-				const gitCommitLabel =
-					config.footerSegments.gitCommit && !hashFoldedIntoBranch ? git.commit : "";
-				const gitMetricsLabel = config.footerSegments.gitMetrics ? git.metrics : "";
-
-				const sessionDurationSegment = (() => {
-					if (!config.footerSegments.sessionDuration || !state.sessionStartEpoch) return "";
-					const timeLabel = buildSessionDurationLabel(state.sessionStartEpoch);
-					const prefix = renderStyleForSource(theme, colorSource, "", "up for");
-					const time = renderStyleForSource(
-						theme,
-						colorSource,
-						config.colors.sessionDuration,
-						timeLabel,
-					);
-					return `${prefix} ${time}`;
-				})();
-				const usernameSegment = config.footerSegments.username
-					? renderStyleForSource(
-							theme,
-							colorSource,
-							config.colors.username,
-							formatUsernameHostLabel(config.icons.username),
-						)
-					: "";
-				const osSegment = config.footerSegments.os
-					? renderStyleForSource(
-							theme,
-							colorSource,
-							config.colors.os,
-							formatOsLabel(config.icons.os, iconMode),
-						)
-					: "";
-				const left = [
-					config.footerSegments.model ? modelLabel : "",
-					config.footerSegments.thinking ? thinkingLabel : "",
-					osSegment,
-					usernameSegment,
-					config.footerSegments.cwd ? cwdLabel : "",
-					config.footerSegments.sessionName ? builtInSessionNameLabel : "",
-					branchLabel,
-					gitCommitLabel,
-					gitMetricsLabel,
-					packageVersionLabel,
-					runtimeLabel,
-					sessionDurationSegment,
-				]
-					.filter(Boolean)
-					.join(" ");
-
-				const timeSegment = config.footerSegments.time
-					? renderStyleForSource(
-							theme,
-							colorSource,
-							config.colors.time,
-							formatTimeLabel(config.icons.time),
-						)
-					: "";
-				const right = [
-					config.footerSegments.context
-						? renderStyleForSource(theme, colorSource, contextColor, contextDisplay)
-						: "",
-					config.footerSegments.tokens
-						? renderStyleForSource(theme, colorSource, config.colors.tokens, tokensDisplay)
-						: "",
-					config.footerSegments.cacheHit && cacheHitDisplay
-						? renderStyleForSource(theme, colorSource, config.colors.cacheHit, cacheHitDisplay)
-						: "",
-					config.footerSegments.cost
-						? renderStyleForSource(theme, colorSource, config.colors.cost, costDisplay)
-						: "",
-					timeSegment,
-				]
-					.filter(Boolean)
-					.join(separator);
-
-				let contentLeft = left;
-				let contentMiddle = "";
-				let contentRight = right;
-				if (config.footerFormat) {
-					const {
-						left: fmtLeft,
-						middle: fmtMiddle,
-						right: fmtRight,
-					} = renderFormatSplit(parseFooterFormat(config.footerFormat), renderVariable);
-					contentLeft = stripOrphanSeparators(fmtLeft);
-					contentMiddle = stripOrphanSeparators(fmtMiddle);
-					contentRight = stripOrphanSeparators(fmtRight);
-				}
-
 				const extensionStatuses = collectExtensionStatusSegments(
 					footerData.getExtensionStatuses(),
 					config,
 				);
 
-				if (config.footerStyle === "pill") {
-					// Several segment colours are dynamic — the context tier, the detected
-					// runtime, the thinking level — so the spec lookup lives here where
-					// that state is already resolved, and pill.ts stays presentation-only.
-					const pillSpecFor = (segment: string): ColorSpec => {
-						switch (segment) {
-							case "model":
-								return config.colors.model;
-							case "thinking":
-								return config.colors.thinking ?? thinkingThemeKey(thinkingText);
-							case "queue":
-								return config.colors.queue;
-							case "subagents":
-								return config.colors.subagents;
-							case "cwd":
-								return config.colors.cwd;
-							case "sessionName":
-								return config.colors.sessionName;
-							case "gitBranch":
-								return config.colors.gitBranch;
-							case "gitStatus":
-							case "gitState":
-								return config.colors.gitStatus;
-							case "gitCommit":
-							case "gitTag":
-								return config.colors.gitCommit;
-							case "gitMetrics":
-								return config.colors.gitMetricsAdded;
-							case "runtime":
-								return state.runtime?.style ?? config.colors.runtimePrefix;
-							case "context":
-								return contextColor;
-							case "tokens":
-								return config.colors.tokens;
-							case "cacheHit":
-								return config.colors.cacheHit;
-							case "cost":
-								return config.colors.cost;
-							case "sessionDuration":
-								return config.colors.sessionDuration;
-							case "username":
-								return config.colors.username;
-							case "time":
-								return config.colors.time;
-							case "os":
-								return config.colors.os;
-							case "packageVersion":
-								return config.colors.packageVersion;
-							default:
-								return config.colors.extensionStatus;
-						}
-					};
-
-					const spans: PillSpan[] = [];
-					const bar = renderPillBar(
-						collectPillInputs(
-							config.pill.segments,
-							[...extensionStatuses.left, ...extensionStatuses.middle, ...extensionStatuses.right],
-							renderVariable,
-							pillSpecFor,
-							(key) => getExtensionStatusColor(config, key) ?? config.colors.extensionStatus,
-							(key) => getExtensionStatusIcon(config, key),
-						),
-						theme,
-						colorSource,
-						config.pill,
-						Math.max(0, width - 2),
-						{
-							ascii: iconMode === "ascii",
-							onSpan: (span) => spans.push(span),
-						},
-					);
-					// An empty bar means nothing had content; fall through to the text
-					// footer rather than emit a bare pair of caps.
-					if (bar) {
-						const columnOffset = width > 2 ? 1 : 0;
-						const line = truncateToWidth(width > 2 ? ` ${bar} ` : bar, width, "");
-						rememberPillSpans(width, spans, columnOffset, visibleWidth(line));
-						return [line];
+				// Several segment colours are dynamic — the context tier, the detected
+				// runtime, the thinking level — so the spec lookup lives here where
+				// that state is already resolved, and pill.ts stays presentation-only.
+				const pillSpecFor = (segment: string): ColorSpec => {
+					switch (segment) {
+						case "model":
+							return config.colors.model;
+						case "thinking":
+							return config.colors.thinking ?? thinkingThemeKey(thinkingText);
+						case "queue":
+							return config.colors.queue;
+						case "subagents":
+							return config.colors.subagents;
+						case "cwd":
+							return config.colors.cwd;
+						case "sessionName":
+							return config.colors.sessionName;
+						case "gitBranch":
+							return config.colors.gitBranch;
+						case "gitStatus":
+						case "gitState":
+							return config.colors.gitStatus;
+						case "gitCommit":
+						case "gitTag":
+							return config.colors.gitCommit;
+						case "gitMetrics":
+							return config.colors.gitMetricsAdded;
+						case "runtime":
+							return state.runtime?.style ?? config.colors.runtimePrefix;
+						case "context":
+							return contextColor;
+						case "tokens":
+							return config.colors.tokens;
+						case "cacheHit":
+							return config.colors.cacheHit;
+						case "cost":
+							return config.colors.cost;
+						case "sessionDuration":
+							return config.colors.sessionDuration;
+						case "username":
+							return config.colors.username;
+						case "time":
+							return config.colors.time;
+						case "os":
+							return config.colors.os;
+						case "packageVersion":
+							return config.colors.packageVersion;
+						default:
+							return config.colors.extensionStatus;
 					}
+				};
+
+				const spans: PillSpan[] = [];
+				const bar = renderPillBar(
+					collectPillInputs(
+						config.pill.segments,
+						[...extensionStatuses.left, ...extensionStatuses.middle, ...extensionStatuses.right],
+						renderVariable,
+						pillSpecFor,
+						(key) => getExtensionStatusColor(config, key) ?? config.colors.extensionStatus,
+						(key) => getExtensionStatusIcon(config, key),
+					),
+					theme,
+					colorSource,
+					config.pill,
+					Math.max(0, width - 2),
+					{
+						ascii: iconMode === "ascii",
+						onSpan: (span) => spans.push(span),
+					},
+				);
+				// Nothing has content: draw nothing rather than a bare pair of caps.
+				if (!bar) {
 					pillSpansByWidth.delete(width);
 					clearPillAnchors();
+					return [""];
 				}
-
-				const renderExtensionStatus = (segment: ExtensionStatusSegment) =>
-					segment.colorMode === "original"
-						? segment.text
-						: renderStyleForSource(theme, colorSource, config.colors.extensionStatus, segment.text);
-				const extensionMiddleSegments = extensionStatuses.middle.map(renderExtensionStatus);
-				const middleSegments = contentMiddle
-					? [contentMiddle, ...extensionMiddleSegments]
-					: extensionMiddleSegments;
-				const content = composeFooterContent(
-					contentLeft,
-					contentRight,
-					extensionStatuses.left.map(renderExtensionStatus),
-					middleSegments,
-					extensionStatuses.right.map(renderExtensionStatus),
-					separator,
-					innerWidth,
-				);
-				const framed = width > 2 ? ` ${truncateToWidth(content, width - 2, "")} ` : content;
-				// This width is drawn as text: no pills, nothing to hit, nothing to point at.
-				pillSpansByWidth.delete(width);
-				clearPillAnchors();
-				return [truncateToWidth(framed, width, "")];
+				const columnOffset = width > 2 ? 1 : 0;
+				const line = truncateToWidth(width > 2 ? ` ${bar} ` : bar, width, "");
+				rememberPillSpans(width, spans, columnOffset, visibleWidth(line));
+				return [line];
 			},
 		};
 

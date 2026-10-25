@@ -23,15 +23,13 @@ import {
 	isExtensionStatusColorMode,
 	mergeConfig,
 	saveColorSourcesPatch,
+	saveContextStylePatch,
 	saveContextThresholdsPatch,
 	saveExtensionStatusColorMode,
 	saveExtensionStatusPlacement,
-	saveFooterFormatPatch,
-	saveFooterSegmentsPatch,
 	saveGitBranchPatch,
 	saveMousePatch,
 	savePathDisplayPatch,
-	saveSeparatorPatch,
 	saveUiFeaturesPatch,
 } from "../extensions/starline/config";
 import {
@@ -76,26 +74,12 @@ describe("mergeConfig", () => {
 			statusLine: true,
 			copyFriendly: false,
 		});
-		expect(config.footerSegments).toEqual({
-			model: false,
-			thinking: false,
-			cwd: true,
-			sessionName: true,
-			gitBranch: true,
-			gitStatus: true,
-			runtime: true,
-			context: true,
-			gitCounts: false,
-			sessionDuration: false,
-			username: false,
-			time: false,
-			os: false,
-			packageVersion: false,
-			gitCommit: false,
-			gitMetrics: false,
-			tokens: true,
-			cacheHit: false,
-			cost: true,
+		expect(config.git).toEqual({
+			counts: false,
+			hostIcon: false,
+			branch: { maxLength: "full" },
+			commit: { hashLength: 7, onlyDetached: true, showTag: true },
+			metrics: { onlyNonzero: true, ignoreSubmodules: false },
 		});
 		expect(config.extensionStatuses).toEqual({
 			defaultPlacement: "right",
@@ -139,17 +123,6 @@ describe("mergeConfig", () => {
 		});
 	});
 
-	it("defaults footerFormat to empty string", () => {
-		expect(mergeConfig({}).footerFormat).toBe("");
-		expect(defaultConfig.footerFormat).toBe("");
-	});
-
-	it("accepts a custom footerFormat string", () => {
-		expect(mergeConfig({ footerFormat: "$cwd on $git_branch $fill $cost" }).footerFormat).toBe(
-			"$cwd on $git_branch $fill $cost",
-		);
-	});
-
 	it("defaults editorMetadataFormat and preserves non-empty strings", () => {
 		expect(defaultConfig.editorMetadataFormat).toBe(DEFAULT_EDITOR_METADATA_FORMAT);
 		for (const value of [undefined, null, 123, true]) {
@@ -164,12 +137,6 @@ describe("mergeConfig", () => {
 		// An explicit "" means "show nothing", so the model and thinking segments can
 		// move to the footer without the editor still spelling them out.
 		expect(mergeConfig({ editorMetadataFormat: "" }).editorMetadataFormat).toBe("");
-	});
-
-	it("ignores non-string footerFormat values", () => {
-		expect(mergeConfig({ footerFormat: 123 }).footerFormat).toBe("");
-		expect(mergeConfig({ footerFormat: null }).footerFormat).toBe("");
-		expect(mergeConfig({ footerFormat: true }).footerFormat).toBe("");
 	});
 
 	it("accepts custom project refresh intervals and 0 to disable polling", () => {
@@ -192,40 +159,6 @@ describe("mergeConfig", () => {
 		).toBe(30_000);
 	});
 
-	it("defaults separator style to pipe and accepts supported values", () => {
-		expect(mergeConfig({}).separator).toBe("pipe");
-		expect(defaultConfig.separator).toBe("pipe");
-		for (const separator of ["pipe", "dot", "chevron", "none"] as const) {
-			expect(mergeConfig({ separator }).separator).toBe(separator);
-		}
-	});
-
-	it("falls back to pipe for invalid separator styles", () => {
-		for (const separator of ["arrow", "", 123, null, true]) {
-			expect(mergeConfig({ separator }).separator).toBe("pipe");
-		}
-	});
-
-	it("saves separator style without erasing unknown config", () => {
-		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
-		const path = join(dir, "starline.json");
-		try {
-			writeFileSync(path, `${JSON.stringify({ unknown: true, contextStyle: "gauge" }, null, 2)}\n`);
-
-			const config = saveSeparatorPatch("chevron", path);
-			const raw = JSON.parse(readFileSync(path, "utf8"));
-
-			expect(config.separator).toBe("chevron");
-			expect(raw).toEqual({
-				unknown: true,
-				contextStyle: "gauge",
-				separator: "chevron",
-			});
-		} finally {
-			rmSync(dir, { recursive: true, force: true });
-		}
-	});
-
 	it("refuses corrupt config without changing its bytes", () => {
 		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
 		const path = join(dir, "starline.json");
@@ -233,7 +166,7 @@ describe("mergeConfig", () => {
 		try {
 			writeFileSync(path, original);
 
-			expect(() => saveSeparatorPatch("dot", path)).toThrow(
+			expect(() => saveContextStylePatch("gauge", path)).toThrow(
 				/Refusing to save Starline config.*corrupt/,
 			);
 			expect(readFileSync(path, "utf8")).toBe(original);
@@ -248,10 +181,10 @@ describe("mergeConfig", () => {
 		const path = join(dir, "starline.json");
 		try {
 			expect(existsSync(path)).toBe(false);
-			const config = saveFooterFormatPatch("$cwd $fill $context", path);
+			const config = saveContextStylePatch("gauge", path);
 			const raw = JSON.parse(readFileSync(path, "utf8"));
 
-			expect(raw).toEqual({ footerFormat: "$cwd $fill $context" });
+			expect(raw).toEqual({ contextStyle: "gauge" });
 			expect(config).toEqual(mergeConfig(raw));
 			expect(configTempFiles(dir)).toEqual([]);
 		} finally {
@@ -263,13 +196,13 @@ describe("mergeConfig", () => {
 		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
 		const path = join(dir, "starline.json");
 		try {
-			writeFileSync(path, `${JSON.stringify({ separator: "pipe" }, null, 2)}\n`);
+			writeFileSync(path, `${JSON.stringify({ contextStyle: "text" }, null, 2)}\n`);
 			chmodSync(path, 0o600);
 
-			saveSeparatorPatch("dot", path);
+			saveContextStylePatch("gauge", path);
 
 			expect(statSync(path).mode & 0o777).toBe(0o600);
-			expect(JSON.parse(readFileSync(path, "utf8")).separator).toBe("dot");
+			expect(JSON.parse(readFileSync(path, "utf8")).contextStyle).toBe("gauge");
 			expect(configTempFiles(dir)).toEqual([]);
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
@@ -288,12 +221,12 @@ describe("mergeConfig", () => {
 			symlinkSync(targetPath, linkPath);
 			const originalLink = readlinkSync(linkPath);
 
-			const config = saveSeparatorPatch("chevron", linkPath);
+			const config = saveContextStylePatch("gauge", linkPath);
 			const raw = JSON.parse(readFileSync(targetPath, "utf8"));
 
 			expect(lstatSync(linkPath).isSymbolicLink()).toBe(true);
 			expect(readlinkSync(linkPath)).toBe(originalLink);
-			expect(raw).toEqual({ unknown: true, separator: "chevron" });
+			expect(raw).toEqual({ unknown: true, contextStyle: "gauge" });
 			expect(config).toEqual(mergeConfig(raw));
 			expect(statSync(targetPath).mode & 0o777).toBe(0o600);
 			expect(configTempFiles(targetDir, "actual.json")).toEqual([]);
@@ -313,7 +246,9 @@ describe("mergeConfig", () => {
 			symlinkSync(missingTarget, linkPath);
 			const originalLink = readlinkSync(linkPath);
 
-			expect(() => saveSeparatorPatch("dot", linkPath)).toThrow(/Refusing to save Starline config/);
+			expect(() => saveContextStylePatch("gauge", linkPath)).toThrow(
+				/Refusing to save Starline config/,
+			);
 			expect(lstatSync(linkPath).isSymbolicLink()).toBe(true);
 			expect(readlinkSync(linkPath)).toBe(originalLink);
 			expect(existsSync(missingTarget)).toBe(false);
@@ -340,12 +275,12 @@ describe("mergeConfig", () => {
 				)}\n`,
 			);
 
-			saveSeparatorPatch("dot", path);
+			saveContextStylePatch("gauge", path);
 			const config = savePathDisplayPatch({ mode: "full" }, path);
 			const raw = JSON.parse(readFileSync(path, "utf8"));
 
 			expect(raw.futureScalar).toBe("keep");
-			expect(raw.separator).toBe("dot");
+			expect(raw.contextStyle).toBe("gauge");
 			expect(raw.pathDisplay).toEqual({
 				mode: "full",
 				depth: 2,
@@ -461,23 +396,23 @@ describe("mergeConfig", () => {
 	});
 
 	it("defaults git branch length to full and accepts positive integer values", () => {
-		expect(mergeConfig({}).gitBranch).toEqual({ maxLength: "full" });
-		expect(defaultConfig.gitBranch).toEqual({ maxLength: "full" });
+		expect(mergeConfig({}).git.branch).toEqual({ maxLength: "full" });
+		expect(defaultConfig.git.branch).toEqual({ maxLength: "full" });
 		for (const maxLength of [1, 10, 17, 20, 30, 40, 50, 10_000]) {
-			expect(mergeConfig({ gitBranch: { maxLength } }).gitBranch).toEqual({ maxLength });
+			expect(mergeConfig({ git: { branch: { maxLength } } }).git.branch).toEqual({ maxLength });
 		}
-		expect(mergeConfig({ gitBranch: { maxLength: "full" } }).gitBranch).toEqual({
+		expect(mergeConfig({ git: { branch: { maxLength: "full" } } }).git.branch).toEqual({
 			maxLength: "full",
 		});
 	});
 
 	it("falls back to full for invalid git branch lengths", () => {
 		for (const maxLength of [0, -1, 1.5, "10", "short", null, true]) {
-			expect(mergeConfig({ gitBranch: { maxLength } }).gitBranch).toEqual({
+			expect(mergeConfig({ git: { branch: { maxLength } } }).git.branch).toEqual({
 				maxLength: "full",
 			});
 		}
-		expect(mergeConfig({ gitBranch: 20 }).gitBranch).toEqual({ maxLength: "full" });
+		expect(mergeConfig({ git: { branch: 20 } }).git.branch).toEqual({ maxLength: "full" });
 	});
 
 	it("saves git branch length without erasing unknown config", () => {
@@ -486,15 +421,15 @@ describe("mergeConfig", () => {
 		try {
 			writeFileSync(
 				path,
-				`${JSON.stringify({ unknown: true, gitBranch: { maxLength: 17, future: true } }, null, 2)}\n`,
+				`${JSON.stringify({ unknown: true, git: { branch: { maxLength: 17, future: true } } }, null, 2)}\n`,
 			);
 
 			const config = saveGitBranchPatch({ maxLength: 30 }, path);
 			const raw = JSON.parse(readFileSync(path, "utf8"));
-			expect(config.gitBranch).toEqual({ maxLength: 30 });
+			expect(config.git.branch).toEqual({ maxLength: 30 });
 			expect(raw).toEqual({
 				unknown: true,
-				gitBranch: { maxLength: 30, future: true },
+				git: { branch: { maxLength: 30, future: true } },
 			});
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
@@ -668,7 +603,6 @@ describe("mergeConfig", () => {
 		expect(config.icons.editorPrompt).toBe(">");
 		expect(config.colors.cwd).toBe(defaultConfig.colors.cwd);
 		expect(config.colors.gitStatus).toBe(defaultConfig.colors.gitStatus);
-		expect(config.colors.separator).toBe("dimmed");
 		expect(config.colors.editorAccent).toBeUndefined();
 		expect(config.colors.editorPrompt).toBe("accent");
 		expect(config.colors.editorBorder).toBeUndefined();
@@ -705,64 +639,10 @@ describe("mergeConfig", () => {
 		expect(mergeConfig({ features: { copyFriendly: "on" } }).features.copyFriendly).toBe(false);
 	});
 
-	it("accepts valid footer segment preferences and ignores invalid values", () => {
-		expect(mergeConfig({ footerSegments: { cwd: false, tokens: false } }).footerSegments).toEqual({
-			model: false,
-			thinking: false,
-			cwd: false,
-			sessionName: true,
-			gitBranch: true,
-			gitStatus: true,
-			runtime: true,
-			context: true,
-			gitCounts: false,
-			sessionDuration: false,
-			username: false,
-			time: false,
-			os: false,
-			packageVersion: false,
-			gitCommit: false,
-			gitMetrics: false,
-			tokens: false,
-			cacheHit: false,
-			cost: true,
-		});
-		expect(
-			mergeConfig({ footerSegments: { cost: "off", gitBranch: false, gitStatus: false } })
-				.footerSegments,
-		).toEqual({
-			model: false,
-			thinking: false,
-			cwd: true,
-			sessionName: true,
-			gitBranch: false,
-			gitStatus: false,
-			runtime: true,
-			context: true,
-			gitCounts: false,
-			sessionDuration: false,
-			username: false,
-			time: false,
-			os: false,
-			packageVersion: false,
-			gitCommit: false,
-			gitMetrics: false,
-			tokens: true,
-			cacheHit: false,
-			cost: true,
-		});
-	});
-
-	it("normalizes session-name preferences", () => {
+	it("normalizes the session-name colour", () => {
 		expect(mergeConfig({ colors: { sessionName: "success" } }).colors.sessionName).toBe("success");
-		expect(mergeConfig({ footerSegments: { sessionName: false } }).footerSegments.sessionName).toBe(
-			false,
-		);
 		expect(mergeConfig({ colors: { sessionName: "not-a-color" } }).colors.sessionName).toBe(
 			"bold green",
-		);
-		expect(mergeConfig({ footerSegments: { sessionName: "on" } }).footerSegments.sessionName).toBe(
-			true,
 		);
 	});
 
@@ -925,140 +805,17 @@ describe("mergeConfig", () => {
 		}
 	});
 
-	it("saves footer segment patches without erasing unknown user config", () => {
-		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
-		const path = join(dir, "starline.json");
-		try {
-			writeFileSync(
-				path,
-				`${JSON.stringify(
-					{
-						unknown: true,
-						footerSegments: {
-							cwd: true,
-							futureKey: "future",
-						},
-					},
-					null,
-					2,
-				)}\n`,
-			);
-
-			const config = saveFooterSegmentsPatch({ tokens: false, cost: false }, path);
-			const raw = JSON.parse(readFileSync(path, "utf8"));
-
-			expect(config.footerSegments).toEqual({
-				model: false,
-				thinking: false,
-				cwd: true,
-				sessionName: true,
-				gitBranch: true,
-				gitStatus: true,
-				runtime: true,
-				context: true,
-				gitCounts: false,
-				sessionDuration: false,
-				username: false,
-				time: false,
-				os: false,
-				packageVersion: false,
-				gitCommit: false,
-				gitMetrics: false,
-				tokens: false,
-				cacheHit: false,
-				cost: false,
-			});
-			expect(raw.unknown).toBe(true);
-			expect(raw.footerSegments).toEqual({
-				cwd: true,
-				futureKey: "future",
-				tokens: false,
-				cost: false,
-			});
-		} finally {
-			rmSync(dir, { recursive: true, force: true });
-		}
-	});
-
-	it("writes only the requested footer segment setting when creating starline.json", () => {
-		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
-		const path = join(dir, "starline.json");
-		try {
-			const config = saveFooterSegmentsPatch({ runtime: false }, path);
-			const raw = JSON.parse(readFileSync(path, "utf8"));
-
-			expect(config.footerSegments).toEqual({
-				model: false,
-				thinking: false,
-				cwd: true,
-				sessionName: true,
-				gitBranch: true,
-				gitStatus: true,
-				runtime: false,
-				context: true,
-				gitCounts: false,
-				sessionDuration: false,
-				username: false,
-				time: false,
-				os: false,
-				packageVersion: false,
-				gitCommit: false,
-				gitMetrics: false,
-				tokens: true,
-				cacheHit: false,
-				cost: true,
-			});
-			expect(raw).toEqual({ footerSegments: { runtime: false } });
-		} finally {
-			rmSync(dir, { recursive: true, force: true });
-		}
-	});
-
-	it("toggles and persists the packageVersion footer segment", () => {
-		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
-		const path = join(dir, "starline.json");
-		try {
-			const config = saveFooterSegmentsPatch({ packageVersion: true }, path);
-			expect(config.footerSegments.packageVersion).toBe(true);
-
-			const raw = JSON.parse(readFileSync(path, "utf8"));
-			expect(raw.footerSegments).toEqual({ packageVersion: true });
-
-			const reloaded = mergeConfig(raw);
-			expect(reloaded.footerSegments.packageVersion).toBe(true);
-		} finally {
-			rmSync(dir, { recursive: true, force: true });
-		}
-	});
-
-	it("toggles and persists gitCommit and gitMetrics footer segments", () => {
-		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
-		const path = join(dir, "starline.json");
-		try {
-			const config = saveFooterSegmentsPatch({ gitCommit: true, gitMetrics: true }, path);
-			expect(config.footerSegments.gitCommit).toBe(true);
-			expect(config.footerSegments.gitMetrics).toBe(true);
-
-			const raw = JSON.parse(readFileSync(path, "utf8"));
-			expect(raw.footerSegments).toEqual({ gitCommit: true, gitMetrics: true });
-
-			const reloaded = mergeConfig(raw);
-			expect(reloaded.footerSegments.gitCommit).toBe(true);
-			expect(reloaded.footerSegments.gitMetrics).toBe(true);
-		} finally {
-			rmSync(dir, { recursive: true, force: true });
-		}
-	});
-
 	it("gitCommit config defaults and normalizes hashLength", () => {
-		expect(defaultConfig.gitCommit).toEqual({ hashLength: 7, onlyDetached: true, showTag: true });
-		expect(mergeConfig({ gitCommit: { hashLength: 3 } }).gitCommit.hashLength).toBe(4);
-		expect(mergeConfig({ gitCommit: { hashLength: 100 } }).gitCommit.hashLength).toBe(40);
-		expect(mergeConfig({ gitCommit: { hashLength: 10 } }).gitCommit.hashLength).toBe(10);
-		expect(mergeConfig({ gitCommit: { onlyDetached: false } }).gitCommit.onlyDetached).toBe(false);
-		expect(mergeConfig({ gitCommit: { showTag: false } }).gitCommit.showTag).toBe(false);
+		expect(defaultConfig.git.commit).toEqual({ hashLength: 7, onlyDetached: true, showTag: true });
+		expect(mergeConfig({ git: { commit: { hashLength: 3 } } }).git.commit.hashLength).toBe(4);
+		expect(mergeConfig({ git: { commit: { hashLength: 100 } } }).git.commit.hashLength).toBe(40);
+		expect(mergeConfig({ git: { commit: { hashLength: 10 } } }).git.commit.hashLength).toBe(10);
+		expect(mergeConfig({ git: { commit: { onlyDetached: false } } }).git.commit.onlyDetached).toBe(
+			false,
+		);
+		expect(mergeConfig({ git: { commit: { showTag: false } } }).git.commit.showTag).toBe(false);
 		// Missing fields fall back to defaults.
-		expect(mergeConfig({ gitCommit: {} }).gitCommit).toEqual({
+		expect(mergeConfig({ git: { commit: {} } }).git.commit).toEqual({
 			hashLength: 7,
 			onlyDetached: true,
 			showTag: true,
@@ -1066,36 +823,13 @@ describe("mergeConfig", () => {
 	});
 
 	it("gitMetrics config defaults", () => {
-		expect(defaultConfig.gitMetrics).toEqual({ onlyNonzero: true, ignoreSubmodules: false });
-		expect(mergeConfig({ gitMetrics: { onlyNonzero: false } }).gitMetrics.onlyNonzero).toBe(false);
+		expect(defaultConfig.git.metrics).toEqual({ onlyNonzero: true, ignoreSubmodules: false });
+		expect(mergeConfig({ git: { metrics: { onlyNonzero: false } } }).git.metrics.onlyNonzero).toBe(
+			false,
+		);
 		expect(
-			mergeConfig({ gitMetrics: { ignoreSubmodules: true } }).gitMetrics.ignoreSubmodules,
+			mergeConfig({ git: { metrics: { ignoreSubmodules: true } } }).git.metrics.ignoreSubmodules,
 		).toBe(true);
-	});
-
-	it("writes and reads back footerFormat", () => {
-		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
-		const path = join(dir, "starline.json");
-		try {
-			const config = saveFooterFormatPatch("$cwd on $git_branch $fill $cost", path);
-			const raw = JSON.parse(readFileSync(path, "utf8"));
-
-			expect(config.footerFormat).toBe("$cwd on $git_branch $fill $cost");
-			expect(raw).toEqual({ footerFormat: "$cwd on $git_branch $fill $cost" });
-		} finally {
-			rmSync(dir, { recursive: true, force: true });
-		}
-	});
-
-	it("clears footerFormat when saving empty string", () => {
-		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
-		const path = join(dir, "starline.json");
-		try {
-			const config = saveFooterFormatPatch("", path);
-			expect(config.footerFormat).toBe("");
-		} finally {
-			rmSync(dir, { recursive: true, force: true });
-		}
 	});
 
 	it("saves extension status placement when creating starline.json", () => {

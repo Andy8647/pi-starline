@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultConfig, FOOTER_FORMAT_VARIABLES, mergeConfig } from "../extensions/starline/config";
+import { defaultConfig, mergeConfig } from "../extensions/starline/config";
 import {
 	buildCacheHitLabel,
 	buildContextDisplayLabel,
@@ -145,10 +145,6 @@ describe("tokens cache format", () => {
 });
 
 describe("cacheHit as a standalone segment", () => {
-	it("is off by default, since tokens already carries the rate inline", () => {
-		expect(defaultConfig.footerSegments.cacheHit).toBe(false);
-	});
-
 	it("renders just the rate", () => {
 		expect(buildCacheHitLabel(totals)).toBe("87.3%");
 	});
@@ -166,8 +162,7 @@ describe("cacheHit as a standalone segment", () => {
 		expect(buildCacheHitLabel({ ...totals, latestCacheHitRate: undefined }, "⚡")).toBe("");
 	});
 
-	it("is a footerFormat variable and a pill segment", () => {
-		expect(FOOTER_FORMAT_VARIABLES).toContain("cache_hit");
+	it("is a pill segment", () => {
 		expect(PILL_SEGMENT_VARIABLES.cacheHit).toBe("cache_hit");
 	});
 

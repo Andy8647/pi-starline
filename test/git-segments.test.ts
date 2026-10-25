@@ -36,8 +36,8 @@ const state = (patch: Partial<GitSegmentState> = {}): GitSegmentState => ({
 	...patch,
 });
 
-const render = (gitState: GitSegmentState, patch: Record<string, unknown> = {}, counts = false) =>
-	renderGitSegments(gitState, config(patch), theme, "theme", { counts });
+const render = (gitState: GitSegmentState, patch: Record<string, unknown> = {}) =>
+	renderGitSegments(gitState, config(patch), theme, "theme");
 
 describe("branch", () => {
 	it("paints the icon before the branch name", () => {
@@ -54,13 +54,13 @@ describe("branch", () => {
 	});
 
 	it("swaps the branch glyph for the origin's forge logo when gitHostIcon is on", () => {
-		const git = render(state({ branch: "main", gitHost: "github" }), { gitHostIcon: true });
+		const git = render(state({ branch: "main", gitHost: "github" }), { git: { hostIcon: true } });
 		expect(git.icon).toBe("GH");
 		expect(git.branch).toBe("GH main");
 	});
 
 	it("keeps the branch glyph when the toggle is off, however the remote looks", () => {
-		const git = render(state({ branch: "main", gitHost: "github" }), { gitHostIcon: false });
+		const git = render(state({ branch: "main", gitHost: "github" }), { git: { hostIcon: false } });
 		expect(git.icon).toBe("G");
 	});
 });
@@ -80,7 +80,7 @@ describe("status", () => {
 	it("shows counts instead of lone glyphs when `counts` is on", () => {
 		const dirty = state({ branch: "main", stashed: 2, ahead: 3, behind: 1 });
 		expect(render(dirty).status).toBe("[SX]");
-		expect(render(dirty, {}, true).status).toBe("[S2^3v1]");
+		expect(render(dirty, { git: { counts: true } }).status).toBe("[S2^3v1]");
 	});
 });
 
@@ -93,13 +93,13 @@ describe("operation state and commit", () => {
 		const commit = { oid: "abcdef1234", detached: true, tag: "v1.2.3" };
 		expect(render(state({ commit })).commit).toBe("abcdef1 v1.2.3");
 		expect(render(state({ commit })).tag).toBe("v1.2.3");
-		expect(render(state({ commit }), { gitCommit: { showTag: false } }).tag).toBe("");
+		expect(render(state({ commit }), { git: { commit: { showTag: false } } }).tag).toBe("");
 	});
 
 	it("hides the commit while attached when onlyDetached is on", () => {
 		const commit = { oid: "abcdef1234", detached: false, tag: null };
 		expect(render(state({ commit })).commit).toBe("");
-		expect(render(state({ commit }), { gitCommit: { onlyDetached: false } }).commit).toBe(
+		expect(render(state({ commit }), { git: { commit: { onlyDetached: false } } }).commit).toBe(
 			"abcdef1",
 		);
 	});
@@ -113,7 +113,7 @@ describe("metrics", () => {
 	it("drops a zero side by default", () => {
 		const metrics = { added: 0, deleted: 4 };
 		expect(render(state({ metrics })).metrics).toBe("−4");
-		expect(render(state({ metrics }), { gitMetrics: { onlyNonzero: false } }).metrics).toBe(
+		expect(render(state({ metrics }), { git: { metrics: { onlyNonzero: false } } }).metrics).toBe(
 			"+0 −4",
 		);
 	});

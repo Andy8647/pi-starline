@@ -40,15 +40,12 @@ export function setWorkingIndicator(indicator: WorkingIndicator | undefined): vo
 }
 
 /**
- * The model pill only exists when the status line is on and the model segment is
- * on. When it is not, the spinner belongs on the editor's top border instead of
+ * The model pill exists when the status line is on and `pill.segments` asks for
+ * it. When it does not, the spinner belongs on the editor's top border instead of
  * vanishing, so the editor asks exactly the question the footer answers.
  */
 export function footerRendersModel(config: PolishedTuiConfig): boolean {
-	if (!config.features.statusLine) return false;
-	if (config.footerStyle === "pill") return config.pill.segments.includes("model");
-	if (config.footerFormat) return /(?:\$model\b|\$\{model\})/.test(config.footerFormat);
-	return config.footerSegments.model;
+	return config.features.statusLine && config.pill.segments.includes("model");
 }
 
 /** A plain spinner, as opposed to a status that has to spell something out. */

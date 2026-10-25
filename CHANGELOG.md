@@ -12,6 +12,43 @@ npm.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-26
+
+The footer has one style now: pills. The text footer is gone, and with it the
+three settings that only existed to describe it (`footerStyle`, `footerFormat`,
+`separator`) and the per-segment toggle table (`footerSegments`). `pill.segments`
+is the only list that decides what appears and in what order. Everything else —
+colours, icons, the editor row, clickable pills — works as before.
+
+**Removed**
+
+- **`footerStyle`.** The pill bar is the footer. A config file that still says
+  `"footerStyle": "text"` loads fine and shows the bar; the key is ignored.
+
+- **`footerFormat` and `/starline format`.** The Starship-style template only
+  ever drove the text footer. `pill.segments` replaces it: list the segments you
+  want, in your order. `editorMetadataFormat` keeps its own `$name` template, and
+  the parser is the same one.
+
+- **`separator` and `colors.separator`.** The text footer's separator glyph.
+  Pills are joined by the powerline arrows `pill.separator` picks.
+
+- **`footerSegments`.** All nineteen toggles, and the *Built-in segments* tab.
+  `pill.segments` is the list; drop a name to hide it. `gitCounts` moved to
+  `git.counts`. A pill that was listed but toggled off here now shows, which is
+  the behaviour the docs claimed all along.
+
+- **`gitBranch`, `gitHostIcon`, `gitCommit`, `gitMetrics`.** The four flat keys
+  are now one `git` block: `git.branch.maxLength`, `git.hostIcon`,
+  `git.commit.{hashLength,onlyDetached,showTag}`, `git.metrics.{onlyNonzero,ignoreSubmodules}`,
+  plus `git.counts`. Existing values need to move into that block.
+
+**Fixed**
+
+- The optional git probes follow `pill.segments` instead of the removed toggles,
+  so a `gitTag` or `gitMetrics` pill reads its data without an unrelated segment
+  having to be switched on first.
+
 ## [0.4.0] - 2026-10-25
 
 Pills in the pill footer can now be clicked. The model, thinking, queue and

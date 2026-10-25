@@ -33,11 +33,8 @@ export type GitSegmentState = Pick<
 	| "metrics"
 > & { gitHost?: GitHost };
 
-/** The config the git segments read. `counts` is passed separately by the caller. */
-export type GitSegmentConfig = Pick<
-	PolishedTuiConfig,
-	"colors" | "icons" | "gitCommit" | "gitMetrics" | "gitBranch" | "gitHostIcon"
->;
+/** The config the git segments read. */
+export type GitSegmentConfig = Pick<PolishedTuiConfig, "colors" | "icons" | "git">;
 
 export type GitSegments = {
 	/** Branch icon in branch colour; "" when the repository has no branch. */
@@ -75,35 +72,34 @@ export function gitHostIconGlyph(icons: ResolvedIcons, host: GitHost): string {
 /**
  * Render every git segment.
  *
- * `options.counts` picks between glyph-only indicators (`!?`) and glyphs with
- * numbers (`!3`); the caller owns where that setting lives, so moving it does
- * not reach in here.
+ * Everything the output depends on — colours, icons, branch length, hash length,
+ * counts instead of lone glyphs — comes from `config.git` and `config.colors`.
  */
 export function renderGitSegments(
 	state: GitSegmentState,
 	config: GitSegmentConfig,
 	theme: ThemeLike,
 	colorSource: ColorSource,
-	options: { counts: boolean },
 ): GitSegments {
+	const git = config.git;
+	const counts = git.counts;
 	const paint = (spec: ColorSpec, text: string) =>
 		renderStyleForSource(theme, colorSource, spec, text);
 	const icons = config.icons;
 
-	// With gitHostIcon on, the branch icon becomes the origin remote's forge
+	// With git.hostIcon on, the branch icon becomes the origin remote's forge
 	// logo. Repos with no origin, and ascii mode (whose host glyphs are all
 	// empty), fall back to the plain branch icon.
-	const hostGlyph =
-		config.gitHostIcon && state.gitHost ? gitHostIconGlyph(icons, state.gitHost) : "";
+	const hostGlyph = git.hostIcon && state.gitHost ? gitHostIconGlyph(icons, state.gitHost) : "";
 	const glyph = hostGlyph || icons.git;
 	const icon = glyph ? paint(config.colors.gitBranch, glyph) : "";
 
 	const branchText = state.branch
-		? paint(config.colors.gitBranch, formatGitBranchText(state.branch, config.gitBranch.maxLength))
+		? paint(config.colors.gitBranch, formatGitBranchText(state.branch, git.branch.maxLength))
 		: undefined;
 
 	const stashLabel =
-		state.stashed > 0 ? (options.counts ? `${icons.stashed}${state.stashed}` : icons.stashed) : "";
+		state.stashed > 0 ? (counts ? `${icons.stashed}${state.stashed}` : icons.stashed) : "";
 	const dirty = [
 		state.conflicted > 0 ? icons.conflicted : "",
 		stashLabel,
@@ -116,12 +112,10 @@ export function renderGitSegments(
 	].join("");
 	const aheadBehind = (() => {
 		if (state.ahead > 0 && state.behind > 0) {
-			return options.counts
-				? `${icons.ahead}${state.ahead}${icons.behind}${state.behind}`
-				: icons.diverged;
+			return counts ? `${icons.ahead}${state.ahead}${icons.behind}${state.behind}` : icons.diverged;
 		}
-		if (state.ahead > 0) return options.counts ? `${icons.ahead}${state.ahead}` : icons.ahead;
-		if (state.behind > 0) return options.counts ? `${icons.behind}${state.behind}` : icons.behind;
+		if (state.ahead > 0) return counts ? `${icons.ahead}${state.ahead}` : icons.ahead;
+		if (state.behind > 0) return counts ? `${icons.behind}${state.behind}` : icons.behind;
 		return "";
 	})();
 	const status =
@@ -133,18 +127,16 @@ export function renderGitSegments(
 	const commit = formatGitCommitSegment(
 		theme,
 		state.commit,
-		config.gitCommit,
+		git.commit,
 		colorSource,
 		config.colors.gitCommit,
 	);
 	const tag =
-		config.gitCommit.showTag && state.commit?.tag
-			? paint(config.colors.gitCommit, state.commit.tag)
-			: "";
+		git.commit.showTag && state.commit?.tag ? paint(config.colors.gitCommit, state.commit.tag) : "";
 	const metrics = formatGitMetricsSegment(
 		theme,
 		state.metrics,
-		config.gitMetrics,
+		git.metrics,
 		colorSource,
 		config.colors.gitMetricsAdded,
 		config.colors.gitMetricsDeleted,

@@ -303,7 +303,7 @@ Verified against pi-subagents 0.82.0: the same request from a probe extension ge
 Pi draws `Steering: …` rows and a dequeue hint above the editor from
 `InteractiveMode.updatePendingMessagesDisplay`, and no extension API reaches that
 container. `queue-rows.ts` wraps the method through the registry: while the queue
-pill is actually in the bar (`footerStyle: "pill"`, `pill.segments` contains
+pill is actually in the bar (`pill.segments` contains
 `queue`, status line on), it clears the container instead of refilling it. The
 predicate is read on every queue update, so the rows return the moment the pill is
 configured away — no restart, and no key to remember.

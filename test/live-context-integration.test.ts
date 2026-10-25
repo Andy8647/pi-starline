@@ -10,6 +10,10 @@ vi.mock("../extensions/starline/config", async (importOriginal) => {
 			...actual.defaultConfig,
 			projectRefreshIntervalMs: 0,
 			features: { ...actual.defaultConfig.features, editor: false, statusLine: true },
+			pill: {
+				...actual.defaultConfig.pill,
+				segments: ["cwd", "context", "tokens", "cost"],
+			},
 		}),
 	};
 });

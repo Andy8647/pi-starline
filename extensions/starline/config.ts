@@ -25,13 +25,7 @@ import {
 	type ResolvedIcons,
 	resolveConfiguredIcons,
 } from "./icons";
-import {
-	DEFAULT_PILL_CONFIG,
-	type FooterStyle,
-	normalizePillConfig,
-	type PillConfig,
-	parseFooterStyle,
-} from "./pill-config";
+import { DEFAULT_PILL_CONFIG, normalizePillConfig, type PillConfig } from "./pill-config";
 import { isSupportedColorSpec } from "./style";
 
 export type ColorSpec = string;
@@ -48,7 +42,6 @@ export type SegmentOptionsConfig = {
 	context: { format: ContextFormat };
 	tokens: { cache: TokensCacheFormat };
 };
-export type SeparatorStyle = "pipe" | "dot" | "chevron" | "none";
 export type ModelLabelSource = "id" | "name";
 
 export type ContextThresholds = {
@@ -82,26 +75,14 @@ export type UiFeaturesConfig = {
 	copyFriendly: boolean;
 };
 
-export type FooterSegmentsConfig = {
-	model: boolean;
-	thinking: boolean;
-	cwd: boolean;
-	sessionName: boolean;
-	gitBranch: boolean;
-	gitStatus: boolean;
-	gitCounts: boolean;
-	gitCommit: boolean;
-	gitMetrics: boolean;
-	runtime: boolean;
-	context: boolean;
-	tokens: boolean;
-	cacheHit: boolean;
-	cost: boolean;
-	sessionDuration: boolean;
-	username: boolean;
-	time: boolean;
-	os: boolean;
-	packageVersion: boolean;
+export type GitConfig = {
+	/** Glyphs carry their number (`!3`) instead of standing alone (`!`). */
+	counts: boolean;
+	/** Use the origin remote's forge logo as the branch icon. */
+	hostIcon: boolean;
+	branch: GitBranchConfig;
+	commit: GitCommitConfig;
+	metrics: GitMetricsConfig;
 };
 
 export type MouseConfig = {
@@ -195,12 +176,8 @@ export const DEFAULT_EDITOR_METADATA_FORMAT = "$model  $provider(  $thinking)";
 
 export type PolishedTuiConfig = {
 	projectRefreshIntervalMs: number;
-	/** "text" renders footerFormat as before; "pill" renders pill.segments instead. */
-	footerStyle: FooterStyle;
 	pill: PillConfig;
-	footerFormat: string;
 	editorMetadataFormat: string;
-	separator: SeparatorStyle;
 	contextStyle: ContextStyle;
 	segmentOptions: SegmentOptionsConfig;
 	editorModelLabel: ModelLabelSource;
@@ -215,9 +192,7 @@ export type PolishedTuiConfig = {
 	userMessagePaddingY: number;
 	contextThresholds: ContextThresholds;
 	pathDisplay: PathDisplayConfig;
-	gitBranch: GitBranchConfig;
-	/** Replace the branch icon with the origin remote's forge logo. */
-	gitHostIcon: boolean;
+	git: GitConfig;
 	icons: ResolvedIcons;
 	colors: {
 		model: ColorSpec;
@@ -237,7 +212,6 @@ export type PolishedTuiConfig = {
 		tokens: ColorSpec;
 		cacheHit: ColorSpec;
 		cost: ColorSpec;
-		separator: ColorSpec;
 		runtimePrefix: ColorSpec;
 		extensionStatus: ColorSpec;
 		sessionDuration: ColorSpec;
@@ -266,70 +240,16 @@ export type PolishedTuiConfig = {
 	};
 	colorSources: ColorSourcesConfig;
 	features: UiFeaturesConfig;
-	footerSegments: FooterSegmentsConfig;
-	gitCommit: GitCommitConfig;
-	gitMetrics: GitMetricsConfig;
 	extensionStatuses: ExtensionStatusesConfig;
 	mouse: MouseConfig;
-};
-
-/**
- * Canonical footer format variable names. In a `footerFormat` string these
- * are written as `$name` or `${name}`.
- */
-export const FOOTER_FORMAT_VARIABLES = [
-	"model",
-	"thinking",
-	"queue",
-	"subagents",
-	"cwd",
-	"session_name",
-	"git_branch",
-	"git_status",
-	"git_state",
-	"runtime",
-	"session_duration",
-	"username",
-	"os",
-	"time",
-	"context",
-	"tokens",
-	"cache_hit",
-	"cost",
-	"package",
-	"package_version",
-	"git_commit",
-	"git_tag",
-	"git_metrics",
-	"git_added",
-	"git_deleted",
-	"sep",
-] as const;
-
-/**
- * Alias → canonical variable name mapping for `footerFormat`.
- * `$fill` is special (not a variable) and handled by the parser.
- */
-export const FOOTER_FORMAT_ALIASES: Record<string, string> = {
-	directory: "cwd",
-	branch: "git_branch",
-	status: "git_status",
-	state: "git_state",
-	commit: "git_commit",
-	tag: "git_tag",
-	duration: "session_duration",
-	separator: "sep",
 };
 
 export const configPath = join(getAgentDir(), "starline.json");
 
 export const defaultConfig: PolishedTuiConfig = {
 	projectRefreshIntervalMs: DEFAULT_PROJECT_REFRESH_INTERVAL_MS,
-	footerStyle: "text",
 	pill: DEFAULT_PILL_CONFIG,
-	footerFormat: "",
 	editorMetadataFormat: DEFAULT_EDITOR_METADATA_FORMAT,
-	separator: "pipe",
 	contextStyle: "text",
 	segmentOptions: { context: { format: "full" }, tokens: { cache: "percent" } },
 	editorModelLabel: "id",
@@ -340,8 +260,13 @@ export const defaultConfig: PolishedTuiConfig = {
 	userMessagePaddingY: 1,
 	contextThresholds: { warning: 70, error: 90 },
 	pathDisplay: { mode: "basename", depth: 0 },
-	gitBranch: { maxLength: "full" },
-	gitHostIcon: false,
+	git: {
+		counts: false,
+		hostIcon: false,
+		branch: { maxLength: "full" },
+		commit: { hashLength: 7, onlyDetached: true, showTag: true },
+		metrics: { onlyNonzero: true, ignoreSubmodules: false },
+	},
 	icons: {
 		mode: "auto",
 		...NERD_DEFAULT_ICONS,
@@ -360,7 +285,6 @@ export const defaultConfig: PolishedTuiConfig = {
 		tokens: "bright-black",
 		cacheHit: "bright-black",
 		cost: "bold green",
-		separator: "bright-black",
 		runtimePrefix: "",
 		extensionStatus: "bright-black",
 		sessionDuration: "yellow",
@@ -381,36 +305,6 @@ export const defaultConfig: PolishedTuiConfig = {
 		editor: true,
 		statusLine: true,
 		copyFriendly: false,
-	},
-	footerSegments: {
-		model: false,
-		thinking: false,
-		cwd: true,
-		sessionName: true,
-		gitBranch: true,
-		gitStatus: true,
-		gitCounts: false,
-		runtime: true,
-		context: true,
-		tokens: true,
-		cacheHit: false,
-		cost: true,
-		sessionDuration: false,
-		username: false,
-		time: false,
-		os: false,
-		packageVersion: false,
-		gitCommit: false,
-		gitMetrics: false,
-	},
-	gitCommit: {
-		hashLength: 7,
-		onlyDetached: true,
-		showTag: true,
-	},
-	gitMetrics: {
-		onlyNonzero: true,
-		ignoreSubmodules: false,
 	},
 	extensionStatuses: {
 		defaultPlacement: "right",
@@ -458,14 +352,6 @@ function parseEditorModelLabel(value: unknown): ModelLabelSource {
 	return defaultConfig.editorModelLabel;
 }
 
-export function isSeparatorStyle(value: unknown): value is SeparatorStyle {
-	return value === "pipe" || value === "dot" || value === "chevron" || value === "none";
-}
-
-function parseSeparatorStyle(value: unknown): SeparatorStyle {
-	return isSeparatorStyle(value) ? value : defaultConfig.separator;
-}
-
 function parseContextThresholds(value: unknown): ContextThresholds {
 	const defaults = defaultConfig.contextThresholds;
 	if (!isRecord(value)) return { ...defaults };
@@ -503,14 +389,21 @@ function parsePathDisplay(value: unknown): PathDisplayConfig {
 function normalizeGitBranchMaxLength(value: unknown): GitBranchMaxLength {
 	if (value === "full") return value;
 	if (typeof value === "number" && Number.isInteger(value) && value > 0) return value;
-	return defaultConfig.gitBranch.maxLength;
+	return defaultConfig.git.branch.maxLength;
 }
 
-function parseGitBranchConfig(value: unknown): GitBranchConfig {
-	const defaults = defaultConfig.gitBranch;
-	if (!isRecord(value)) return { ...defaults };
+function parseGitConfig(value: unknown): GitConfig {
+	const defaults = defaultConfig.git;
+	if (!isRecord(value)) return structuredClone(defaults);
+	const branch = isRecord(value.branch) ? value.branch : {};
+	const commit = isRecord(value.commit) ? value.commit : {};
+	const metrics = isRecord(value.metrics) ? value.metrics : {};
 	return {
-		maxLength: normalizeGitBranchMaxLength(value.maxLength),
+		counts: typeof value.counts === "boolean" ? value.counts : defaults.counts,
+		hostIcon: typeof value.hostIcon === "boolean" ? value.hostIcon : defaults.hostIcon,
+		branch: { maxLength: normalizeGitBranchMaxLength(branch.maxLength) },
+		commit: normalizeGitCommitConfig(commit),
+		metrics: normalizeGitMetricsConfig(metrics),
 	};
 }
 
@@ -535,14 +428,6 @@ function colorSourceValue(
 function booleanValue(record: Record<string, unknown>, key: keyof UiFeaturesConfig): boolean {
 	const value = record[key];
 	return typeof value === "boolean" ? value : defaultConfig.features[key];
-}
-
-function footerSegmentValue(
-	record: Record<string, unknown>,
-	key: keyof FooterSegmentsConfig,
-): boolean {
-	const value = record[key];
-	return typeof value === "boolean" ? value : defaultConfig.footerSegments[key];
 }
 
 function definedColors(
@@ -643,7 +528,6 @@ function normalizeColors(record: Record<string, unknown>): Partial<PolishedTuiCo
 		tokens: colorValue(record, "tokens"),
 		cacheHit: colorValue(record, "cacheHit"),
 		cost: colorValue(record, "cost"),
-		separator: colorValue(record, "separator"),
 		runtimePrefix: colorValue(record, "runtimePrefix"),
 		extensionStatus: colorValue(record, "extensionStatus"),
 		sessionDuration: colorValue(record, "sessionDuration"),
@@ -713,34 +597,10 @@ function normalizeSegmentOptions(value: unknown): SegmentOptionsConfig {
 	};
 }
 
-function normalizeFooterSegments(record: Record<string, unknown>): FooterSegmentsConfig {
-	return {
-		model: footerSegmentValue(record, "model"),
-		thinking: footerSegmentValue(record, "thinking"),
-		cwd: footerSegmentValue(record, "cwd"),
-		sessionName: footerSegmentValue(record, "sessionName"),
-		gitBranch: footerSegmentValue(record, "gitBranch"),
-		gitStatus: footerSegmentValue(record, "gitStatus"),
-		gitCounts: footerSegmentValue(record, "gitCounts"),
-		runtime: footerSegmentValue(record, "runtime"),
-		context: footerSegmentValue(record, "context"),
-		tokens: footerSegmentValue(record, "tokens"),
-		cacheHit: footerSegmentValue(record, "cacheHit"),
-		cost: footerSegmentValue(record, "cost"),
-		sessionDuration: footerSegmentValue(record, "sessionDuration"),
-		username: footerSegmentValue(record, "username"),
-		time: footerSegmentValue(record, "time"),
-		os: footerSegmentValue(record, "os"),
-		packageVersion: footerSegmentValue(record, "packageVersion"),
-		gitCommit: footerSegmentValue(record, "gitCommit"),
-		gitMetrics: footerSegmentValue(record, "gitMetrics"),
-	};
-}
-
 /** Clamp hashLength to Git's valid abbreviation range [4, 40]. */
 function normalizeGitHashLength(value: unknown): number {
 	const parsed = typeof value === "number" ? value : Number(value);
-	if (!Number.isFinite(parsed)) return defaultConfig.gitCommit.hashLength;
+	if (!Number.isFinite(parsed)) return defaultConfig.git.commit.hashLength;
 	const rounded = Math.round(parsed);
 	return Math.min(40, Math.max(4, rounded));
 }
@@ -751,8 +611,9 @@ function normalizeGitCommitConfig(record: Record<string, unknown>): GitCommitCon
 		onlyDetached:
 			typeof record.onlyDetached === "boolean"
 				? record.onlyDetached
-				: defaultConfig.gitCommit.onlyDetached,
-		showTag: typeof record.showTag === "boolean" ? record.showTag : defaultConfig.gitCommit.showTag,
+				: defaultConfig.git.commit.onlyDetached,
+		showTag:
+			typeof record.showTag === "boolean" ? record.showTag : defaultConfig.git.commit.showTag,
 	};
 }
 
@@ -761,11 +622,11 @@ function normalizeGitMetricsConfig(record: Record<string, unknown>): GitMetricsC
 		onlyNonzero:
 			typeof record.onlyNonzero === "boolean"
 				? record.onlyNonzero
-				: defaultConfig.gitMetrics.onlyNonzero,
+				: defaultConfig.git.metrics.onlyNonzero,
 		ignoreSubmodules:
 			typeof record.ignoreSubmodules === "boolean"
 				? record.ignoreSubmodules
-				: defaultConfig.gitMetrics.ignoreSubmodules,
+				: defaultConfig.git.metrics.ignoreSubmodules,
 	};
 }
 
@@ -859,17 +720,6 @@ function isUiFeatureKey(value: string): value is keyof UiFeaturesConfig {
 	return value === "editor" || value === "statusLine" || value === "copyFriendly";
 }
 
-/**
- * Derived from the defaults rather than restated. The hand-written list had
- * drifted: `model`, `thinking` and `cacheHit` were missing, so every patch for
- * them was dropped without a word.
- */
-const footerSegmentKeys: ReadonlySet<string> = new Set(Object.keys(defaultConfig.footerSegments));
-
-function isFooterSegmentKey(value: string): value is keyof FooterSegmentsConfig {
-	return footerSegmentKeys.has(value);
-}
-
 function validColorSourceEntries(record: Record<string, unknown>): Partial<ColorSourcesConfig> {
 	return Object.fromEntries(
 		Object.entries(record).filter((entry): entry is [keyof ColorSourcesConfig, ColorSource] => {
@@ -886,15 +736,6 @@ function validUiFeatureEntries(record: Record<string, unknown>): Partial<UiFeatu
 			return isUiFeatureKey(key) && typeof value === "boolean";
 		}),
 	) as Partial<UiFeaturesConfig>;
-}
-
-function validFooterSegmentEntries(record: Record<string, unknown>): Partial<FooterSegmentsConfig> {
-	return Object.fromEntries(
-		Object.entries(record).filter((entry): entry is [keyof FooterSegmentsConfig, boolean] => {
-			const [key, value] = entry;
-			return isFooterSegmentKey(key) && typeof value === "boolean";
-		}),
-	) as Partial<FooterSegmentsConfig>;
 }
 
 type ConfigFileState =
@@ -998,33 +839,21 @@ export function mergeConfig(parsed: unknown): PolishedTuiConfig {
 	const features = isRecord(config.features)
 		? normalizeUiFeatures(config.features as Record<string, unknown>)
 		: defaultConfig.features;
-	const footerSegments = isRecord(config.footerSegments)
-		? normalizeFooterSegments(config.footerSegments as Record<string, unknown>)
-		: defaultConfig.footerSegments;
 	const extensionStatuses = isRecord(config.extensionStatuses)
 		? normalizeExtensionStatuses(config.extensionStatuses as Record<string, unknown>, palette)
 		: defaultConfig.extensionStatuses;
-	const gitCommit = isRecord(config.gitCommit)
-		? normalizeGitCommitConfig(config.gitCommit as Record<string, unknown>)
-		: defaultConfig.gitCommit;
-	const gitMetrics = isRecord(config.gitMetrics)
-		? normalizeGitMetricsConfig(config.gitMetrics as Record<string, unknown>)
-		: defaultConfig.gitMetrics;
-	const gitBranch = parseGitBranchConfig(config.gitBranch);
+	const git = parseGitConfig(config.git);
 	const mouse = isRecord(config.mouse)
 		? normalizeMouseConfig(config.mouse as Record<string, unknown>)
 		: defaultConfig.mouse;
 	const editorMetadataFormat = stringValue(config, "editorMetadataFormat");
 	return {
 		projectRefreshIntervalMs: parseProjectRefreshIntervalMs(config.projectRefreshIntervalMs),
-		footerStyle: parseFooterStyle(config.footerStyle),
 		pill: normalizePillConfig(config.pill),
-		footerFormat: stringValue(config, "footerFormat") ?? "",
 		// An explicit "" means "show nothing", which is how the model/thinking
 		// segments get moved down to the footer without leaving an empty row.
 		// Only a missing or non-string value falls back to the default.
 		editorMetadataFormat: editorMetadataFormat ?? DEFAULT_EDITOR_METADATA_FORMAT,
-		separator: parseSeparatorStyle(config.separator),
 		contextStyle: parseContextStyle(config.contextStyle),
 		segmentOptions: normalizeSegmentOptions(config.segmentOptions),
 		editorModelLabel: parseEditorModelLabel(config.editorModelLabel),
@@ -1038,8 +867,7 @@ export function mergeConfig(parsed: unknown): PolishedTuiConfig {
 		),
 		contextThresholds: parseContextThresholds(config.contextThresholds),
 		pathDisplay: parsePathDisplay(config.pathDisplay),
-		gitBranch,
-		gitHostIcon: config.gitHostIcon === true,
+		git,
 		icons: resolveConfiguredIcons(iconMode, iconOverrides),
 		colors: {
 			...defaultConfig.colors,
@@ -1047,9 +875,6 @@ export function mergeConfig(parsed: unknown): PolishedTuiConfig {
 		},
 		colorSources: { ...colorSources },
 		features: { ...features },
-		footerSegments: { ...footerSegments },
-		gitCommit,
-		gitMetrics,
 		extensionStatuses: {
 			defaultPlacement: extensionStatuses.defaultPlacement,
 			placements: { ...extensionStatuses.placements },
@@ -1150,27 +975,6 @@ export function saveUiFeaturesPatch(
 	});
 }
 
-export function saveFooterSegmentsPatch(
-	patch: Partial<FooterSegmentsConfig>,
-	path = configPath,
-): PolishedTuiConfig {
-	return mutateConfig(path, (record) => {
-		const existing = isRecord(record.footerSegments)
-			? { ...(record.footerSegments as Record<string, unknown>) }
-			: {};
-		record.footerSegments = {
-			...existing,
-			...validFooterSegmentEntries(patch),
-		};
-	});
-}
-
-export function saveFooterFormatPatch(value: string, path = configPath): PolishedTuiConfig {
-	return mutateConfig(path, (record) => {
-		record.footerFormat = typeof value === "string" ? value : "";
-	});
-}
-
 export function saveIconsModePatch(mode: IconMode, path = configPath): PolishedTuiConfig {
 	return mutateConfig(path, (record) => {
 		const existing = isRecord(record.icons) ? { ...(record.icons as Record<string, unknown>) } : {};
@@ -1184,15 +988,6 @@ export function saveIconsModePatch(mode: IconMode, path = configPath): PolishedT
 export function saveContextStylePatch(style: ContextStyle, path = configPath): PolishedTuiConfig {
 	return mutateConfig(path, (record) => {
 		record.contextStyle = parseContextStyle(style);
-	});
-}
-
-export function saveSeparatorPatch(
-	separator: SeparatorStyle,
-	path = configPath,
-): PolishedTuiConfig {
-	return mutateConfig(path, (record) => {
-		record.separator = parseSeparatorStyle(separator);
 	});
 }
 
@@ -1230,12 +1025,13 @@ export function saveGitBranchPatch(
 	path = configPath,
 ): PolishedTuiConfig {
 	return mutateConfig(path, (record) => {
-		const existing = isRecord(record.gitBranch)
-			? { ...(record.gitBranch as Record<string, unknown>) }
+		const existingGit = isRecord(record.git) ? { ...(record.git as Record<string, unknown>) } : {};
+		const existingBranch = isRecord(existingGit.branch)
+			? { ...(existingGit.branch as Record<string, unknown>) }
 			: {};
 		if (patch.maxLength !== undefined)
-			existing.maxLength = normalizeGitBranchMaxLength(patch.maxLength);
-		record.gitBranch = existing;
+			existingBranch.maxLength = normalizeGitBranchMaxLength(patch.maxLength);
+		record.git = { ...existingGit, branch: existingBranch };
 	});
 }
 

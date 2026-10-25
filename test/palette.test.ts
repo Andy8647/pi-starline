@@ -122,16 +122,14 @@ describe("mergeConfig palette integration", () => {
 	});
 
 	/**
-	 * footerFormat and editorMetadataFormat use `$name` for their own format
-	 * variables. Palette expansion must never reach them.
+	 * editorMetadataFormat uses `$name` for its own format variables. Palette
+	 * expansion must never reach it.
 	 */
 	it("does not touch format strings", () => {
 		const config = mergeConfig({
 			palette: { blue: "#7aa2f7", model: "#ff0000", cwd: "#00ff00" },
-			footerFormat: "$cwd $git_branch $model",
 			editorMetadataFormat: "$model  $provider",
 		});
-		expect(config.footerFormat).toBe("$cwd $git_branch $model");
 		expect(config.editorMetadataFormat).toBe("$model  $provider");
 	});
 

@@ -11,25 +11,20 @@ import {
 	type ExtensionStatusColorMode,
 	type ExtensionStatusPlacement,
 	ensureConfigExists,
-	type FooterSegmentsConfig,
 	type GitBranchConfig,
 	type IconMode,
 	loadConfig,
 	type MouseConfig,
 	type PathDisplayConfig,
 	type PolishedTuiConfig,
-	type SeparatorStyle,
 	saveColorSourcesPatch,
 	saveContextStylePatch,
 	saveExtensionStatusColorMode,
 	saveExtensionStatusPlacement,
-	saveFooterFormatPatch,
-	saveFooterSegmentsPatch,
 	saveGitBranchPatch,
 	saveIconsModePatch,
 	saveMousePatch,
 	savePathDisplayPatch,
-	saveSeparatorPatch,
 	saveUiFeaturesPatch,
 	type UiFeaturesConfig,
 } from "./config";
@@ -46,6 +41,7 @@ import {
 	resolveSessionStartEpoch,
 } from "./format";
 import { emptyGitStatus, readGitHost, readGitStatus } from "./git";
+import { gitProbeOptions } from "./git-probe";
 import { LiveContextController } from "./live-context";
 import { forgetLiveSession, installLiveSessionCapture } from "./live-session";
 import { installMouse } from "./mouse";
@@ -162,30 +158,20 @@ export default function (pi: ExtensionAPI) {
 	type ProjectRefreshTarget = { cwd: string; generation: number };
 	const refreshProjectState = async ({ cwd, generation }: ProjectRefreshTarget) => {
 		if (!sessionLifecycle.isCurrent(generation)) return;
-		const gitCommitConfig = currentConfig.gitCommit;
-		const gitMetricsConfig = currentConfig.gitMetrics;
-		const segments = currentConfig.footerSegments;
-		const fmt = currentConfig.footerFormat;
-		// Enable optional probes when the segment is on OR a custom footerFormat
-		// references the relevant variable. Mirrors the session-duration timer
-		// pattern so format-only users still get data.
-		const formatNeedsTag = /\$\{?(?:git_tag|tag)\b/.test(fmt);
-		const formatNeedsCommit = /\$\{?(?:git_commit|commit)\b/.test(fmt);
-		const formatNeedsMetrics = /\$\{?(?:git_metrics|git_added|git_deleted)\b/.test(fmt);
-		const formatNeedsPackage = /\$\{?(?:package|package_version)\b/.test(fmt);
-		const wantExactTag =
-			((segments.gitCommit || formatNeedsCommit) && gitCommitConfig.showTag) || formatNeedsTag;
-		const wantMetrics = segments.gitMetrics || formatNeedsMetrics;
-		const wantPackage = segments.packageVersion || formatNeedsPackage;
+		const probe = gitProbeOptions(currentConfig.pill.segments, {
+			showTag: currentConfig.git.commit.showTag,
+			hostIcon: currentConfig.git.hostIcon,
+		});
+		const wantPackage = currentConfig.pill.segments.includes("packageVersion");
 		const [git, runtime, packageVersion, gitHost] = await Promise.all([
 			readGitStatus(cwd, {
-				readExactTag: wantExactTag,
-				readMetrics: wantMetrics,
-				ignoreSubmodules: gitMetricsConfig.ignoreSubmodules,
+				readExactTag: probe.readExactTag,
+				readMetrics: probe.readMetrics,
+				ignoreSubmodules: currentConfig.git.metrics.ignoreSubmodules,
 			}),
 			readRuntimeInfo(cwd),
 			wantPackage ? readPackageVersionResult(cwd) : Promise.resolve(undefined),
-			currentConfig.gitHostIcon ? readGitHost(cwd) : Promise.resolve(undefined),
+			probe.readHost ? readGitHost(cwd) : Promise.resolve(undefined),
 		]);
 		if (!sessionLifecycle.isCurrent(generation)) return;
 		lastProjectCwd = applyProjectRefreshToState(state, {
@@ -227,18 +213,11 @@ export default function (pi: ExtensionAPI) {
 		lastDurationLabel = "";
 		const timer = setInterval(() => {
 			if (!sessionLifecycle.isCurrent()) return;
-			const segments = currentConfig.footerSegments;
-			const formatNeedsTimer =
-				currentConfig.footerFormat &&
-				/\$\{?(?:time|session_duration|duration)\b/.test(currentConfig.footerFormat);
-			if (
-				!(
-					currentConfig.features.statusLine &&
-					(segments.sessionDuration || segments.time || formatNeedsTimer)
-				)
-			)
+			const shown = currentConfig.pill.segments;
+			const wantsTime = shown.includes("time");
+			if (!(currentConfig.features.statusLine && (wantsTime || shown.includes("sessionDuration"))))
 				return;
-			if (segments.time || formatNeedsTimer) {
+			if (wantsTime) {
 				refresh();
 				return;
 			}
@@ -300,9 +279,7 @@ export default function (pi: ExtensionAPI) {
 	 * a restart.
 	 */
 	const queuePillCarriesTheQueue = () =>
-		currentConfig.features.statusLine &&
-		currentConfig.footerStyle === "pill" &&
-		currentConfig.pill.segments.includes("queue");
+		currentConfig.features.statusLine && currentConfig.pill.segments.includes("queue");
 
 	const installQueueRowHiding = () => {
 		cleanupQueueRows?.();
@@ -694,20 +671,11 @@ export default function (pi: ExtensionAPI) {
 					: undefined,
 			};
 		},
-		setFooterSegments(patch: Partial<FooterSegmentsConfig>) {
-			currentConfig = saveFooterSegmentsPatch(patch);
-		},
-		setFooterFormat(value: string) {
-			currentConfig = saveFooterFormatPatch(value);
-		},
 		setIconMode(mode: IconMode) {
 			currentConfig = saveIconsModePatch(mode);
 		},
 		setContextStyle(style: ContextStyle) {
 			currentConfig = saveContextStylePatch(style);
-		},
-		setSeparator(separator: SeparatorStyle) {
-			currentConfig = saveSeparatorPatch(separator);
 		},
 		setPathDisplay(patch: Partial<PathDisplayConfig>) {
 			currentConfig = savePathDisplayPatch(patch);
