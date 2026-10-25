@@ -331,6 +331,27 @@ describe("pill actions", () => {
 		expect(overlay?.offsetX).toBe(x - 1);
 	});
 
+	it("closes the pill's own bubble on a second click, and opens it on a third", () => {
+		const width = 80;
+		const { footer, custom } = makeFooter({ queued: true });
+		const line = footer.render(width)[0] ?? "";
+		const x = columnOf(line, "queued");
+		const done = vi.fn();
+
+		footer.handleMouse?.({ type: "click", x, y: 0, width });
+		expect(custom).toHaveBeenCalledTimes(1);
+		// Mounting the overlay is what makes it the open bubble.
+		const [factory] = custom.mock.calls[0] ?? [];
+		(factory as BubbleFactory)({}, theme, {}, done);
+
+		expect(footer.handleMouse?.({ type: "click", x, y: 0, width })).toEqual({ handled: true });
+		expect(done).toHaveBeenCalledTimes(1);
+		expect(custom).toHaveBeenCalledTimes(1);
+
+		footer.handleMouse?.({ type: "click", x, y: 0, width });
+		expect(custom).toHaveBeenCalledTimes(2);
+	});
+
 	it("falls back to explaining the wait when the session is not readable", () => {
 		const { footer, custom } = makeFooter({ queued: true });
 		const line = footer.render(80)[0] ?? "";

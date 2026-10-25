@@ -35,7 +35,7 @@ import { requestPointerShape } from "./mouse/pointer-shape";
 import { collectPillInputs, type PillSpan, renderPillBar } from "./pill";
 import { pillActionFor, queuedSegmentText, runPillAction } from "./pill-actions";
 import { clearPillAnchors, setPillAnchors } from "./pill-anchors";
-import type { PillAnchor } from "./pill-bubble";
+import { closePillBubble, isPillBubbleOpenFor, type PillAnchor } from "./pill-bubble";
 import type { FooterState } from "./state";
 import { renderStyleForSource } from "./style";
 import { subagentsSegmentText } from "./subagent-fleet";
@@ -290,6 +290,7 @@ export function installFooter(
 				// Same columns, plus the colours, for anything that wants to sit next to
 				// this pill later — a bubble today, whatever the next action needs.
 				anchors.set(span.key, {
+					key: span.key,
 					startColumn: bodyStartColumn,
 					centerColumn: Math.floor((startColumn + endColumn - 1) / 2),
 					terminalWidth: width,
@@ -351,7 +352,13 @@ export function installFooter(
 				// that turns into a drag never produces one, which is what keeps a stray
 				// gesture from opening a bubble.
 				if (event.type === "click") {
+					// Clicking the pill again puts its bubble away, like a menu-bar item.
+					if (isPillBubbleOpenFor(hit.key)) {
+						closePillBubble();
+						return { handled: true };
+					}
 					runPillAction(action, ctx, {
+						key: hit.key,
 						startColumn: hit.bodyStartColumn,
 						centerColumn: Math.floor((hit.startColumn + hit.endColumn - 1) / 2),
 						terminalWidth: width,
@@ -511,7 +518,7 @@ export function installFooter(
 								theme,
 								colorSource,
 								config.colors.subagents,
-								subagentsSegmentText(),
+								withIcon(config.icons.subagents, subagentsSegmentText()),
 							);
 						case "cwd":
 							return cwdLabel;

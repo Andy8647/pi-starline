@@ -2,6 +2,7 @@ import { visibleWidth } from "@earendil-works/pi-tui";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	closePillBubble,
+	isPillBubbleOpenFor,
 	type PillAnchor,
 	pillBubblePlacement,
 	pillBubbleWidth,
@@ -195,6 +196,16 @@ describe("showPillBubble", () => {
 		expect(bubble.render(30).length).toBeGreaterThan(0);
 		bubble.handleInput("\x1b");
 		expect(done).toHaveBeenCalledTimes(1);
+	});
+
+	it("remembers which pill opened it, until it closes", () => {
+		const { ctx, custom } = fakeContext();
+		showPillBubble(ctx, content, anchor({ key: "queue" }));
+		const bubble = openBubble(custom, vi.fn());
+		expect(isPillBubbleOpenFor("queue")).toBe(true);
+		expect(isPillBubbleOpenFor("thinking")).toBe(false);
+		bubble.handleInput("\x1b");
+		expect(isPillBubbleOpenFor("queue")).toBe(false);
 	});
 
 	it("does nothing without a UI", () => {

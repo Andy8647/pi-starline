@@ -54,6 +54,11 @@ const MAX_BUBBLE_WIDTH = 64;
  */
 export type PillAnchor = {
 	/**
+	 * The segment key of the pill. A click on the pill whose bubble is already
+	 * open closes it instead of opening it again.
+	 */
+	key?: string;
+	/**
 	 * First column painted in the pill's colour. The bubble lines its left edge up
 	 * with it; without it the bubble is centred on `centerColumn` instead.
 	 */
@@ -220,10 +225,17 @@ export function renderPillBubble(input: {
  * than stacking two overlays on the same footer.
  */
 let closeActiveBubble: (() => void) | undefined;
+/** The pill the open bubble belongs to, when it was opened from one. */
+let activeBubbleKey: string | undefined;
 
 /** Dismiss the open bubble, if any. */
 export function closePillBubble(): void {
 	closeActiveBubble?.();
+}
+
+/** Whether the open bubble is the one the pill `key` opened. */
+export function isPillBubbleOpenFor(key: string): boolean {
+	return closeActiveBubble !== undefined && activeBubbleKey === key;
 }
 
 /**
@@ -252,10 +264,14 @@ export function showPillBubble(
 				const close = () => {
 					if (!mounted) return;
 					mounted = false;
-					if (closeActiveBubble === close) closeActiveBubble = undefined;
+					if (closeActiveBubble === close) {
+						closeActiveBubble = undefined;
+						activeBubbleKey = undefined;
+					}
 					done(undefined);
 				};
 				closeActiveBubble = close;
+				activeBubbleKey = anchor?.key;
 
 				return {
 					render(renderWidth: number): string[] {
@@ -300,7 +316,10 @@ export function showPillBubble(
 					},
 					dispose(): void {
 						mounted = false;
-						if (closeActiveBubble === close) closeActiveBubble = undefined;
+						if (closeActiveBubble === close) {
+							closeActiveBubble = undefined;
+							activeBubbleKey = undefined;
+						}
 					},
 				};
 			},
