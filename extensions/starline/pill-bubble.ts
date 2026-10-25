@@ -169,7 +169,9 @@ function buildBubble(input: {
 
 	const edge = (glyph: string) => `${DEFAULT_BG}${fillFg}${glyph.repeat(width)}${RESET}`;
 	const row = (text: string, style = "") =>
-		`${background}${foreground}${style}  ${text}${STYLE_OFF}${" ".repeat(
+		// The style starts after the left padding and ends before the right, so an
+		// underline covers the words and not the margin around them.
+		`${background}${foreground}  ${style}${text}${STYLE_OFF}${" ".repeat(
 			Math.max(0, innerWidth - visibleWidth(text)),
 		)}  ${RESET}`;
 

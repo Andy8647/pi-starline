@@ -151,6 +151,9 @@ describe("renderPillBubble", () => {
 		const underlined = lines.filter((line) => line.includes("\x1b[4m"));
 		expect(underlined).toHaveLength(1);
 		expect(strip(underlined[0] ?? "")).toContain("▸ selectable");
+		// The margin is not part of the target's underline.
+		const [, afterUnderline] = (underlined[0] ?? "").split("\x1b[4m");
+		expect(strip(afterUnderline ?? "").startsWith("▸ selectable")).toBe(true);
 	});
 });
 
