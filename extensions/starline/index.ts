@@ -66,6 +66,13 @@ import { installSelectorBorderStyle } from "./selector-border";
 import { SessionLifecycle } from "./session-lifecycle";
 import { registerStarlineSettingsCommand } from "./settings-command";
 import { createInitialState, type FooterState, syncState } from "./state";
+import {
+	createSubagentFleet,
+	type EventBusLike,
+	getActiveSubagentFleet,
+	SUBAGENT_TOOL_NAME,
+	setActiveSubagentFleet,
+} from "./subagent-fleet";
 import { PolishedEditor, WrappedPolishedEditor } from "./ui";
 import { installUserMessageStyle } from "./user-message";
 import { setWorkingIndicator } from "./working-indicator";
@@ -297,6 +304,24 @@ export default function (pi: ExtensionAPI) {
 	const uninstallQueueRowHiding = () => {
 		cleanupQueueRows?.();
 		cleanupQueueRows = undefined;
+	};
+
+	/**
+	 * Follow what pi-subagents is running, for the `subagents` pill. Its public RPC
+	 * answers on `pi.events`; without the package nothing answers and the pill
+	 * stays off. One request now picks up runs restored with the session.
+	 */
+	const installSubagentFleet = () => {
+		const bus = (pi as { events?: EventBusLike }).events;
+		if (!bus) return;
+		const fleet = createSubagentFleet(bus, { onChange: refresh });
+		setActiveSubagentFleet(fleet);
+		fleet.refresh();
+	};
+
+	/** A foreground run starts with no event of its own, only the tool call. */
+	const refreshFleetForTool = (event: { toolName?: string }) => {
+		if (event.toolName === SUBAGENT_TOOL_NAME) getActiveSubagentFleet()?.refresh();
 	};
 
 	/**
@@ -555,6 +580,7 @@ export default function (pi: ExtensionAPI) {
 		stopProjectRefresh();
 		installSessionCapture();
 		installQueueRowHiding();
+		installSubagentFleet();
 		applyConfiguredUi(ctx);
 		installMousePatches();
 		refresh();
@@ -578,6 +604,7 @@ export default function (pi: ExtensionAPI) {
 			uninstallMouse();
 			uninstallSessionCapture();
 			uninstallQueueRowHiding();
+			setActiveSubagentFleet(undefined);
 			uninstallPrototypePatches();
 			setWorkingIndicator(undefined);
 			stopSessionTimer();
@@ -726,9 +753,13 @@ export default function (pi: ExtensionAPI) {
 	});
 	pi.on("tool_execution_start", (event, ctx) => {
 		liveContext.clear();
+		refreshFleetForTool(event);
 		syncInteractiveState(event, ctx);
 	});
-	pi.on("tool_execution_end", syncInteractiveAndProjectState);
+	pi.on("tool_execution_end", (event, ctx) => {
+		refreshFleetForTool(event);
+		syncInteractiveAndProjectState(event, ctx);
+	});
 	pi.on("session_compact", (event, ctx) => {
 		liveContext.clear();
 		syncInteractiveAndProjectStateWithUsage(event, ctx);

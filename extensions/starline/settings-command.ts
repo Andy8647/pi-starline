@@ -191,6 +191,7 @@ const directCommandSuggestions = [
 	"mouse disable",
 	"mouse toggle",
 	"queue",
+	"subagents",
 	"thinking",
 	"format clear",
 	"format $cwd on $git_branch $fill $context",

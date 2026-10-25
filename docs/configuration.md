@@ -324,7 +324,7 @@ A reference that does not resolve is left as written, so the segment renders uns
 
 | Key | Values | Meaning |
 | --- | --- | --- |
-| `segments` | `footerSegments` keys, `queue`, `extensionStatus`, `extensionStatus:<key>` | Order, left to right |
+| `segments` | `footerSegments` keys, `queue`, `subagents`, `extensionStatus`, `extensionStatus:<key>` | Order, left to right |
 | `separator` | `powerline` (default), `powerline-thin`, `none` | Glyph between pills |
 | `bold` | `true` (default), `false` | Bold segment text |
 | `caps` | `round` (default), `right`, `none` | How the bar's ends are closed |
@@ -332,6 +332,7 @@ A reference that does not resolve is left as written, so the segment renders uns
 Notes:
 
 - **The `queue` pill is clickable.** It exists only while messages are waiting for the current turn to end, so it costs no space the rest of the time. Clicking it, or running `/starline queue`, opens a bubble that grows up out of the pill, in the pill's own colour: it says how many messages are queued and shows their first lines. The pill itself still says `queued` rather than a number, because it is one word wide. While the queue pill is enabled, Pi's own `Steering: …` rows above the editor are hidden, so the queue is shown once rather than twice; remove `queue` from `pill.segments` (or switch the status line off) and Pi's rows come back. `colors.queue` (default `bold yellow`) colours the pill and the bubble, and `$queue` renders the same word in a text `footerFormat`.
+- **The `subagents` pill is clickable.** With [`pi-subagents`](https://github.com/nicobailon/pi-subagents) installed, it appears while subagents are running and says how many (`2 agents`); it disappears when they finish, and without pi-subagents it never appears. Clicking it, or running `/starline subagents`, opens the bubble with one line per run: agent (and step label), model, time running and tokens so far. `/subagents-fleet` still opens pi-subagents' own inspector for steering and stopping. The numbers come from pi-subagents' public in-process RPC, refreshed when a run starts or ends rather than on a timer. If the pill replaces pi-subagents' FleetView and async widget for you, turn those off in `~/.pi/agent/extensions/subagent/config.json` with `"fleetView": false` and `"asyncWidget": false`. `colors.subagents` (default `bold green`) colours the pill and the bubble, and `$subagents` renders the same text in a text `footerFormat`.
 - **The `thinking` pill is clickable.** A click opens the same bubble with every thinking level the model supports, the current one marked; click another level to switch. Opening it changes nothing. `off` is not offered, so the pill stays on screen. `/starline thinking` steps to the next level from the keyboard and reports the step (`medium → high`).
 - **Colours need no extra configuration.** A segment's existing `colors.*` entry, which is a foreground in text mode, becomes the pill background here. Text colour is picked automatically for legibility unless you set `fg:` yourself.
 - `extensionStatus` is not one segment but however many other extensions have registered (balance, automode, mcp, …). Listing it expands to all of them; `extensionStatus:<key>` places one specific status, and it is not repeated by a later `extensionStatus`.
@@ -554,6 +555,7 @@ Center the branch between directory and cost:
 | `$os`               |              | operating-system icon                                               |
 | `$time`             |              | current time `HH:MM`                                                |
 | `$queue`            |              | `queued` while messages wait for the current turn, empty otherwise   |
+| `$subagents`        |              | `2 agents` while pi-subagents runs something, empty otherwise        |
 | `$context`          |              | context usage (text and/or gauge via config)                        |
 | `$tokens`           |              | input/output token counts                                           |
 | `$cost`             |              | session cost                                                        |

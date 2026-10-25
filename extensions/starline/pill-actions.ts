@@ -23,6 +23,7 @@ import {
 import { externalPillAction } from "./pill-api";
 import { type PillAnchor, type PillBubbleContent, showPillBubble } from "./pill-bubble";
 import { PILL_SEGMENT_VARIABLES } from "./pill-config";
+import { type FleetSnapshot, getActiveSubagentFleet } from "./subagent-fleet";
 
 /** What an action gets: the session, and where the pill is if a click found it. */
 export type PillActionContext = {
@@ -177,12 +178,69 @@ function showThinkingLevel({ ctx, pill, via }: PillActionContext): void {
 	);
 }
 
+/** `45s`, `3m 12s`, `1h 05m`: what a glance at a running agent needs. */
+export function formatElapsed(milliseconds: number): string {
+	const seconds = Math.max(0, Math.floor(milliseconds / 1000));
+	if (seconds < 60) return `${seconds}s`;
+	const minutes = Math.floor(seconds / 60);
+	if (minutes < 60) return `${minutes}m ${String(seconds % 60).padStart(2, "0")}s`;
+	return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
+}
+
+function formatTokens(tokens: number): string {
+	return tokens >= 1000 ? `${Math.round(tokens / 1000)}k tok` : `${tokens} tok`;
+}
+
+/**
+ * One line per running agent: who, on what model, for how long, at what cost.
+ * The model's provider prefix is dropped; the bubble is narrow and the name is
+ * what tells two runs apart.
+ */
+export function subagentsBubbleContent(fleet: FleetSnapshot, now = Date.now()): PillBubbleContent {
+	const listed = fleet.entries.map((entry) => {
+		const name = entry.role ? `${entry.role} (${entry.agent})` : entry.agent;
+		const parts = [name];
+		if (entry.model) parts.push(entry.model.split("/").at(-1) ?? entry.model);
+		parts.push(formatElapsed(now - entry.startedAt));
+		if (entry.tokens > 0) parts.push(formatTokens(entry.tokens));
+		return `· ${truncateToWidth(parts.join(" · "), MAX_MESSAGE_COLUMNS, "…")}`;
+	});
+	const unlisted = Math.max(fleet.omitted, fleet.totalActive - fleet.entries.length);
+	if (unlisted > 0) listed.push(`· +${unlisted} more`);
+	const total = fleet.totalActive;
+	return {
+		title: total > 0 ? `${total} subagent${total === 1 ? "" : "s"} running` : "Subagents",
+		body: total > 0 ? listed : ["Nothing is running."],
+		hint: "/subagents-fleet for details · esc to close",
+	};
+}
+
+/** How long a click waits for fresh numbers before showing the ones it has. */
+const FLEET_FETCH_TIMEOUT_MS = 400;
+
+/**
+ * Ask pi-subagents for the current fleet, then show it. The pill's count may be
+ * a moment old and the elapsed times always are, so the bubble asks again; a
+ * slow answer falls back to the last one rather than keeping the click waiting.
+ */
+async function showSubagents({ ctx, pill }: PillActionContext): Promise<void> {
+	const fleet = getActiveSubagentFleet();
+	if (!fleet) return;
+	const fresh = await fleet.fetch(FLEET_FETCH_TIMEOUT_MS);
+	if (!fresh && !fleet.available()) {
+		if (ctx.hasUI) ctx.ui.notify("pi-subagents is not installed or not answering", "info");
+		return;
+	}
+	showPillBubble(ctx, subagentsBubbleContent(fresh ?? fleet.snapshot()), pill);
+}
+
 /**
  * Segment key → action. Segments with no entry are labels: a click on one is not
  * handled, so nothing is swallowed.
  */
 export const PILL_ACTIONS: Readonly<Partial<Record<string, PillAction>>> = {
 	queue: showQueuedMessages,
+	subagents: showSubagents,
 	thinking: showThinkingLevel,
 };
 

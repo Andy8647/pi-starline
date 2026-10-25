@@ -56,6 +56,17 @@ npm.
   popover for free. Design and phases are in
   [docs/clickable-pills.md](https://github.com/Andy8647/pi-starline/blob/main/docs/clickable-pills.md).
 
+- **A pill for running subagents.** With `pi-subagents` installed, a `subagents`
+  pill appears while subagents are running and counts them (`2 agents`). Click it, or
+  run `/starline subagents`, for one line per run: agent, model, how long it has
+  been running and its tokens so far. It reads pi-subagents' public in-process RPC
+  and refreshes when a run starts or ends, never on a timer; without the package it
+  simply never appears. `subagents` is part of the default pill bar — add it to your
+  own `pill.segments` if you keep one — and `colors.subagents` (default `bold
+  green`) and `$subagents` work like their `queue` counterparts. To let the pill
+  replace pi-subagents' own FleetView and async widget, set `"fleetView": false` and
+  `"asyncWidget": false` in its config.
+
 - **The pointer turns into a hand over anything clickable.** Hovering a pill that
   has an action, or a clickable line in its bubble, switches the mouse pointer to a
   hand, and it switches back as soon as the pointer moves off. Needs a terminal that
@@ -66,8 +77,7 @@ npm.
   API on `globalThis` under `Symbol.for("pi-starline.pill-api.v1")`. An extension
   that publishes a status with `ctx.ui.setStatus()` registers an action for that
   key and opens the standard bubble with its own detail — `pi-balance` can show 5h
-  and 7d numbers, `pi-subagents` its runs, without rendering or positioning
-  anything. Every bridged action is also reachable as `/starline <key>`, and the
+  and 7d numbers, without rendering or positioning anything. Every bridged action is also reachable as `/starline <key>`, and the
   action is told which way it was reached (`via: "click" | "command"`). The
   protocol, a working example and the load-order/`/reload` rules are in
   [docs/clickable-pills.md](https://github.com/Andy8647/pi-starline/blob/main/docs/clickable-pills.md#a-protocol-for-other-extensions).

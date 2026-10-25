@@ -38,6 +38,7 @@ import { clearPillAnchors, setPillAnchors } from "./pill-anchors";
 import type { PillAnchor } from "./pill-bubble";
 import type { FooterState } from "./state";
 import { renderStyleForSource } from "./style";
+import { subagentsSegmentText } from "./subagent-fleet";
 import { modelPillIcon, readWorkingFrame } from "./working-indicator";
 
 const separatorText: Record<SeparatorStyle, string> = {
@@ -505,6 +506,13 @@ export function installFooter(
 								config.colors.queue,
 								queuedSegmentText(ctx),
 							);
+						case "subagents":
+							return renderStyleForSource(
+								theme,
+								colorSource,
+								config.colors.subagents,
+								subagentsSegmentText(),
+							);
 						case "cwd":
 							return cwdLabel;
 						case "session_name":
@@ -806,6 +814,8 @@ export function installFooter(
 								return config.colors.thinking ?? thinkingThemeKey(thinkingText);
 							case "queue":
 								return config.colors.queue;
+							case "subagents":
+								return config.colors.subagents;
 							case "cwd":
 								return config.colors.cwd;
 							case "sessionName":

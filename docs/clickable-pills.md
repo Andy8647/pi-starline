@@ -59,9 +59,9 @@ works without staging anything.
 - **`ModelSelectorComponent`** is exported from `@earendil-works/pi-coding-agent`, so
   the model picker can be Pi's own instead of a look-alike.
 - **`ctx.ui.setStatus(key, text)`** is how another extension publishes a pill
-  today; `extensionStatus:<key>` in `pill.segments` already renders one. A bridge
-  for `pi-subagents` (which never calls `setStatus`) is a ~30 line extension with
-  **zero** changes here.
+  today; `extensionStatus:<key>` in `pill.segments` already renders one.
+  `pi-subagents` never calls `setStatus`, but it publishes a versioned in-process
+  RPC on `pi.events`, which is what the built-in `subagents` pill reads (below).
 - **A `Container` forwards to its children.** `Container.handleMouse` (`tui.js:116`)
   walks its children by rendered height and re-dispatches with `y` rebased to the
   child, `x` unchanged. A component mounted inside one of Pi's container slots —
@@ -269,6 +269,28 @@ that call `setThinkingLevel()`. Opening the list changes nothing. `/starline
 thinking` has no pointer to pick with, so it steps to the next level instead and
 reports `from → to`.
 
+## The subagents pill
+
+`pi-subagents` draws its own FleetView and widget and publishes no status, so there
+is nothing for a bridge to hang off. What it does publish is an in-process RPC on
+`pi.events` (`subagents:rpc:v1`, documented in its `docs/extension-api.md`): an
+untargeted `status` request answers from in-memory state with a versioned `fleet`
+record — every active run, foreground and background, with agent, step label,
+model, effort, start time and tokens.
+
+Because that RPC is a published contract, the pill is built in rather than asking
+the package to adopt the pill API. `subagent-fleet.ts` sends `status` and caches the
+answer; it asks again on the package's lifecycle events (`subagent:async-started`,
+`-complete`, `foreground-complete`, `child-status`, …) and on Pi's
+`tool_execution_start`/`end` for the `subagent` tool, since a foreground run starts
+with no event of its own. Bursts collapse into one request, there is no timer, and
+the footer only redraws when the count changes. A click asks once more (400 ms,
+then the cached answer) so the elapsed times are current. Without pi-subagents the
+requests go unanswered and the pill never appears.
+
+Verified against pi-subagents 0.82.0: the same request from a probe extension gets
+`{ success: true, data: { fleet: { version: 1, entries, totalActive, omitted } } }`.
+
 ## Hiding Pi's own queue rows
 
 Pi draws `Steering: …` rows and a dequeue hint above the editor from
@@ -291,7 +313,7 @@ field on the extension context plus a switch for the rows; `live-session.ts` and
 | 2 | Model picker via `ModelSelectorComponent` | M |
 | 3 | Branch switcher (list local branches, confirm on a dirty worktree, `git checkout`) | M |
 | 4 ✅ | Extension-status click hook: a status key opts in by publishing structured data — shipped as the published pill API, which also covers `pi-subagents` and any other extension | S–M |
-| — | `pi-subagents` status bridge (separate package, no changes here) | S |
+| 5 ✅ | `subagents` pill: count of running subagents, bubble listing them, read from pi-subagents' public RPC | S |
 
 Phase 1 was the only phase that touched rendering; phases 2–4 are actions added to a
 table that already works, which is the point of doing it in that order. Phase 1

@@ -225,6 +225,8 @@ export type PolishedTuiConfig = {
 		thinking?: ColorSpec;
 		/** The queued-messages pill, which only exists while something is queued. */
 		queue: ColorSpec;
+		/** The running-subagents pill, which only exists while pi-subagents runs something. */
+		subagents: ColorSpec;
 		cwd: ColorSpec;
 		sessionName: ColorSpec;
 		gitBranch: ColorSpec;
@@ -279,6 +281,7 @@ export const FOOTER_FORMAT_VARIABLES = [
 	"model",
 	"thinking",
 	"queue",
+	"subagents",
 	"cwd",
 	"session_name",
 	"git_branch",
@@ -346,6 +349,7 @@ export const defaultConfig: PolishedTuiConfig = {
 	colors: {
 		model: "bold blue",
 		queue: "bold yellow",
+		subagents: "bold green",
 		cwd: "bold cyan",
 		sessionName: "bold green",
 		gitBranch: "bold purple",
@@ -628,6 +632,7 @@ function normalizeColors(record: Record<string, unknown>): Partial<PolishedTuiCo
 		model: colorValue(record, "model"),
 		thinking: colorValue(record, "thinking"),
 		queue: colorValue(record, "queue"),
+		subagents: colorValue(record, "subagents"),
 		cwd: colorValue(record, "cwd") ?? colorValue(record, "cwdText"),
 		sessionName: colorValue(record, "sessionName"),
 		gitBranch: colorValue(record, "gitBranch") ?? colorValue(record, "git"),
