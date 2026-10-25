@@ -10,6 +10,31 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [Unreleased]
+
+**Added**
+
+- **The queue now shows up in the footer, and clicking it explains itself.** In the
+  pill footer a new `queue` segment appears while messages are waiting for the
+  current turn to end — a pill reading `queued`, gone again as soon as the queue
+  drains, so it costs nothing the rest of the time. Clicking it opens a short panel;
+  `/starline queue` does the same from the keyboard. The pill says a word rather
+  than a number on purpose: Pi's extension API exposes that something is queued but
+  not how many messages there are or what they say.
+
+  `queue` is part of the default pill bar. If you maintain your own
+  `pill.segments`, add `"queue"` to it; `colors.queue` (default `bold yellow`)
+  colours the pill, and `$queue` renders the same word in a text `footerFormat`.
+
+- **Pills can now be clicked.** The footer maps a mouse click to the pill under the
+  pointer and runs that segment's action, with no new prototype patch: the pill bar
+  records the columns each segment occupied in the render that drew it, including
+  truncation and wide characters. Pills with no action stay labels, and the click
+  falls through instead of being swallowed, so only the queue pill responds for now.
+  Every action also has a `/starline` subcommand, so nothing new is mouse-only.
+  The design and the phases still to come are in
+  [docs/clickable-pills.md](https://github.com/Andy8647/pi-starline/blob/main/docs/clickable-pills.md).
+
 ## [0.3.9] - 2026-10-25
 
 Two things about repositories being written to and events being handled twice —
@@ -485,7 +510,7 @@ What this fork adds over upstream:
   selection
 - Paste collapsing, with paste-again-to-expand
 
-[Unreleased]: https://github.com/Andy8647/pi-starline/compare/v0.3.7...HEAD
+[Unreleased]: https://github.com/Andy8647/pi-starline/compare/v0.3.9...HEAD
 [0.3.7]: https://github.com/Andy8647/pi-starline/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/Andy8647/pi-starline/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/Andy8647/pi-starline/compare/v0.3.4...v0.3.5

@@ -306,6 +306,7 @@ A reference that does not resolve is left as written, so the segment renders uns
 		"segments": [
 			"model",
 			"thinking",
+			"queue",
 			"cwd",
 			"gitBranch",
 			"gitStatus",
@@ -323,13 +324,14 @@ A reference that does not resolve is left as written, so the segment renders uns
 
 | Key | Values | Meaning |
 | --- | --- | --- |
-| `segments` | `footerSegments` keys, `extensionStatus`, `extensionStatus:<key>` | Order, left to right |
+| `segments` | `footerSegments` keys, `queue`, `extensionStatus`, `extensionStatus:<key>` | Order, left to right |
 | `separator` | `powerline` (default), `powerline-thin`, `none` | Glyph between pills |
 | `bold` | `true` (default), `false` | Bold segment text |
 | `caps` | `round` (default), `right`, `none` | How the bar's ends are closed |
 
 Notes:
 
+- **The `queue` pill is clickable.** It exists only while messages are waiting for the current turn to end, so it costs no space the rest of the time. Clicking it, or running `/starline queue`, opens a panel that explains the wait; Pi does not yet tell extensions how many messages are queued or what they say, so the pill says `queued` rather than inventing a number. `colors.queue` (default `bold yellow`) colours it, and `$queue` does the same thing in a text `footerFormat`.
 - **Colours need no extra configuration.** A segment's existing `colors.*` entry, which is a foreground in text mode, becomes the pill background here. Text colour is picked automatically for legibility unless you set `fg:` yourself.
 - `extensionStatus` is not one segment but however many other extensions have registered (balance, automode, mcp, …). Listing it expands to all of them; `extensionStatus:<key>` places one specific status, and it is not repeated by a later `extensionStatus`.
 - A status configured with `colorMode: "themed"` (the default) recolours the extension's status segment to match the rest of the bar. `colorMode: "original"` keeps the colours its own extension chose, on a neutral background.
@@ -550,6 +552,7 @@ Center the branch between directory and cost:
 | `$username`         |              | `user@host`                                                         |
 | `$os`               |              | operating-system icon                                               |
 | `$time`             |              | current time `HH:MM`                                                |
+| `$queue`            |              | `queued` while messages wait for the current turn, empty otherwise   |
 | `$context`          |              | context usage (text and/or gauge via config)                        |
 | `$tokens`           |              | input/output token counts                                           |
 | `$cost`             |              | session cost                                                        |

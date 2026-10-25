@@ -1,7 +1,13 @@
 # Clickable pills — design note
 
-Status: not implemented. This is the design and the survey behind it, written
-before any code so the pieces can be argued about separately.
+Status: **phase 1 implemented.** The footer has a `handleMouse`, the pill renderer
+records hit areas, actions live in one table, and the queue pill plus
+`/starline queue` are the first (mouse + keyboard) pair. Phases 2–4 are still
+design, and each of them is now an entry in that table rather than new plumbing.
+
+This document was written before the code so the pieces could be argued about
+separately. Paragraphs marked **As built** were corrected against Pi 1.4.0 while
+implementing phase 1.
 
 ## Goal
 
@@ -27,9 +33,16 @@ Four actions motivated this, in the order they are worth building:
 - **Mouse dispatch goes through the layout tree.** `TuiAltScreen.handleMouseEvent`
   → `dispatchMouseToLayout` walks the boxes under the pointer and calls
   `component.handleMouse(event)` with coordinates relative to that component's box
-  (`tui-alt-screen.js:644`). A box is only created for a component that declares
-  `[LAYOUT_NODE]()` (`layout-node.js`, `layout.js:50`); anything else is folded into
-  its parent's box.
+  (`tui-alt-screen.js:644`).
+
+  **As built:** every entry of a `vstack`/`hstack` gets a box, with or without a
+  layout node (`layoutComponent` in `layout.js`); a component that declares no
+  `[LAYOUT_NODE]()` simply gets a box with no children of its own. What
+  `dispatchMouseToLayout` skips is the narrower case of a component that *does*
+  declare a node and still uses `Container.prototype.handleMouse`, because there
+  the box is the whole container rather than one leaf. Pi's footer slot is a plain
+  `Container`, so it is a box, it is dispatched to, and its `handleMouse` forwards
+  into the footer with `y` rebased.
 - **`MouseRegion`** (`components/mouse-region.js`) is the documented way to add
   pointer behaviour to an existing component: it renders the child, forwards the
   event to it first, and only then calls its own handler.
@@ -49,13 +62,13 @@ Four actions motivated this, in the order they are worth building:
   `{x: 7, y: 0}` to its second child for a click at `{x: 7, y: 1}`, and delivers
   nothing to that child for a click on the first row.
 
-## Why the footer is not clickable today
+## Why the footer was not clickable before phase 1
 
 `installFooter` hands Pi a plain object with `render` / `invalidate` / `dispose`
 and no `handleMouse`. Pi's `footerContainer` would forward a click to it — the
-container does that for every child — but there is nothing to forward to, so the
-event stops at the container. Nothing is patched, nothing is in the way: the
-handler simply does not exist yet.
+container does that for every child — but there was nothing to forward to, so the
+event stopped at the container. Nothing had to be patched for it either: the
+handler simply did not exist.
 
 ## Design
 
@@ -65,6 +78,12 @@ No layout node, no wrapper. The footer already owns the one line it renders, and
 Pi's container rebases `y` into it, so `handleMouse(event)` receives exactly the
 coordinates the pill spans are measured in. An event that lands on no pill returns
 `undefined`, so a click on empty footer space falls through and swallows nothing.
+
+**As built:** the handler also claims `press`. Pi synthesizes a `click` only when a
+component accepted the `press` first, so an action cannot run on `click` alone. The
+press runs nothing; the action fires on the click, which Pi produces only when press
+and release landed on the same cell. A gesture that turns into a drag never becomes
+a click, which is the cheap half of the accidental-click risk below.
 
 Rejected: `MouseRegion`. It is the right tool when a handler wants to wrap
 *someone else's* component; here the footer and the handler are the same object,
@@ -82,11 +101,25 @@ clipped in the middle still answers for its visible cells.
 The map is stored on the footer instance, replaced on every render, and read only
 by `handleMouse`. No timers, no invalidation logic.
 
+**As built:** spans are keyed by render width, not "the last render", because a
+render is also how the layout measures; one frame can render the footer at more
+than one width and the map a click is matched against has to be the one that was
+drawn. A span covers the pill's own padding, the separator that points out of it,
+and the end caps, so the bar has no dead cells between two pills. Columns come from
+`visibleWidth`, never `string.length`, because segment text can be CJK.
+
+**As built:** an extension status pill's span key is still the status key, so the
+action lookup only answers for builtin segment names. A third-party status that
+happens to be called `queue` stays inert instead of opening Starline's panel.
+
 ### 3. Actions are a table, keyed by segment
 
 ```ts
 type PillAction = (context: PillActionContext) => void | Promise<void>;
-const pillActions: Partial<Record<PillSegmentKey, PillAction>> = { … };
+const PILL_ACTIONS: Readonly<Partial<Record<string, PillAction>>> = { … };
+
+/** Builtin segments only: an extension status pill carries its status key. */
+export function pillActionFor(key: string): PillAction | undefined;
 ```
 
 - A segment with no entry is inert: the click is not handled, so Pi's own handling
@@ -101,8 +134,11 @@ const pillActions: Partial<Record<PillSegmentKey, PillAction>> = { … };
 
 The queue list, the branch switcher and any future panel open through
 `ctx.ui.custom(..., { overlay: true })`. The footer stays one line; nothing about
-the layout changes when a popover is open, and `Escape` closes it through Pi's own
-overlay handling.
+the layout changes when a popover is open.
+
+**As built:** the panel closes on Escape (and Enter) through its own `handleInput`.
+Pi owns the overlay, but not the meaning of Escape inside it, so the dismiss key is
+part of the component rather than something the overlay stack does for us.
 
 ## The two things that cannot be built yet
 
@@ -123,14 +159,16 @@ overlay handling.
 
 | Phase | Content | Effort |
 | --- | --- | --- |
-| 1 | Footer `handleMouse`, pill span sink, action table, `/starline` action commands, one action (queue status → popover explaining what is queued) | M |
+| 1 ✅ | Footer `handleMouse`, pill span sink, action table, `/starline` action commands, one action (queue status → popover explaining what is queued) | M |
 | 2 | Model picker via `ModelSelectorComponent` | M |
 | 3 | Branch switcher (list local branches, confirm on a dirty worktree, `git checkout`) | M |
 | 4 | Extension-status click hook: a status key opts in by publishing structured data | S–M |
 | — | `pi-subagents` status bridge (separate package, no changes here) | S |
 
-Phase 1 is the only one that touches rendering; phases 2–4 are actions added to a
-table that already works, which is the point of doing it in that order.
+Phase 1 was the only phase that touched rendering; phases 2–4 are actions added to a
+table that already works, which is the point of doing it in that order. Phase 1
+landed as `extensions/starline/pill-actions.ts` (the table and the queue action),
+`PillSpan` in `pill.ts`, and `handleMouse` in `footer.ts`.
 
 ## What this does not need
 
@@ -146,12 +184,14 @@ table that already works, which is the point of doing it in that order.
 ## Risks and open questions
 
 - **Click targets on a narrow footer.** At 60 columns the queue pill may be
-  truncated to two cells. Decide whether a partially visible pill is still a
-  target (proposal: yes, for its visible cells).
+  truncated to two cells. **As built:** a partially visible pill is still a target
+  for its visible cells; a pill clipped away entirely is not in the map at all.
 - **Accidental clicks while selecting.** The footer sits below the editor, so a
   drag that starts in the transcript and ends on the footer is a selection, not a
-  click; Pi only synthesizes a click when press and release land on the same cell.
-  Nothing to build, but it belongs in the tests.
+  click. **As built:** Pi synthesizes a click only when press and release land on
+  the same cell, and the press itself runs nothing, so a gesture that slides off the
+  pill it started on never fires. `test/pill-click.test.ts` pins the press/click
+  split.
 - **Which segments are safe to make clickable.** `gitStatus`, `tokens` and `context`
   are read-outs; a click that does nothing is worse than an inert pill, so they
   stay inert until there is something to show.

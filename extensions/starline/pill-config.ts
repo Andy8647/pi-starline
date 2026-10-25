@@ -35,6 +35,7 @@ export const EXTENSION_STATUS_PREFIX = `${EXTENSION_STATUS_SEGMENT}:`;
 export const PILL_SEGMENT_VARIABLES: Record<string, string> = {
 	model: "model",
 	thinking: "thinking",
+	queue: "queue",
 	cwd: "cwd",
 	sessionName: "session_name",
 	gitBranch: "git_branch",
@@ -59,6 +60,7 @@ export const DEFAULT_PILL_CONFIG: PillConfig = {
 	segments: [
 		"model",
 		"thinking",
+		"queue",
 		"cwd",
 		"gitBranch",
 		"gitStatus",

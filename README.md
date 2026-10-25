@@ -29,6 +29,10 @@ pieces of one product, not a theme:
 - The model pill's icon becomes a spinner while the agent works — same cell, no
   reflow — and long statuses (`Retrying (1/3) in 4s...`) keep Pi's
   `── … ────` line on the editor's top border
+- **Clickable queue pill** — while messages wait for the current turn, the pill bar
+  gains a `queued` pill; click it (or run `/starline queue`) for an explanation of
+  what happens to them. Pi exposes only *whether* something is queued, so the pill
+  says a word rather than inventing a count
 - Right side shows context usage, token counts, and cost
 - Built-in footer segments can be shown or hidden individually from `/starline`
 - Fully custom Starship-style layout via a `footerFormat` template string — see [Footer Format Template](https://github.com/Andy8647/pi-starline/blob/main/docs/configuration.md#footer-format-template)
