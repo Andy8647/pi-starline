@@ -85,6 +85,9 @@ export default function (pi: ExtensionAPI) {
 - **The key is your status key.** That is how Starline knows which pill is yours.
   Starline's own segment names (`queue`, `model`, …) win over a status with the
   same key.
+- **A real one:** [pi-balance](https://github.com/Andy8647/pi-balance)'s
+  `src/starline-pill.ts` does exactly this, with a live "updated … ago" line and two
+  actions.
 - **Pass `pill` through.** It is where the footer drew your pill; without it the
   bubble opens centred above the footer instead of on your pill.
 - The types are optional: `pi-starline` as a dev dependency gives you
