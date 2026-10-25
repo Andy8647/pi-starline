@@ -69,7 +69,10 @@ const theme = {
 };
 
 /** The settings command reads config from deps; this keeps one object to edit. */
-function settingsHarness(initial: PolishedTuiConfig = defaultConfig) {
+function settingsHarness(
+	initial: PolishedTuiConfig = defaultConfig,
+	statuses: ReadonlyMap<string, string> = new Map(),
+) {
 	let config = initial;
 	let picked: string[] | undefined;
 	const notifications: string[] = [];
@@ -94,7 +97,7 @@ function settingsHarness(initial: PolishedTuiConfig = defaultConfig) {
 				picked = [...next];
 				config = { ...config, pill: { ...config.pill, segments: [...next] } };
 			},
-			getActiveExtensionStatuses: () => new Map<string, string>(),
+			getActiveExtensionStatuses: () => statuses,
 			setExtensionStatusPlacement() {},
 			setExtensionStatusColorMode() {},
 			setMouseConfig() {},
@@ -162,5 +165,62 @@ describe("/starline Pills tab", () => {
 		const rerendered = component.render(120).join("\n");
 		expect(rerendered).toMatch(/Thinking\s+1/);
 		expect(rerendered).toMatch(/Model\s+2/);
+	});
+
+	it("gives every status published this session its own row, after the built-ins", async () => {
+		const harness = settingsHarness(defaultConfig, new Map([["alpha", "41.1%"]]));
+		const component = await harness.open(3);
+
+		// Nineteen built-in rows, then one per status.
+		expect(component.render(120).join("\n")).toContain("1/20");
+
+		// The last row is the status, labelled with its key and off the bar.
+		for (let index = 0; index < PILL_SEGMENT_NAMES.length; index += 1) {
+			component.handleInput("\x1b[B");
+		}
+		const rendered = component.render(120).join("\n");
+		expect(rendered).toMatch(/alpha\s+off/);
+	});
+
+	it("puts one status on the bar where it is placed, leaving the catch-all alone", async () => {
+		const harness = settingsHarness(defaultConfig, new Map([["alpha", "41.1%"]]));
+		const component = await harness.open(3);
+		for (let index = 0; index < PILL_SEGMENT_NAMES.length; index += 1) {
+			component.handleInput("\x1b[B");
+		}
+
+		// `off` cycles to position 1.
+		component.handleInput(" ");
+
+		const picked = harness.picked() as string[];
+		expect(picked[0]).toBe("extensionStatus:alpha");
+		// The catch-all still owns every other status.
+		expect(picked).toContain("extensionStatus");
+		expect(picked).toHaveLength(segments.length + 1);
+		expect(harness.notifications).toContain("alpha: position 1");
+	});
+
+	it("shows where an already placed status sits, and cycles it off", async () => {
+		const placed: PolishedTuiConfig = {
+			...defaultConfig,
+			pill: {
+				...defaultConfig.pill,
+				segments: ["extensionStatus:alpha", ...segments],
+			},
+		};
+		const harness = settingsHarness(placed, new Map([["alpha", "41.1%"]]));
+		const component = await harness.open(3);
+		for (let index = 0; index < PILL_SEGMENT_NAMES.length; index += 1) {
+			component.handleInput("\x1b[B");
+		}
+
+		expect(component.render(120).join("\n")).toMatch(/alpha\s+1\b/);
+
+		// One space moves it from position 1 to position 2, like any other row.
+		component.handleInput(" ");
+		const picked = harness.picked() as string[];
+		expect(picked[0]).toBe(segments[0]);
+		expect(picked[1]).toBe("extensionStatus:alpha");
+		expect(harness.notifications).toContain("alpha: position 2");
 	});
 });

@@ -103,8 +103,9 @@ export function isKnownPillSegment(name: string): boolean {
 /**
  * Every segment name `/starline` can put on the bar, in a fixed order so the
  * rows do not move under the cursor when a position changes. Per-status
- * `extensionStatus:<key>` entries are JSON-only: the *Extension segments* tab
- * owns those keys.
+ * `extensionStatus:<key>` entries are not listed here: they depend on what other
+ * extensions published this session, and the *Pills* tab appends a row for each
+ * one after these.
  */
 export const PILL_SEGMENT_NAMES: readonly string[] = [
 	...Object.keys(PILL_SEGMENT_VARIABLES),
