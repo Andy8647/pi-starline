@@ -34,6 +34,8 @@ import {
 } from "./config";
 import { sanitizeExtensionStatusText } from "./extension-status";
 import { isIconMode } from "./icons";
+import { pillActionFor, runPillAction } from "./pill-actions";
+import { getPillAnchor } from "./pill-anchors";
 import type { SessionLifecycle } from "./session-lifecycle";
 import { EDITOR_BORDER_STYLE, renderChromeBorder, safeThemeFg } from "./style";
 
@@ -188,6 +190,9 @@ const directCommandSuggestions = [
 	"mouse enable",
 	"mouse disable",
 	"mouse toggle",
+	"queue",
+	"subagents",
+	"thinking",
 	"format clear",
 	"format $cwd on $git_branch $fill $context",
 	"format $cwd( on $git_branch)($git_status)$fill($context)( | $cost)",
@@ -306,7 +311,7 @@ function footerSegmentPatch(
 }
 
 function usageText(): string {
-	return 'Usage: /starline [editor|statusline|copy-friendly] [enable|disable|toggle] or /starline format "<template>"';
+	return 'Usage: /starline [editor|statusline|copy-friendly] [enable|disable|toggle], /starline queue, or /starline format "<template>"';
 }
 
 function featureNotification(
@@ -661,6 +666,16 @@ export function registerStarlineSettingsCommand(pi: ExtensionAPI, deps: Settings
 					const message = error instanceof Error ? error.message : String(error);
 					if (ctx.hasUI) ctx.ui.notify(`Could not update mouse settings: ${message}`, "error");
 				}
+				return;
+			}
+
+			// The keyboard half of a clickable pill: same action, same bubble, pointed at
+			// the pill the footer last drew. Only segments with an action resolve, so an
+			// unknown word still falls through to the usage warning below.
+			const actionKey = args.trim().toLowerCase();
+			const action = pillActionFor(actionKey);
+			if (action) {
+				runPillAction(action, ctx, getPillAnchor(actionKey), "command");
 				return;
 			}
 

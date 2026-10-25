@@ -10,6 +10,91 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [Unreleased]
+
+## [0.4.0] - 2026-10-25
+
+Pills in the pill footer can now be clicked. The model, thinking, queue and
+subagents pills open a small bubble on the pill where you can read more or pick
+something, and other extensions can put their own content in the same bubble.
+Clicking needs **Pi 0.85.0 or newer**; on 0.84.x the footer looks the same and the
+pills stay labels.
+
+**Added**
+
+- **Clickable pills.** Click a pill to open its bubble; click it again, or press
+  Escape, to close it. Clicking another pill swaps the bubble. Lines you can act on
+  are underlined and highlight under the pointer; ↑/↓ move the same highlight and
+  Enter picks it. Every action also runs from the keyboard as `/starline <name>`, so
+  nothing is mouse-only. Pills without an action stay labels and let the click
+  through. In Ghostty and kitty the pointer turns into a hand over anything
+  clickable (not under tmux, zellij or screen, where Pi only reports the mouse while
+  a button is held).
+
+- **Model pill: switch models.** Lists the session's scoped models (the ones ctrl+p
+  cycles) and opens on the current one; pick another to switch, bringing along any
+  thinking level the scope pins. With no scope it lists up to eight available models
+  and points at `/model` for the rest. `/starline model` steps to the next one.
+
+- **Thinking pill: pick a level.** Lists the levels the model supports and opens on
+  the current one, so ↑ from `high` lands on `medium`. Opening the list changes
+  nothing. `off` is not offered, so a choice never removes the pill.
+  `/starline thinking` steps to the next level.
+
+- **Queue pill.** A new `queue` segment appears while messages wait for the current
+  turn to end: an inbox icon and the count, gone once the queue drains. Its bubble
+  lists the messages and stays current while open. While the pill is in the bar,
+  Pi's own `Steering: …` rows above the editor are hidden, so the queue shows once.
+  If Pi does not let the count be read the pill says `queued`; with icons off it
+  reads `3 queued`. Configure with `colors.queue`, `icons.queue` and `$queue`.
+
+- **Subagents pill.** With [pi-subagents](https://github.com/nicobailon/pi-subagents)
+  installed, a new `subagents` segment counts running subagents (`2 agents`) behind
+  the users icon pi-tidy uses for subagent rows. Its bubble lists each run with
+  agent, model, time running and tokens, updating every second while open. It reads
+  pi-subagents' public in-process RPC and refreshes when a run starts or ends, not
+  on a timer; without pi-subagents it never appears. To let the pill replace
+  pi-subagents' own FleetView and async widget, set `"fleetView": false` and
+  `"asyncWidget": false` in its config. Configure with `colors.subagents`,
+  `icons.subagents` and `$subagents`.
+
+- **The bubble.** A rounded outline in the pill's colour that sits on the pill,
+  its bottom edge open over the pill like a folder tab and its title in the top
+  edge. Nothing inside is filled, so a translucent terminal shows through; the
+  highlighted line is filled with the pill's colour. It unfolds upward from the pill
+  in 60 ms; `pill.bubbleAnimation: false` turns that off.
+
+- **For extension authors: put your content in a pill.** An extension that
+  publishes a status with `ctx.ui.setStatus()` can register a click action for it
+  through a small API on `globalThis` (`Symbol.for("pi-starline.pill-api.v1")`) and
+  open the same bubble with its own lines and actions, without rendering or
+  positioning anything. Bubbles can be live (pass a function and call `refresh()`
+  on the returned handle), a line can be marked `current` so the bubble opens on
+  it, and the action is told whether it came from a click or `/starline <key>`.
+  Types ship in the package as `pi-starline/types/pill-api`; nothing is imported at
+  runtime, so the extension still loads without Starline. A bridge extension can
+  do the same for someone else's extension. Guide and templates:
+  [docs/pill-api.md](https://github.com/Andy8647/pi-starline/blob/main/docs/pill-api.md);
+  [pi-balance](https://github.com/Andy8647/pi-balance) is a working example.
+
+**Changed**
+
+- `queue` and `subagents` are part of the default pill bar. If you keep your own
+  `pill.segments`, add them where you want them; neither takes space while empty.
+
+- The README is shorter. The git status indicators and the 57 detected runtimes
+  moved to [docs/segments.md](https://github.com/Andy8647/pi-starline/blob/main/docs/segments.md).
+
+**Notes**
+
+- Pi's extension API does not expose the queued messages, the live session, a way
+  to hide its queue rows, or a mouse "leave" event, so four guarded wrappers fill
+  the gaps: `AgentSession.prompt` and `getContextUsage` (to reach the session),
+  `InteractiveMode.updatePendingMessagesDisplay` (to hide the rows) and
+  `TuiAltScreen.handleMouseEvent` (to reset the pointer when it leaves a pill). If a
+  future Pi changes any of them, that feature falls back or switches off and the
+  rest keeps working. Each goes away once Pi offers the matching API.
+
 ## [0.3.9] - 2026-10-25
 
 Two things about repositories being written to and events being handled twice —
@@ -485,7 +570,10 @@ What this fork adds over upstream:
   selection
 - Paste collapsing, with paste-again-to-expand
 
-[Unreleased]: https://github.com/Andy8647/pi-starline/compare/v0.3.7...HEAD
+[Unreleased]: https://github.com/Andy8647/pi-starline/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Andy8647/pi-starline/compare/v0.3.9...v0.4.0
+[0.3.9]: https://github.com/Andy8647/pi-starline/compare/v0.3.8...v0.3.9
+[0.3.8]: https://github.com/Andy8647/pi-starline/compare/v0.3.7...v0.3.8
 [0.3.7]: https://github.com/Andy8647/pi-starline/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/Andy8647/pi-starline/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/Andy8647/pi-starline/compare/v0.3.4...v0.3.5

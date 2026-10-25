@@ -223,8 +223,13 @@ function makeWheelReceiver() {
 	};
 	instance.currentLayout = renderLayoutFrame(root, WIDTH, HEIGHT, () => {});
 	instance.terminal = { rows: HEIGHT, columns: WIDTH, write: () => {} };
+	// 0.84.x reads a line count; 1.4 asks an accelerator per notch. A steady 3
+	// lines either way, so the assertions below hold for both.
 	instance.wheelScrollLines = 3;
+	instance.wheelScroll = { next: () => 3, setLines: () => {} };
 	instance.overlayStack = [];
+	// 1.4 offers a notch to overlays, then to components, before `routeWheel`.
+	instance.renderedOverlayLayouts = [];
 	instance.scrollbarHover = undefined;
 	instance.scrollbarDrag = undefined;
 	instance.stopped = true;

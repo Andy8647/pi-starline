@@ -93,6 +93,7 @@ import { editorVisualRowCount } from "./editor-text-cursor";
 import { externalMouseLayer } from "./external-layer";
 import { type BoxLike, scrollContentLinesFor } from "./hit-test";
 import { keyTextFor } from "./key-text";
+import { installPointerShape } from "./pointer-shape";
 import { externalEditorName, selectionHintText } from "./selection-state";
 import { cleanTranscriptRows } from "./transcript-copy";
 
@@ -972,8 +973,12 @@ export function installMouse(prototype: object, deps: InstallMouseDeps): () => v
 				`[starline] ${external.name} owns Pi's mouse layer, so Starline's mouse features are off — two layers would handle every event twice. Wheel-over-draft, click-to-caret, clean copies and the selection hint come from that extension instead.`,
 			);
 		}
-		const dedupe = installCursorMarkerDedupe(prototype);
-		return dedupe ? () => dedupe() : () => {};
+		// The pointer shape handles no event, it only watches where moves land,
+		// so it cannot double up with another layer and stays on.
+		const externalCleanups = [installCursorMarkerDedupe(prototype), installPointerShape(prototype)];
+		return () => {
+			for (const cleanup of externalCleanups) cleanup?.();
+		};
 	}
 
 	const available = probeCapabilities(prototype);
@@ -1025,6 +1030,11 @@ export function installMouse(prototype: object, deps: InstallMouseDeps): () => v
 	// the duplicates. See mouse/cursor-marker.ts for the upstream issue.
 	const dedupe = installCursorMarkerDedupe(typedPrototype);
 	if (dedupe) cleanups.push(dedupe);
+	// Not in the capability table either: it is part of the clickable pills, which
+	// need Pi's component mouse events, and a Pi without `handleMouseEvent` has
+	// none — no pills to hover, so nothing to warn about. See mouse/pointer-shape.ts.
+	const pointer = installPointerShape(typedPrototype);
+	if (pointer) cleanups.push(pointer);
 
 	if (cleanups.length === 0) return () => {};
 	return () => {

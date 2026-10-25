@@ -38,6 +38,10 @@ export type IconGlyphs = {
 	context: string;
 	cost: string;
 	tokens: string;
+	/** The queued-messages pill, shown in front of the count. */
+	queue: string;
+	/** The running-subagents pill. Same glyph pi-tidy uses for subagent tool rows. */
+	subagents: string;
 	/** Forge logos for the branch segment, used only when gitHostIcon is on. */
 	gitHostGithub: string;
 	gitHostGitlab: string;
@@ -73,6 +77,8 @@ export const ICON_GLYPH_KEYS = [
 	"context",
 	"cost",
 	"tokens",
+	"queue",
+	"subagents",
 	"gitHostGithub",
 	"gitHostGitlab",
 	"gitHostBitbucket",
@@ -114,6 +120,10 @@ export const NERD_DEFAULT_ICONS: IconGlyphs = {
 	context: "",
 	cost: "",
 	tokens: "",
+	// fa-inbox: messages waiting their turn.
+	queue: "\uf01c",
+	// fa-users, the glyph pi-tidy draws for a subagent tool row.
+	subagents: "\uf0c0",
 	gitHostGithub: "",
 	gitHostGitlab: "",
 	gitHostBitbucket: "",
@@ -146,6 +156,8 @@ export const ASCII_DEFAULT_ICONS: IconGlyphs = {
 	context: "",
 	cost: "",
 	tokens: "",
+	queue: "",
+	subagents: "",
 	// gitHostIcon is a Nerd Font feature; it disables itself in ascii mode.
 	gitHostGithub: "",
 	gitHostGitlab: "",

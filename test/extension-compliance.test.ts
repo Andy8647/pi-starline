@@ -210,7 +210,13 @@ function stripPromptMarks(line: string): string {
 }
 
 function stripTestTags(line: string): string {
-	return stripPromptMarks(line).replaceAll(/\[[^\]]+\]/g, "");
+	return (
+		stripPromptMarks(line)
+			.replaceAll(/\[[^\]]+\]/g, "")
+			// Pi's zero-width APC markers (the cursor: `pi:c` before 1.4, the
+			// `pi:fc` … `pi:/fc` pair around the cursor cell from 1.4 on).
+			.replaceAll(/\x1b_[^\x07]*\x07/g, "")
+	);
 }
 
 function loadExtension(options: { thinkingLevel?: string; commands?: Map<string, unknown> } = {}) {

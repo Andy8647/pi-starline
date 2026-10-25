@@ -5,6 +5,8 @@ import {
 	type EditorComponent,
 	type EditorTheme,
 	type TUI,
+	type TuiMouseEvent,
+	type TuiMouseEventResult,
 	truncateToWidth,
 	visibleWidth,
 } from "@earendil-works/pi-tui";
@@ -366,15 +368,14 @@ function readScrollCount(line: string | undefined, direction: "↑" | "↓"): nu
 	return match ? Number(match[1]) : 0;
 }
 
-/** The shape of a Pi TUI mouse event, local so it survives an older pi-tui type surface. */
+/**
+ * The fields of a Pi mouse event the frame translation reads. Generic callers
+ * pass the whole `TuiMouseEvent` and get the same type back.
+ */
 export type FrameMouseEvent = {
-	type?: string;
-	button?: string;
 	x: number;
 	y: number;
 	width: number;
-	height?: number;
-	[key: string]: unknown;
 };
 
 /**
@@ -390,10 +391,10 @@ export type FrameMouseEvent = {
  * rule as a click in its autocomplete list — which it draws immediately after that
  * rule in its own frame, but two rows earlier in ours.
  */
-export function translateEditorMouse(
-	event: FrameMouseEvent,
+export function translateEditorMouse<Event extends FrameMouseEvent>(
+	event: Event,
 	geometry: { railWidth: number; padTop: number; editorLineCount: number },
-): FrameMouseEvent | undefined {
+): Event | undefined {
 	const { railWidth, padTop, editorLineCount } = geometry;
 	if (editorLineCount <= 0) return undefined;
 	const y = event.y - padTop;
@@ -409,13 +410,13 @@ export function translateEditorMouse(
 /**
  * Pi's own click handling, resolved once at load.
  *
- * `Editor.handleMouse` only exists from pi-tui 1.4, which is newer than the type
- * surface this package builds against, so the lookup walks the prototype chain by
- * hand and simply stays undefined on older builds.
+ * `Editor.handleMouse` only exists from pi-tui 1.4. The peer floor is older, so
+ * the lookup is a plain property read that stays undefined on those builds rather
+ * than a call the type system assumes is there.
  */
 const baseHandleMouse = (
-	CustomEditor.prototype as unknown as {
-		handleMouse?: (this: unknown, event: FrameMouseEvent) => unknown;
+	CustomEditor.prototype as {
+		handleMouse?: (this: unknown, event: TuiMouseEvent) => TuiMouseEventResult | undefined;
 	}
 ).handleMouse;
 
@@ -614,7 +615,7 @@ export class PolishedEditor extends CustomEditor {
 	 * translated back before Pi sees it — grapheme-accurate columns, autocomplete
 	 * clicks and focus then come from Pi rather than from a patched press handler.
 	 */
-	handleMouse(event: FrameMouseEvent): unknown {
+	override handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
 		if (typeof baseHandleMouse !== "function") return undefined;
 		const config = this.getConfig();
 		const { railWidth } = getEditorChromeWidths(config, this.uiTheme, "\x1b[0m");

@@ -43,6 +43,42 @@ const CAP_GLYPHS = { left: "", right: "" };
 /** Divider used where a solid arrow would be invisible. */
 const THIN_SEPARATOR = SEPARATOR_GLYPHS["powerline-thin"];
 
+/**
+ * Where one pill ended up in a rendered bar, in visible columns.
+ *
+ * `startColumn` is inclusive, `endColumn` exclusive. Columns count what the
+ * terminal draws, so a CJK pill spans two cells per character and a pill that
+ * `width` cut in half still reports the cells it kept.
+ *
+ * A span covers everything the pill visually owns: its own padding, the
+ * separator that points out of it, and — on the two ends of the bar — the cap.
+ * That leaves no dead cells between two pills for a click to fall into.
+ */
+export type PillSpan = {
+	/** `PillInput.key` of the segment this span belongs to. */
+	key: string;
+	startColumn: number;
+	endColumn: number;
+	/**
+	 * First column painted solid in the pill's colour. The hit area starts earlier
+	 * on the first pill, whose round cap is the colour drawn on the terminal's own
+	 * background; anything that has to line up with the pill's edge uses this.
+	 */
+	bodyStartColumn: number;
+	/** First column after the pill's own colour: where its arrow or cap starts. */
+	bodyEndColumn: number;
+	/** Background SGR the pill was painted with, for anything that has to match it. */
+	bg: string;
+	/** Foreground SGR, or "" when the text carried its own styling. */
+	fg: string;
+};
+
+export type PillRenderOptions = {
+	ascii?: boolean;
+	/** Called once per pill that survived truncation, in left-to-right order. */
+	onSpan?: (span: PillSpan) => void;
+};
+
 export type PillInput = {
 	/** Segment name, for diagnostics. */
 	key: string;
@@ -123,6 +159,7 @@ export function collectPillInputs(
 }
 
 type PreparedPill = {
+	key: string;
 	text: string;
 	bg: string;
 	fg: string;
@@ -213,7 +250,7 @@ function prepare(
 		if (!text || visibleWidth(text) === 0) continue;
 
 		if (input.keepStyling) {
-			pills.push({ text, bg: neutral, fg: "", bold: false });
+			pills.push({ key: input.key, text, bg: neutral, fg: "", bold: false });
 			continue;
 		}
 
@@ -221,6 +258,7 @@ function prepare(
 		const bg = resolved.bg ?? resolveBackgroundSgr(theme, source, input.spec) ?? neutral;
 		// An explicit fg: in the spec wins; otherwise pick for legibility.
 		pills.push({
+			key: input.key,
 			text,
 			bg,
 			fg: resolved.bg && resolved.fg ? resolved.fg : contrastTextSgr(bg),
@@ -234,6 +272,11 @@ function prepare(
 /**
  * Render the pill bar. Returns "" when nothing has content, so the caller can
  * fall back rather than emit a lone pair of caps.
+ *
+ * `options.onSpan` receives the hit area of every pill the terminal will
+ * actually show, measured in the bar's own visible columns. Recording the spans
+ * here rather than recomputing them later keeps them in step with the render:
+ * colour, caps, separators and truncation are all already accounted for.
  */
 export function renderPillBar(
 	inputs: PillInput[],
@@ -241,7 +284,7 @@ export function renderPillBar(
 	source: ColorSource,
 	config: PillConfig,
 	width: number,
-	options: { ascii?: boolean } = {},
+	options: PillRenderOptions = {},
 ): string {
 	const pills = prepare(inputs, theme, source, config);
 	if (pills.length === 0) return "";
@@ -255,41 +298,80 @@ export function renderPillBar(
 	const rightCap = wantsCaps ? CAP_GLYPHS.right : "";
 
 	let out = "";
+	// Columns the terminal will draw so far. Getting this from `visibleWidth`
+	// rather than string length is what makes CJK segment text hit the right cells.
+	let column = 0;
+	const emit = (piece: string) => {
+		out += piece;
+		column += visibleWidth(piece);
+	};
 
+	const capStart = column;
 	const firstBg = pills[0]?.bg;
 	if (leftCap && firstBg) {
 		const capFg = toForegroundSgr(firstBg);
-		if (capFg) out += `${DEFAULT_BG}${capFg}${leftCap}${RESET}`;
+		if (capFg) emit(`${DEFAULT_BG}${capFg}${leftCap}${RESET}`);
 	}
 
+	const spans: PillSpan[] = [];
+
 	pills.forEach((pill, index) => {
-		out += `${pill.bg}${pill.fg}${pill.bold ? BOLD : ""} ${pill.text} ${RESET}`;
+		// The left cap opens the bar in the first pill's colour, so it belongs to it.
+		const startColumn = index === 0 ? capStart : column;
+		const bodyStartColumn = column;
+		emit(`${pill.bg}${pill.fg}${pill.bold ? BOLD : ""} ${pill.text} ${RESET}`);
+		const bodyEndColumn = column;
 
 		const next = pills[index + 1];
 		if (next) {
-			if (!separator) return;
-
 			// A solid arrow works by being the left colour on the right colour, so
 			// it vanishes when the two pills share a background — several segments
 			// default to the same theme colour, which merged them into one blob.
 			// Fall back to the thin divider in the text colour, which stays visible.
-			if (pill.bg === next.bg) {
-				out += `${pill.bg}${pill.fg || contrastTextSgr(pill.bg)}${THIN_SEPARATOR}${RESET}`;
-				return;
+			if (separator && pill.bg === next.bg) {
+				emit(`${pill.bg}${pill.fg || contrastTextSgr(pill.bg)}${THIN_SEPARATOR}${RESET}`);
+			} else if (separator) {
+				const arrowFg = toForegroundSgr(pill.bg);
+				// Without a usable foreground the arrow would be invisible; letting the
+				// backgrounds abut is better than drawing a glyph in the wrong colour.
+				if (arrowFg) emit(`${next.bg}${arrowFg}${separator}${RESET}`);
 			}
-
-			const arrowFg = toForegroundSgr(pill.bg);
-			// Without a usable foreground the arrow would be invisible; letting the
-			// backgrounds abut is better than drawing a glyph in the wrong colour.
-			out += arrowFg ? `${next.bg}${arrowFg}${separator}${RESET}` : "";
-			return;
-		}
-
-		if (rightCap) {
+		} else if (rightCap) {
 			const capFg = toForegroundSgr(pill.bg);
-			if (capFg) out += `${DEFAULT_BG}${capFg}${rightCap}${RESET}`;
+			if (capFg) emit(`${DEFAULT_BG}${capFg}${rightCap}${RESET}`);
 		}
+
+		// The arrow (or cap) is emitted before the span closes, so it belongs to
+		// the pill that points out of itself.
+		spans.push({
+			key: pill.key,
+			startColumn,
+			endColumn: column,
+			bodyStartColumn,
+			bodyEndColumn,
+			bg: pill.bg,
+			fg: pill.fg,
+		});
 	});
 
-	return width > 0 ? truncateToWidth(out, width, "") : out;
+	const rendered = width > 0 ? truncateToWidth(out, width, "") : out;
+	if (options.onSpan) {
+		// Truncation keeps a prefix, so surviving cells keep their columns; only
+		// the far end needs clamping, and a pill clipped away entirely vanishes.
+		const visible = visibleWidth(rendered);
+		for (const span of spans) {
+			const startColumn = Math.min(span.startColumn, visible);
+			const endColumn = Math.min(span.endColumn, visible);
+			if (endColumn > startColumn) {
+				const bodyStartColumn = Math.min(span.bodyStartColumn, endColumn - 1);
+				const bodyEndColumn = Math.max(
+					bodyStartColumn + 1,
+					Math.min(span.bodyEndColumn, endColumn),
+				);
+				options.onSpan({ ...span, startColumn, endColumn, bodyStartColumn, bodyEndColumn });
+			}
+		}
+	}
+
+	return rendered;
 }

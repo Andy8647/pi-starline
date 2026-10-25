@@ -1,5 +1,10 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import {
+	type TuiMouseEvent,
+	type TuiMouseEventResult,
+	truncateToWidth,
+	visibleWidth,
+} from "@earendil-works/pi-tui";
 import {
 	type ColorSpec,
 	FOOTER_FORMAT_ALIASES,
@@ -31,9 +36,14 @@ import {
 import type { GitHost } from "./git";
 import { type ResolvedIcons, resolveRuntimeSymbol } from "./icons";
 import type { LiveContextOverride } from "./live-context";
-import { collectPillInputs, renderPillBar } from "./pill";
+import { requestPointerShape } from "./mouse/pointer-shape";
+import { collectPillInputs, type PillSpan, renderPillBar } from "./pill";
+import { pillActionFor, queuedSegmentText, runPillAction } from "./pill-actions";
+import { clearPillAnchors, setPillAnchors } from "./pill-anchors";
+import { closePillBubble, isPillBubbleOpenFor, type PillAnchor } from "./pill-bubble";
 import type { FooterState } from "./state";
 import { renderStyleForSource } from "./style";
+import { subagentsSegmentText } from "./subagent-fleet";
 import { modelPillIcon, readWorkingFrame } from "./working-indicator";
 
 const separatorText: Record<SeparatorStyle, string> = {
@@ -42,6 +52,33 @@ const separatorText: Record<SeparatorStyle, string> = {
 	chevron: " › ",
 	none: " ",
 };
+
+/**
+ * Pi's component mouse event and result. Pi dispatches to `handleMouse` from
+ * pi-tui 0.85.0; on 0.84.x the method is simply never called.
+ */
+export type FooterMouseEvent = TuiMouseEvent;
+
+export type FooterMouseResult = TuiMouseEventResult;
+
+/**
+ * The footer Pi mounts. `handleMouse` is optional and undeclared by the old
+ * component type, which is why the object is built under this local shape.
+ */
+type FooterComponent = {
+	render(width: number): string[];
+	invalidate(): void;
+	dispose(): void;
+	handleMouse?(event: FooterMouseEvent): FooterMouseResult | undefined;
+};
+
+/**
+ * How many renders' worth of pill hit maps to keep. A render is also how the
+ * layout measures, so one frame can render the footer at more than one width;
+ * keying by width keeps a measurement from replacing the map the click on screen
+ * will be matched against.
+ */
+const PILL_HIT_MAP_LIMIT = 4;
 
 function joinStatusTexts(statusTexts: string[], separator: string): string {
 	return statusTexts.filter(Boolean).join(separator);
@@ -222,13 +259,117 @@ export function installFooter(
 			tui.requestRender();
 		});
 
-		return {
+		/**
+		 * Pill hit areas from the render that is on screen, per width.
+		 *
+		 * Replaced on every render, read only by `handleMouse`: no timers, no
+		 * invalidation, nothing to keep in sync with what the footer drew.
+		 */
+		const pillSpansByWidth = new Map<number, PillSpan[]>();
+
+		const rememberPillSpans = (
+			width: number,
+			spans: readonly PillSpan[],
+			columnOffset: number,
+			lineWidth: number,
+		) => {
+			const visibleSpans: PillSpan[] = [];
+			const anchors = new Map<string, PillAnchor>();
+			for (const span of spans) {
+				// The bar is drawn after a one-column pad, and the line may have been cut
+				// again after the bar was; clamp to what the terminal actually shows.
+				const startColumn = Math.min(lineWidth, span.startColumn + columnOffset);
+				const endColumn = Math.min(lineWidth, span.endColumn + columnOffset);
+				if (endColumn <= startColumn) continue;
+				const bodyStartColumn = Math.min(endColumn - 1, span.bodyStartColumn + columnOffset);
+				const bodyEndColumn = Math.max(
+					bodyStartColumn + 1,
+					Math.min(endColumn, span.bodyEndColumn + columnOffset),
+				);
+				visibleSpans.push({ ...span, startColumn, endColumn, bodyStartColumn, bodyEndColumn });
+				// Same columns, plus the colours, for anything that wants to sit next to
+				// this pill later — a bubble today, whatever the next action needs.
+				anchors.set(span.key, {
+					key: span.key,
+					startColumn: bodyStartColumn,
+					endColumn: bodyEndColumn,
+					centerColumn: Math.floor((startColumn + endColumn - 1) / 2),
+					terminalWidth: width,
+					background: span.bg,
+					foreground: span.fg,
+				});
+			}
+			pillSpansByWidth.set(width, visibleSpans);
+			setPillAnchors(anchors);
+			if (pillSpansByWidth.size > PILL_HIT_MAP_LIMIT) {
+				const oldest = pillSpansByWidth.keys().next();
+				if (!oldest.done) pillSpansByWidth.delete(oldest.value);
+			}
+		};
+
+		const component: FooterComponent = {
 			dispose: () => {
 				unsubscribeBranch();
 				hooks.setRequestRender(undefined);
 				hooks.setExtensionStatusesGetter?.(undefined);
 			},
 			invalidate() {},
+			/**
+			 * A click on a pill runs that segment's action.
+			 *
+			 * Pi's footer slot is a `Container`, which forwards mouse events to the
+			 * component inside it with `y` rebased to this component and `x` unchanged, so
+			 * these are exactly the columns `render` measured. Nothing is declared or
+			 * patched for this.
+			 *
+			 * Returning undefined for anything that is not a target (another row, empty
+			 * space, an inert segment) is what lets the click fall through instead of
+			 * being swallowed by the footer.
+			 */
+			handleMouse(event: FooterMouseEvent): FooterMouseResult | undefined {
+				if (getConfig().footerStyle !== "pill") return undefined;
+				if (!Number.isFinite(event.x) || !Number.isFinite(event.y)) return undefined;
+				// The pill bar is the one and only row this component draws.
+				if (event.y !== 0) return undefined;
+				const width = typeof event.width === "number" ? Math.floor(event.width) : undefined;
+				if (width === undefined) return undefined;
+				const spans = pillSpansByWidth.get(width);
+				if (!spans) return undefined;
+
+				const hit = spans.find((span) => event.x >= span.startColumn && event.x < span.endColumn);
+				const action = hit === undefined ? undefined : pillActionFor(hit.key);
+				if (!hit || !action) return undefined;
+
+				// Moving over a pill that does something turns the pointer into a hand.
+				// Pi has no leave event; mouse/pointer-shape.ts puts it back once a move
+				// lands anywhere that does not ask for it.
+				if (event.type === "move") {
+					requestPointerShape("pointer");
+					return { handled: true };
+				}
+
+				// Pi synthesizes a `click` only for a press a component handled, so the press
+				// is claimed here and the action runs on the click that follows it. A press
+				// that turns into a drag never produces one, which is what keeps a stray
+				// gesture from opening a bubble.
+				if (event.type === "click") {
+					// Clicking the pill again puts its bubble away, like a menu-bar item.
+					if (isPillBubbleOpenFor(hit.key)) {
+						closePillBubble();
+						return { handled: true };
+					}
+					runPillAction(action, ctx, {
+						key: hit.key,
+						startColumn: hit.bodyStartColumn,
+						endColumn: hit.bodyEndColumn,
+						centerColumn: Math.floor((hit.startColumn + hit.endColumn - 1) / 2),
+						terminalWidth: width,
+						background: hit.bg,
+						foreground: hit.fg,
+					});
+				}
+				return { handled: true };
+			},
 			render(width: number): string[] {
 				if (width <= 0) return [""];
 				const config = getConfig();
@@ -367,6 +508,20 @@ export function installFooter(
 							return modelLabel;
 						case "thinking":
 							return thinkingLabel;
+						case "queue":
+							return renderStyleForSource(
+								theme,
+								colorSource,
+								config.colors.queue,
+								queuedSegmentText(ctx, config.icons.queue),
+							);
+						case "subagents":
+							return renderStyleForSource(
+								theme,
+								colorSource,
+								config.colors.subagents,
+								withIcon(config.icons.subagents, subagentsSegmentText()),
+							);
 						case "cwd":
 							return cwdLabel;
 						case "session_name":
@@ -666,6 +821,10 @@ export function installFooter(
 								return config.colors.model;
 							case "thinking":
 								return config.colors.thinking ?? thinkingThemeKey(thinkingText);
+							case "queue":
+								return config.colors.queue;
+							case "subagents":
+								return config.colors.subagents;
 							case "cwd":
 								return config.colors.cwd;
 							case "sessionName":
@@ -705,6 +864,7 @@ export function installFooter(
 						}
 					};
 
+					const spans: PillSpan[] = [];
 					const bar = renderPillBar(
 						collectPillInputs(
 							config.pill.segments,
@@ -718,11 +878,21 @@ export function installFooter(
 						colorSource,
 						config.pill,
 						Math.max(0, width - 2),
-						{ ascii: iconMode === "ascii" },
+						{
+							ascii: iconMode === "ascii",
+							onSpan: (span) => spans.push(span),
+						},
 					);
 					// An empty bar means nothing had content; fall through to the text
 					// footer rather than emit a bare pair of caps.
-					if (bar) return [truncateToWidth(width > 2 ? ` ${bar} ` : bar, width, "")];
+					if (bar) {
+						const columnOffset = width > 2 ? 1 : 0;
+						const line = truncateToWidth(width > 2 ? ` ${bar} ` : bar, width, "");
+						rememberPillSpans(width, spans, columnOffset, visibleWidth(line));
+						return [line];
+					}
+					pillSpansByWidth.delete(width);
+					clearPillAnchors();
 				}
 
 				const renderExtensionStatus = (segment: ExtensionStatusSegment) =>
@@ -743,8 +913,13 @@ export function installFooter(
 					innerWidth,
 				);
 				const framed = width > 2 ? ` ${truncateToWidth(content, width - 2, "")} ` : content;
+				// This width is drawn as text: no pills, nothing to hit, nothing to point at.
+				pillSpansByWidth.delete(width);
+				clearPillAnchors();
 				return [truncateToWidth(framed, width, "")];
 			},
 		};
+
+		return component;
 	});
 }

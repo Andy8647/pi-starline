@@ -526,6 +526,7 @@ describe("mergeConfig", () => {
 		expect(mergeConfig({ colors: { gitMetricsDeleted: "red" } }).colors.gitMetricsDeleted).toBe(
 			"red",
 		);
+		expect(mergeConfig({ colors: { queue: "bold purple" } }).colors.queue).toBe("bold purple");
 		expect(mergeConfig({ colors: { git: "syntaxKeyword" } }).colors.gitBranch).toBe(
 			"syntaxKeyword",
 		);

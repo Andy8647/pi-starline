@@ -130,6 +130,8 @@ Default config values — copy this and change any value you want:
 		"context": "",
 		"cost": "",
 		"tokens": "",
+		"queue": "\uf01c",
+		"subagents": "\uf0c0",
 		"gitHostGithub": "",
 		"gitHostGitlab": "",
 		"gitHostBitbucket": "",
@@ -231,7 +233,7 @@ Default config values — copy this and change any value you want:
 - `footerFormat`: optional Starship-style template string that fully controls the footer layout. When set, it overrides `footerSegments`. See [Footer Format Template](#footer-format-template) below. The `/starline` **Layout** tab configures context style, separator, path display mode/depth, branch length, and icon mode; set or clear custom formats with `/starline format`.
 - `gitCommit`: Starship [`git_commit`](https://starship.rs/config/#git-commit)-style options for the `gitCommit` footer segment. `hashLength` (default `7`, clamped to `4`–`40`) controls the short-hash display length. `onlyDetached` (default `true`) shows the hash mainly on detached HEAD. `showTag` (default `true`) appends an exact-match tag (`git describe --tags --exact-match HEAD`). The tag probe piggybacks on the existing git refresh — it only runs when both the segment and `showTag` are on, and misses/failures degrade silently.
 - `gitMetrics`: Starship [`git_metrics`](https://starship.rs/config/#git-metrics)-style options for the `gitMetrics` footer segment. Uses `git diff HEAD --numstat` (staged + unstaged combined — the Starship “total dirty” view) to show aggregate `+added −deleted` line counts. `onlyNonzero` (default `true`) omits each zero component independently and hides the segment entirely at `0/0`. `ignoreSubmodules` (default `false`) adds `--ignore-submodules=all`. The numstat diff piggybacks on the existing git refresh and uses a hard 2s timeout; a metrics-only failure degrades silently without discarding fresh branch/status data. On very large monorepos the diff may lag or be omitted on timeout.
-- `extensionStatuses`: controls third-party statuses published by other Pi extensions through `ctx.ui.setStatus()`. `defaultPlacement` and each `placements` value can be `off`, `left`, `middle`, `right`, or `editor`. The `Extension segments` tab in `/starline` lists only statuses that are currently active. `editor` puts the status on the right-hand side of the editor's metadata row, next to the copy and paste hints — it is drawn there as one muted line, so `colors`, `icons`, and `colorMode` do not apply, and it needs both `features.editor` and `features.statusLine` on (the status map only reaches Starline through its footer).
+- `extensionStatuses`: controls third-party statuses published by other Pi extensions through `ctx.ui.setStatus()`. `defaultPlacement` and each `placements` value can be `off`, `left`, `middle`, `right`, or `editor`. The `Extension segments` tab in `/starline` lists only statuses that are currently active. `editor` puts the status on the right-hand side of the editor's metadata row, next to the copy and paste hints — it is drawn there as one muted line, so `colors`, `icons`, and `colorMode` do not apply, and it needs both `features.editor` and `features.statusLine` on (the status map only reaches Starline through its footer). Publishing extensions can also make their pill clickable and open a bubble with their own detail through the pill API — see [Clickable pills for other extensions](pill-api.md).
 - The shown `editor*` values match the default `theme` source. Omit those keys to keep Starline's source-aware defaults when switching between `theme` and `terminal`.
 - `editorAccent` styles the active editor rail and previous user-message rail when `features.copyFriendly` is disabled.
 - `editorPrompt` styles the copy-friendly editor prompt glyph. Omit it to use `editorAccent`, then the default accent fallback.
@@ -306,6 +308,7 @@ A reference that does not resolve is left as written, so the segment renders uns
 		"segments": [
 			"model",
 			"thinking",
+			"queue",
 			"cwd",
 			"gitBranch",
 			"gitStatus",
@@ -323,13 +326,18 @@ A reference that does not resolve is left as written, so the segment renders uns
 
 | Key | Values | Meaning |
 | --- | --- | --- |
-| `segments` | `footerSegments` keys, `extensionStatus`, `extensionStatus:<key>` | Order, left to right |
+| `segments` | `footerSegments` keys, `queue`, `subagents`, `extensionStatus`, `extensionStatus:<key>` | Order, left to right |
 | `separator` | `powerline` (default), `powerline-thin`, `none` | Glyph between pills |
 | `bold` | `true` (default), `false` | Bold segment text |
 | `caps` | `round` (default), `right`, `none` | How the bar's ends are closed |
+| `bubbleAnimation` | `true` (default), `false` | Unfold a clicked pill's bubble upward from the pill (60 ms) instead of showing it at once. Applies from the next session or `/reload`. |
 
 Notes:
 
+- **The `queue` pill is clickable.** It exists only while messages are waiting for the current turn to end, so it costs no space the rest of the time. Clicking it, or running `/starline queue`, opens a bubble on the pill that says how many messages are queued and shows their first lines. The pill shows an inbox icon and the count (`icons.queue`); when Pi does not let the count be read it says `queued` instead, and with icons off it reads `3 queued`. Clicking the pill again closes the bubble. While the queue pill is enabled, Pi's own `Steering: …` rows above the editor are hidden, so the queue is shown once rather than twice; remove `queue` from `pill.segments` (or switch the status line off) and Pi's rows come back. `colors.queue` (default `bold yellow`) colours the pill and the bubble, and `$queue` renders the same text in a text `footerFormat`.
+- **The `model` pill is clickable.** A click lists the session's scoped models — the ones ctrl+p cycles, from `enabledModels` or `--models` — with the current one marked; click another to switch. A scoped model that pins a thinking level (`provider/model:high`) brings it along, as ctrl+p does. Without a scope it lists up to eight available models and points at `/model` for the rest. `/starline model` steps to the next one from the keyboard.
+- **The `subagents` pill is clickable.** With [`pi-subagents`](https://github.com/nicobailon/pi-subagents) installed, it appears while subagents are running and says how many (`2 agents`); it disappears when they finish, and without pi-subagents it never appears. Clicking it, or running `/starline subagents`, opens the bubble with one line per run: agent (and step label), model, time running and tokens so far. `/subagents-fleet` still opens pi-subagents' own inspector for steering and stopping. The numbers come from pi-subagents' public in-process RPC, refreshed when a run starts or ends rather than on a timer. If the pill replaces pi-subagents' FleetView and async widget for you, turn those off in `~/.pi/agent/extensions/subagent/config.json` with `"fleetView": false` and `"asyncWidget": false`. `colors.subagents` (default `bold green`) colours the pill and the bubble, and `$subagents` renders the same text in a text `footerFormat`.
+- **The `thinking` pill is clickable.** A click opens the same bubble with every thinking level the model supports, the current one marked; click another level to switch. Opening it changes nothing. `off` is not offered, so the pill stays on screen. `/starline thinking` steps to the next level from the keyboard and reports the step (`medium → high`).
 - **Colours need no extra configuration.** A segment's existing `colors.*` entry, which is a foreground in text mode, becomes the pill background here. Text colour is picked automatically for legibility unless you set `fg:` yourself.
 - `extensionStatus` is not one segment but however many other extensions have registered (balance, automode, mcp, …). Listing it expands to all of them; `extensionStatus:<key>` places one specific status, and it is not repeated by a later `extensionStatus`.
 - A status configured with `colorMode: "themed"` (the default) recolours the extension's status segment to match the rest of the bar. `colorMode: "original"` keeps the colours its own extension chose, on a neutral background.
@@ -550,6 +558,8 @@ Center the branch between directory and cost:
 | `$username`         |              | `user@host`                                                         |
 | `$os`               |              | operating-system icon                                               |
 | `$time`             |              | current time `HH:MM`                                                |
+| `$queue`            |              | icon + count (`3`) while messages wait for the current turn, empty otherwise |
+| `$subagents`        |              | `2 agents` while pi-subagents runs something, empty otherwise        |
 | `$context`          |              | context usage (text and/or gauge via config)                        |
 | `$tokens`           |              | input/output token counts                                           |
 | `$cost`             |              | session cost                                                        |

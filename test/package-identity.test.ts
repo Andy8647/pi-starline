@@ -20,8 +20,9 @@ describe("package identity", () => {
 		}
 	});
 
-	it("ships only the extension sources", () => {
-		expect(pkg.files).toEqual(["extensions"]);
+	it("ships only the extension sources and the pill API types", () => {
+		// `types/` is what other extensions `import type` the pill API from.
+		expect(pkg.files).toEqual(["extensions", "types"]);
 	});
 
 	it("keeps both copyright lines in the licence", () => {

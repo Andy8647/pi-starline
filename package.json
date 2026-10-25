@@ -1,6 +1,6 @@
 {
 	"name": "pi-starline",
-	"version": "0.3.9",
+	"version": "0.4.0",
 	"description": "A Starship-inspired statusline and Opencode-style TUI for Pi.",
 	"type": "module",
 	"license": "MIT",
@@ -20,7 +20,8 @@
 		"tui"
 	],
 	"files": [
-		"extensions"
+		"extensions",
+		"types"
 	],
 	"scripts": {
 		"lint": "biome check .",
@@ -50,9 +51,9 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.0",
-		"@earendil-works/pi-ai": "^0.84.4",
-		"@earendil-works/pi-coding-agent": "^0.84.4",
-		"@earendil-works/pi-tui": "^0.84.4",
+		"@earendil-works/pi-ai": "^1.4.0",
+		"@earendil-works/pi-coding-agent": "^1.4.0",
+		"@earendil-works/pi-tui": "^1.4.0",
 		"@types/node": "^26.0.0",
 		"typescript": "^7.0.2",
 		"vitest": "^4.1.8"

@@ -26,6 +26,8 @@ export type PillConfig = {
 	separator: PillSeparator;
 	bold: boolean;
 	caps: PillCaps;
+	/** Unfold a pill's bubble upward from the pill instead of showing it at once. */
+	bubbleAnimation: boolean;
 };
 
 export const EXTENSION_STATUS_SEGMENT = "extensionStatus";
@@ -35,6 +37,8 @@ export const EXTENSION_STATUS_PREFIX = `${EXTENSION_STATUS_SEGMENT}:`;
 export const PILL_SEGMENT_VARIABLES: Record<string, string> = {
 	model: "model",
 	thinking: "thinking",
+	queue: "queue",
+	subagents: "subagents",
 	cwd: "cwd",
 	sessionName: "session_name",
 	gitBranch: "git_branch",
@@ -59,6 +63,8 @@ export const DEFAULT_PILL_CONFIG: PillConfig = {
 	segments: [
 		"model",
 		"thinking",
+		"queue",
+		"subagents",
 		"cwd",
 		"gitBranch",
 		"gitStatus",
@@ -69,6 +75,7 @@ export const DEFAULT_PILL_CONFIG: PillConfig = {
 	separator: "powerline",
 	bold: true,
 	caps: "round",
+	bubbleAnimation: true,
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -118,5 +125,9 @@ export function normalizePillConfig(value: unknown): PillConfig {
 		separator: parseSeparator(value.separator),
 		bold: typeof value.bold === "boolean" ? value.bold : DEFAULT_PILL_CONFIG.bold,
 		caps: parseCaps(value.caps),
+		bubbleAnimation:
+			typeof value.bubbleAnimation === "boolean"
+				? value.bubbleAnimation
+				: DEFAULT_PILL_CONFIG.bubbleAnimation,
 	};
 }

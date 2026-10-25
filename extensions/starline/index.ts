@@ -47,10 +47,14 @@ import {
 } from "./format";
 import { emptyGitStatus, readGitHost, readGitStatus } from "./git";
 import { LiveContextController } from "./live-context";
+import { forgetLiveSession, installLiveSessionCapture } from "./live-session";
 import { installMouse } from "./mouse";
 import { setActiveEditor } from "./mouse/editor-mouse";
 import { readPackageVersionResult } from "./package-version";
 import { installPasteCollapse } from "./paste-collapse";
+import { setModelSwitcher } from "./pill-actions";
+import { publishPillApi } from "./pill-api";
+import { setPillBubbleAnimation } from "./pill-bubble";
 import {
 	createProjectRefreshScheduler,
 	type ScheduleProjectRefreshOptions,
@@ -58,11 +62,19 @@ import {
 	startProjectRefreshInterval,
 } from "./project-refresh";
 import { applyProjectRefreshToState } from "./project-state";
+import { installNativeQueueRowHiding } from "./queue-rows";
 import { readRuntimeInfo } from "./runtime";
 import { installSelectorBorderStyle } from "./selector-border";
 import { SessionLifecycle } from "./session-lifecycle";
 import { registerStarlineSettingsCommand } from "./settings-command";
 import { createInitialState, type FooterState, syncState } from "./state";
+import {
+	createSubagentFleet,
+	type EventBusLike,
+	getActiveSubagentFleet,
+	SUBAGENT_TOOL_NAME,
+	setActiveSubagentFleet,
+} from "./subagent-fleet";
 import { PolishedEditor, WrappedPolishedEditor } from "./ui";
 import { installUserMessageStyle } from "./user-message";
 import { setWorkingIndicator } from "./working-indicator";
@@ -84,7 +96,17 @@ function isTuiContext(ctx: ExtensionContext): boolean {
 	}
 }
 
+/**
+ * How long a pill's bubble takes to unfold from the pill: long enough to read as
+ * growing out of it, short enough never to be waited on.
+ */
+const BUBBLE_ANIMATION_MS = 60;
+
 export default function (pi: ExtensionAPI) {
+	// Published before anything else so a bridge that registers in `session_start`
+	// finds it, whichever order the extensions were loaded in.
+	publishPillApi();
+
 	const state: FooterState = createInitialState(emptyGitStatus());
 	const sessionLifecycle = new SessionLifecycle();
 
@@ -105,6 +127,8 @@ export default function (pi: ExtensionAPI) {
 	let lastProjectCwd: string | undefined;
 	let disposePasteCollapse: (() => void) | undefined;
 	let disposeMouse: (() => void) | undefined;
+	let cleanupSessionCapture: (() => void) | undefined;
+	let cleanupQueueRows: (() => void) | undefined;
 
 	const refresh = () => {
 		if (sessionLifecycle.isCurrent()) requestFooterRender?.();
@@ -251,6 +275,75 @@ export default function (pi: ExtensionAPI) {
 	const uninstallMouse = () => {
 		disposeMouse?.();
 		disposeMouse = undefined;
+	};
+
+	/**
+	 * Capture the live `AgentSession` so the queue bubble can list what is waiting.
+	 * The context only carries a boolean; the messages are on the session, and one
+	 * wrapper on its `prompt` is enough to hold the instance. See `live-session.ts`.
+	 */
+	const installSessionCapture = () => {
+		cleanupSessionCapture?.();
+		cleanupSessionCapture = installLiveSessionCapture();
+	};
+
+	const uninstallSessionCapture = () => {
+		cleanupSessionCapture?.();
+		cleanupSessionCapture = undefined;
+		forgetLiveSession();
+	};
+
+	/**
+	 * Pi's own `Steering:` rows above the editor are the same information the queue
+	 * pill carries, so they are hidden exactly while the pill is on screen. The
+	 * predicate is read on every queue update, so `/starline` changes apply without
+	 * a restart.
+	 */
+	const queuePillCarriesTheQueue = () =>
+		currentConfig.features.statusLine &&
+		currentConfig.footerStyle === "pill" &&
+		currentConfig.pill.segments.includes("queue");
+
+	const installQueueRowHiding = () => {
+		cleanupQueueRows?.();
+		cleanupQueueRows = installNativeQueueRowHiding(queuePillCarriesTheQueue);
+	};
+
+	const uninstallQueueRowHiding = () => {
+		cleanupQueueRows?.();
+		cleanupQueueRows = undefined;
+	};
+
+	/**
+	 * Follow what pi-subagents is running, for the `subagents` pill. Its public RPC
+	 * answers on `pi.events`; without the package nothing answers and the pill
+	 * stays off. One request now picks up runs restored with the session.
+	 */
+	const installSubagentFleet = () => {
+		const bus = (pi as { events?: EventBusLike }).events;
+		if (!bus) return;
+		const fleet = createSubagentFleet(bus, { onChange: refresh });
+		setActiveSubagentFleet(fleet);
+		fleet.refresh();
+	};
+
+	/**
+	 * The model pill's picker switches through `pi`, which actions do not get.
+	 * A scoped model that pins a thinking level brings it along, as ctrl+p does.
+	 */
+	const installModelSwitcher = () => {
+		setModelSwitcher(async ({ model, thinkingLevel }) => {
+			const switched = await pi.setModel(model as Parameters<typeof pi.setModel>[0]);
+			if (switched && thinkingLevel) {
+				pi.setThinkingLevel(thinkingLevel as Parameters<typeof pi.setThinkingLevel>[0]);
+			}
+			return switched;
+		});
+	};
+
+	/** A foreground run starts with no event of its own, only the tool call. */
+	const refreshFleetForTool = (event: { toolName?: string }) => {
+		if (event.toolName === SUBAGENT_TOOL_NAME) getActiveSubagentFleet()?.refresh();
 	};
 
 	/**
@@ -507,6 +600,11 @@ export default function (pi: ExtensionAPI) {
 		currentConfig = loadConfig();
 		syncFooterState(ctx);
 		stopProjectRefresh();
+		installSessionCapture();
+		installQueueRowHiding();
+		installSubagentFleet();
+		installModelSwitcher();
+		setPillBubbleAnimation(currentConfig.pill.bubbleAnimation ? BUBBLE_ANIMATION_MS : 0);
 		applyConfiguredUi(ctx);
 		installMousePatches();
 		refresh();
@@ -528,6 +626,10 @@ export default function (pi: ExtensionAPI) {
 		sessionLifecycle.shutdown();
 		try {
 			uninstallMouse();
+			uninstallSessionCapture();
+			uninstallQueueRowHiding();
+			setActiveSubagentFleet(undefined);
+			setModelSwitcher(undefined);
 			uninstallPrototypePatches();
 			setWorkingIndicator(undefined);
 			stopSessionTimer();
@@ -676,9 +778,13 @@ export default function (pi: ExtensionAPI) {
 	});
 	pi.on("tool_execution_start", (event, ctx) => {
 		liveContext.clear();
+		refreshFleetForTool(event);
 		syncInteractiveState(event, ctx);
 	});
-	pi.on("tool_execution_end", syncInteractiveAndProjectState);
+	pi.on("tool_execution_end", (event, ctx) => {
+		refreshFleetForTool(event);
+		syncInteractiveAndProjectState(event, ctx);
+	});
 	pi.on("session_compact", (event, ctx) => {
 		liveContext.clear();
 		syncInteractiveAndProjectStateWithUsage(event, ctx);
