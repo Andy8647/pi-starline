@@ -14,7 +14,7 @@ import {
 	queuedSegmentText,
 	runPillAction,
 } from "../extensions/starline/pill-actions";
-import { closePillBubble } from "../extensions/starline/pill-bubble";
+import { closePillBubble, isPillBubbleOpenFor } from "../extensions/starline/pill-bubble";
 import { DEFAULT_PILL_CONFIG, type PillConfig } from "../extensions/starline/pill-config";
 import { registerStarlineSettingsCommand } from "../extensions/starline/settings-command";
 import { createInitialState } from "../extensions/starline/state";
@@ -376,6 +376,54 @@ describe("pill actions", () => {
 
 		footer.handleMouse?.({ type: "click", x, y: 0, width });
 		expect(custom).toHaveBeenCalledTimes(2);
+	});
+
+	/** Click the queue pill, then mount the overlay it asked for. */
+	function openQueueBubble(
+		footer: NonNullable<ReturnType<typeof makeFooter>["footer"]>,
+		custom: ReturnType<typeof makeFooter>["custom"],
+	): { done: ReturnType<typeof vi.fn>; x: number } {
+		const width = 80;
+		const line = footer.render(width)[0] ?? "";
+		const x = columnOf(line, "queued");
+		footer.handleMouse?.({ type: "click", x, y: 0, width });
+		const [factory] = custom.mock.calls.at(-1) ?? [];
+		const done = vi.fn();
+		(factory as BubbleFactory)({}, theme, {}, done);
+		return { done, x };
+	}
+
+	it("closes an open bubble on a press that lands on no clickable pill", () => {
+		const { footer, custom } = makeFooter({ queued: true });
+		const width = 80;
+		const { done } = openQueueBubble(footer, custom);
+		expect(isPillBubbleOpenFor("queue")).toBe(true);
+
+		// The one-column pad at the start of the line: on this row, on no pill.
+		expect(footer.handleMouse?.({ type: "press", x: 0, y: 0, width })).toBeUndefined();
+		expect(isPillBubbleOpenFor("queue")).toBe(false);
+		expect(done).toHaveBeenCalledTimes(1);
+	});
+
+	it("closes it from a press on a read-out pill, which does nothing itself", () => {
+		const width = 80;
+		const { footer, custom } = makeFooter({ queued: true });
+		openQueueBubble(footer, custom);
+		const x = columnOf(footer.render(width)[0] ?? "", "project");
+
+		expect(footer.handleMouse?.({ type: "press", x, y: 0, width })).toBeUndefined();
+		expect(isPillBubbleOpenFor("queue")).toBe(false);
+	});
+
+	it("leaves it open for a press on a pill, whose click decides", () => {
+		const { footer, custom } = makeFooter({ queued: true });
+		const width = 80;
+		const { x } = openQueueBubble(footer, custom);
+
+		// The press is claimed so Pi synthesizes a click; closing here as well would
+		// make that click reopen the bubble it just dismissed.
+		expect(footer.handleMouse?.({ type: "press", x, y: 0, width })).toEqual({ handled: true });
+		expect(isPillBubbleOpenFor("queue")).toBe(true);
 	});
 
 	it("falls back to explaining the wait when the session is not readable", () => {

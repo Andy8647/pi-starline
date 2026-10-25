@@ -32,7 +32,13 @@ import { sanitizeExtensionStatusText } from "./extension-status";
 import { isIconMode } from "./icons";
 import { pillActionFor, runPillAction } from "./pill-actions";
 import { getPillAnchor } from "./pill-anchors";
-import { movePillSegment, PILL_SEGMENT_NAMES, pillSegmentPosition } from "./pill-config";
+import {
+	EXTENSION_STATUS_PREFIX,
+	isKnownPillSegment,
+	movePillSegment,
+	PILL_SEGMENT_NAMES,
+	pillSegmentPosition,
+} from "./pill-config";
 import type { SessionLifecycle } from "./session-lifecycle";
 import { EDITOR_BORDER_STYLE, renderChromeBorder, safeThemeFg } from "./style";
 
@@ -139,7 +145,18 @@ function pillSegmentSettingId(name: string): string {
 function pillSegmentFromId(id: string): string | undefined {
 	if (!id.startsWith(pillSegmentSettingPrefix)) return undefined;
 	const name = id.slice(pillSegmentSettingPrefix.length);
-	return PILL_SEGMENT_NAMES.includes(name) ? name : undefined;
+	// Per-status segments (`extensionStatus:<key>`) are rows too; the key is read
+	// from whatever the extension published this session, so any key is valid.
+	return isKnownPillSegment(name) ? name : undefined;
+}
+
+/** Row label for a segment, including the single-status rows. */
+function pillSegmentLabel(name: string): string {
+	const builtin = pillSegmentLabels[name];
+	if (builtin) return builtin;
+	return name.startsWith(EXTENSION_STATUS_PREFIX)
+		? name.slice(EXTENSION_STATUS_PREFIX.length)
+		: name;
 }
 
 /**
@@ -443,16 +460,25 @@ function buildItems(
 	if (section === "pills") {
 		const segments = config.pill.segments;
 		const values = pillSegmentValues(segments.length);
-		return PILL_SEGMENT_NAMES.map((name) => {
+		const row = (name: string, label: string): SettingItem => {
 			const position = pillSegmentPosition(segments, name);
 			return {
 				id: pillSegmentSettingId(name),
-				label: pillSegmentLabels[name] ?? name,
+				label,
 				description: `Position in the bar (1 is leftmost). Space cycles off → 1…${segments.length + 1}.`,
 				currentValue: position > 0 ? String(position) : "off",
 				values,
 			};
-		});
+		};
+		const items = PILL_SEGMENT_NAMES.map((name) => row(name, pillSegmentLabel(name)));
+		// One row per status an extension published this session, so a single
+		// status can be placed on the bar without editing starline.json. Sorted,
+		// so the rows do not move under the cursor between changes.
+		const statusKeys = [...activeStatuses.keys()].sort();
+		for (const key of statusKeys) {
+			items.push(row(`${EXTENSION_STATUS_PREFIX}${key}`, key));
+		}
+		return items;
 	}
 
 	const statuses = Array.from(activeStatuses.entries()).sort(([a], [b]) =>
@@ -706,7 +732,7 @@ export function registerStarlineSettingsCommand(pi: ExtensionAPI, deps: Settings
 									settingsList = makeSettingsList();
 									settingsList.selectItem(id);
 									deps.requestRender();
-									const label = pillSegmentLabels[pillSegment] ?? pillSegment;
+									const label = pillSegmentLabel(pillSegment);
 									ctx.ui.notify(
 										newValue === "off" ? `${label}: off` : `${label}: position ${newValue}`,
 										"info",

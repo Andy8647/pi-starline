@@ -291,6 +291,30 @@ export function renderPillBubble(input: {
  */
 let activeBubble: { handle: PillBubbleHandle; key?: string } | undefined;
 
+/**
+ * Where the open bubble drew itself, in screen cells. A bubble is dismissed by a
+ * click outside it, and "outside" needs its rectangle: Pi's overlay placement puts
+ * it on the footer row whatever the content, so the rectangle is the only thing
+ * that says which cells belong to it.
+ */
+export type PillBubbleGeometry = {
+	/** First column the bubble covers, 0-based. */
+	leftColumn: number;
+	/** Columns it covers. */
+	width: number;
+	/** Rows it drew, which is what the overlay was handed. */
+	height: number;
+	/** Rows between the bubble's last row and the terminal's last row (the footer). */
+	bottomOffset: number;
+};
+
+let activeBubbleGeometry: PillBubbleGeometry | undefined;
+
+/** Geometry of the bubble on screen now, or undefined when none is open. */
+export function activePillBubbleGeometry(): PillBubbleGeometry | undefined {
+	return activeBubbleGeometry;
+}
+
 /** Dismiss the open bubble, if any. */
 export function closePillBubble(): void {
 	activeBubble?.handle.close();
@@ -361,6 +385,9 @@ export function showPillBubble(
 
 	let content = read();
 	let width = pillBubbleWidth(content, terminalWidth, anchor);
+	/** Placement of the overlay on screen now, kept for the geometry a click reads. */
+	let leftColumn = 0;
+	let bottomOffset = 1;
 	let open = true;
 	/**
 	 * Index of the selected target, shared by the mouse and the keyboard. It
@@ -377,6 +404,7 @@ export function showPillBubble(
 	const finish = () => {
 		if (!open) return;
 		open = false;
+		activeBubbleGeometry = undefined;
 		if (activeBubble?.handle === handle) activeBubble = undefined;
 		for (const callback of closeCallbacks.splice(0)) {
 			try {
@@ -422,6 +450,10 @@ export function showPillBubble(
 	function mount(): void {
 		const previous = overlay;
 		const placement = pillBubblePlacement(anchor, width, fallbackWidth);
+		// Where the overlay lands is the placement's to decide, and its own rows are
+		// whatever it draws; a click expects both, so record them as they happen.
+		leftColumn = placement.leftColumn;
+		bottomOffset = Math.max(0, -(placement.options.offsetY ?? 0));
 		const animate = mounts === 0 && openAnimationMs > 0;
 		mounts += 1;
 		let instance: { dismiss: () => void; requestRender: () => void } | undefined;
@@ -504,6 +536,16 @@ export function showPillBubble(
 								startLine: target.startLine - shift,
 								endLine: target.endLine - shift,
 							}));
+							// The rows that will be on screen, not the ones the content would draw:
+							// during the unfold the overlay is shorter than its content.
+							if (overlay === instance) {
+								activeBubbleGeometry = {
+									leftColumn,
+									width: Math.max(0, Math.floor(renderWidth)),
+									height: lines.length,
+									bottomOffset,
+								};
+							}
 							return lines;
 						},
 						invalidate() {},

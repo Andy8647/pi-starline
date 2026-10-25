@@ -74,6 +74,7 @@
 import { getKeybindings, sliceByColumn, stripTerminalSequences } from "@earendil-works/pi-tui";
 import type { PolishedTuiConfig } from "../config";
 import { installPrototypePatch } from "../prototype-patch-registry";
+import { installPillBubbleDismiss } from "./bubble-dismiss";
 import {
 	disabledFeatureWarning,
 	enabledFeatures,
@@ -974,8 +975,13 @@ export function installMouse(prototype: object, deps: InstallMouseDeps): () => v
 			);
 		}
 		// The pointer shape handles no event, it only watches where moves land,
-		// so it cannot double up with another layer and stays on.
-		const externalCleanups = [installCursorMarkerDedupe(prototype), installPointerShape(prototype)];
+		// so it cannot double up with another layer and stays on. The bubble's
+		// outside-click dismissal is the same kind of observer.
+		const externalCleanups = [
+			installCursorMarkerDedupe(prototype),
+			installPointerShape(prototype),
+			installPillBubbleDismiss(),
+		];
 		return () => {
 			for (const cleanup of externalCleanups) cleanup?.();
 		};
@@ -1035,6 +1041,9 @@ export function installMouse(prototype: object, deps: InstallMouseDeps): () => v
 	// none — no pills to hover, so nothing to warn about. See mouse/pointer-shape.ts.
 	const pointer = installPointerShape(typedPrototype);
 	if (pointer) cleanups.push(pointer);
+	// The other reader of the same patch: an open bubble closes when a press lands
+	// outside it. See mouse/bubble-dismiss.ts.
+	if (pointer) cleanups.push(installPillBubbleDismiss());
 
 	if (cleanups.length === 0) return () => {};
 	return () => {
