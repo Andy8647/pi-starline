@@ -365,8 +365,9 @@ describe("pill actions", () => {
 		// One row up, so the bubble's last line sits right on top of the pill.
 		expect(overlay?.offsetY).toBe(-1);
 		expect(overlay?.anchor).toBe("bottom-left");
-		// Lined up with the pill's first coloured cell: the pad before the icon.
-		expect(overlay?.offsetX).toBe(x - 1);
+		// Three columns of edge left of the pill's first coloured cell (the pad
+		// before the icon), so the bottom edge can open over the pill like a tab.
+		expect(overlay?.offsetX).toBe(x - 1 - 3);
 	});
 
 	it("closes the pill's own bubble on a second click, and opens it on a third", () => {

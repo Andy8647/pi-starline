@@ -7,6 +7,7 @@ import {
 	pillBubblePlacement,
 	pillBubbleWidth,
 	renderPillBubble,
+	setPillBubbleAnimation,
 	showPillBubble,
 } from "../extensions/starline/pill-bubble";
 
@@ -54,34 +55,53 @@ describe("pillBubbleWidth", () => {
 });
 
 describe("pillBubblePlacement", () => {
-	it("lines the bubble up with the pill's left edge, on the footer row", () => {
-		const placement = pillBubblePlacement(anchor({ startColumn: 33 }), 30, 80);
-		expect(placement.leftColumn).toBe(33);
+	it("starts a few columns left of the pill and opens its bottom edge over it", () => {
+		const placement = pillBubblePlacement(anchor({ startColumn: 33, endColumn: 38 }), 30, 80);
+		expect(placement.leftColumn).toBe(30);
 		expect(placement.attached).toBe(true);
+		expect(placement.tab).toEqual({ start: 3, end: 8 });
 		expect(placement.options).toMatchObject({
 			width: 30,
 			anchor: "bottom-left",
-			offsetX: 33,
+			offsetX: 30,
 			offsetY: -1,
 		});
 	});
 
 	it("pushes the bubble left only as far as it needs to stay on screen", () => {
-		const placement = pillBubblePlacement(anchor({ startColumn: 70, centerColumn: 74 }), 30, 80);
+		const placement = pillBubblePlacement(
+			anchor({ startColumn: 70, endColumn: 75, centerColumn: 74 }),
+			30,
+			80,
+		);
 		expect(placement.leftColumn).toBe(50);
-		expect(placement.attached).toBe(true);
+		expect(placement.tab).toEqual({ start: 20, end: 25 });
+	});
+
+	it("closes the bottom when the pill is too close to the bubble's edge for a tab", () => {
+		const atLeft = pillBubblePlacement(anchor({ startColumn: 0, endColumn: 6 }), 30, 80);
+		expect(atLeft.leftColumn).toBe(0);
+		expect(atLeft.tab).toBeUndefined();
+		const atRight = pillBubblePlacement(anchor({ startColumn: 74, endColumn: 80 }), 30, 80);
+		expect(atRight.tab).toBeUndefined();
 	});
 
 	it("centres on the pill when the anchor has no left edge", () => {
 		const placement = pillBubblePlacement(anchor(), 30, 80);
 		expect(placement.leftColumn).toBe(25);
 		expect(placement.attached).toBe(true);
+		expect(placement.tab).toBeUndefined();
 	});
 
 	it("centres and floats when there is no pill to sit on", () => {
 		const placement = pillBubblePlacement(undefined, 30, 80);
 		expect(placement.leftColumn).toBe(25);
 		expect(placement.attached).toBe(false);
+	});
+
+	it("is wide enough for the opening over a wide pill", () => {
+		const wide = anchor({ startColumn: 10, endColumn: 50 });
+		expect(pillBubbleWidth({ body: ["hi"] }, 80, wide)).toBe(48);
 	});
 });
 
@@ -93,43 +113,52 @@ describe("renderPillBubble", () => {
 			background: BACKGROUND,
 			foreground: "",
 			attached: true,
+			tab: { start: 4, end: 10 },
 			...overrides,
 		});
 
-	it("paints every line edge to edge, so the block is solid", () => {
+	it("draws a rounded outline of even width, in the pill's colour, with nothing filled", () => {
 		const lines = render();
-		expect(lines.length).toBeGreaterThanOrEqual(5);
-		for (const line of lines) {
-			expect(visibleWidth(line)).toBe(40);
+		for (const line of lines) expect(visibleWidth(line)).toBe(40);
+		const plain = lines.map(strip);
+		expect(plain[0]?.startsWith("╭")).toBe(true);
+		expect(plain[0]?.endsWith("╮")).toBe(true);
+		for (const line of plain.slice(1, -1)) {
+			expect(line.startsWith("│")).toBe(true);
+			expect(line.endsWith("│")).toBe(true);
 		}
-		// The top edge is the fill colour drawn on the terminal's own background;
-		// every row below it carries the pill background.
-		expect(lines[0]).not.toContain(BACKGROUND);
-		for (const line of lines.slice(1)) expect(line).toContain(BACKGROUND);
+		// The pill's colour is only ever a foreground: no row is filled.
+		expect(lines.join("")).not.toContain(BACKGROUND);
+		expect(lines[0]).toContain("\x1b[38;2;249;226;175m");
 	});
 
-	it("draws no corners, outline or tail, only a half-row top edge", () => {
+	it("carries the title in the top edge", () => {
+		const top = strip(render()[0] ?? "");
+		expect(top.startsWith("╭─ 2 messages queued ─")).toBe(true);
 		const lines = render().map(strip);
-		expect(lines[0]).toBe("▄".repeat(40));
-		expect(lines.join("\n")).not.toMatch(/[▗▖▝▘▼╭╮╰╯]/u);
-	});
-
-	it("puts the title inside the block", () => {
-		const lines = render().map(strip);
-		expect(lines[1]).toContain("2 messages queued");
 		expect(lines.join("\n")).toContain("esc to close");
 		expect(lines.join("\n")).toContain("· first");
 	});
 
-	it("leaves the bottom open when it sits on its pill", () => {
-		const lines = render().map(strip);
-		expect(lines.at(-1)).toContain("esc to close");
+	it("opens the bottom edge over the pill, like a folder tab", () => {
+		expect(strip(render().at(-1) ?? "")).toBe(`╰──┘${" ".repeat(6)}└${"─".repeat(28)}╯`);
 	});
 
-	it("closes the bottom with a half-row edge when it floats", () => {
-		const lines = render({ attached: false });
-		expect(strip(lines.at(-1) ?? "")).toBe("▀".repeat(40));
-		expect(lines.at(-1)).not.toContain(BACKGROUND);
+	it("closes the bottom without a tab", () => {
+		expect(strip(render({ tab: undefined }).at(-1) ?? "")).toBe(`╰${"─".repeat(38)}╯`);
+	});
+
+	it("fills the selected target with the pill's colour, and only that row", () => {
+		const lines = render({
+			content: {
+				body: ["plain", { text: "one", onSelect: () => {} }, { text: "two", onSelect: () => {} }],
+			},
+			selected: 1,
+		});
+		const filled = lines.filter((line) => line.includes(BACKGROUND));
+		expect(filled).toHaveLength(1);
+		expect(strip(filled[0] ?? "")).toContain("two");
+		expect(visibleWidth(filled[0] ?? "")).toBe(40);
 	});
 
 	it("wraps long paragraphs instead of overflowing", () => {
@@ -372,5 +401,148 @@ describe("bubble handle", () => {
 		const calls = read.mock.calls.length;
 		handle.refresh();
 		expect(read.mock.calls.length).toBe(calls);
+	});
+});
+
+describe("choosing a target", () => {
+	type Interactive = BubbleComponent & { dispose(): void };
+	const DOWN = "\x1b[B";
+	const UP = "\x1b[A";
+	const ENTER = "\r";
+
+	function open(onOne = vi.fn(), onTwo = vi.fn()) {
+		const { ctx, custom } = fakeContext();
+		const handle = showPillBubble(
+			ctx,
+			{
+				title: "Pick",
+				body: ["plain", { text: "one", onSelect: onOne }, { text: "two", onSelect: onTwo }],
+				hint: "esc to close",
+			},
+			anchor(),
+		);
+		const [factory, options] = custom.mock.calls.at(-1) ?? [];
+		const tui = { requestRender: vi.fn() };
+		const done = vi.fn();
+		const bubble = (factory as (...args: unknown[]) => Interactive)(tui, {}, {}, done);
+		const width = (options as { overlayOptions: { width: number } }).overlayOptions.width;
+		const selectedText = () =>
+			strip(bubble.render(width).find((line) => line.includes(BACKGROUND)) ?? "");
+		return { bubble, tui, done, handle, width, selectedText, onOne, onTwo };
+	}
+
+	it("steps through the targets with the arrow keys, wrapping, and runs one with Enter", () => {
+		const { bubble, done, selectedText, onOne, onTwo } = open();
+		expect(selectedText()).toBe("");
+		bubble.handleInput(DOWN);
+		expect(selectedText()).toContain("one");
+		bubble.handleInput(DOWN);
+		expect(selectedText()).toContain("two");
+		bubble.handleInput(DOWN);
+		expect(selectedText()).toContain("one");
+		bubble.handleInput(UP);
+		expect(selectedText()).toContain("two");
+
+		bubble.handleInput(ENTER);
+		expect(onTwo).toHaveBeenCalledTimes(1);
+		expect(onOne).not.toHaveBeenCalled();
+		expect(done).toHaveBeenCalledTimes(1);
+	});
+
+	it("starts from the bottom when the first key is up", () => {
+		const { bubble, selectedText, width } = open();
+		// Keys act on the targets of the last render; Pi always renders before input.
+		bubble.render(width);
+		bubble.handleInput(UP);
+		expect(selectedText()).toContain("two");
+	});
+
+	it("closes on Enter with nothing selected, running nothing", () => {
+		const { bubble, done, onOne, onTwo } = open();
+		bubble.handleInput(ENTER);
+		expect(done).toHaveBeenCalledTimes(1);
+		expect(onOne).not.toHaveBeenCalled();
+		expect(onTwo).not.toHaveBeenCalled();
+	});
+
+	it("selects the target under the pointer, so the mouse and the keys agree", () => {
+		const { bubble, tui, width, selectedText } = open();
+		const row = bubble.render(width).findIndex((line) => strip(line).includes("one"));
+		expect(bubble.handleMouse?.({ type: "move", x: 3, y: row })).toEqual({ handled: true });
+		expect(selectedText()).toContain("one");
+		expect(tui.requestRender).toHaveBeenCalledTimes(1);
+		// Moving within the same target does not repaint again.
+		bubble.handleMouse?.({ type: "move", x: 5, y: row });
+		expect(tui.requestRender).toHaveBeenCalledTimes(1);
+		bubble.handleInput(DOWN);
+		expect(selectedText()).toContain("two");
+	});
+});
+
+describe("opening animation", () => {
+	afterEach(() => {
+		setPillBubbleAnimation(0);
+		vi.useRealTimers();
+	});
+
+	it("unfolds upward from the pill, a row at a time, then stops repainting", async () => {
+		vi.useFakeTimers();
+		setPillBubbleAnimation(90);
+		const { ctx, custom } = fakeContext();
+		const onSelect = vi.fn();
+		showPillBubble(
+			ctx,
+			{ title: "Pick", body: [{ text: "one", onSelect }, "two", "three"], hint: "esc" },
+			anchor(),
+		);
+		const [factory, options] = custom.mock.calls.at(-1) ?? [];
+		const tui = { requestRender: vi.fn() };
+		const bubble = (factory as (...args: unknown[]) => BubbleComponent)(tui, {}, {}, vi.fn());
+		const width = (options as { overlayOptions: { width: number } }).overlayOptions.width;
+
+		const first = bubble.render(width).map(strip);
+		expect(first).toHaveLength(1);
+		// The row that shows first is the one on the pill: the bottom edge.
+		expect(first[0]?.startsWith("╰")).toBe(true);
+		// Not yet drawn, so not yet clickable.
+		expect(bubble.handleMouse?.({ type: "click", x: 3, y: 0 })).toBeUndefined();
+
+		await vi.advanceTimersByTimeAsync(48);
+		const middle = bubble.render(width).length;
+		expect(middle).toBeGreaterThan(1);
+		expect(middle).toBeLessThan(6);
+
+		await vi.advanceTimersByTimeAsync(100);
+		const full = bubble.render(width).map(strip);
+		expect(full).toHaveLength(6);
+		expect(full[0]?.startsWith("╭─ Pick")).toBe(true);
+		const repaints = tui.requestRender.mock.calls.length;
+		await vi.advanceTimersByTimeAsync(200);
+		expect(tui.requestRender.mock.calls.length).toBe(repaints);
+
+		// Targets line up with the rows once it is whole.
+		bubble.handleMouse?.({ type: "click", x: 3, y: 1 });
+		expect(onSelect).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not animate a reopen for width", () => {
+		setPillBubbleAnimation(90);
+		const { ctx, custom } = fakeContext();
+		let text = "short";
+		const handle = showPillBubble(ctx, () => ({ body: [text] }), anchor());
+		const [first] = custom.mock.calls.at(-1) ?? [];
+		(first as (...args: unknown[]) => BubbleComponent)({ requestRender: vi.fn() }, {}, {}, vi.fn());
+
+		text = "x".repeat(50);
+		handle.refresh();
+		const [second, options] = custom.mock.calls.at(-1) ?? [];
+		const bubble = (second as (...args: unknown[]) => BubbleComponent)(
+			{ requestRender: vi.fn() },
+			{},
+			{},
+			vi.fn(),
+		);
+		const width = (options as { overlayOptions: { width: number } }).overlayOptions.width;
+		expect(bubble.render(width)).toHaveLength(3);
 	});
 });

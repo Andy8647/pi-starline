@@ -286,12 +286,17 @@ export function installFooter(
 				const endColumn = Math.min(lineWidth, span.endColumn + columnOffset);
 				if (endColumn <= startColumn) continue;
 				const bodyStartColumn = Math.min(endColumn - 1, span.bodyStartColumn + columnOffset);
-				visibleSpans.push({ ...span, startColumn, endColumn, bodyStartColumn });
+				const bodyEndColumn = Math.max(
+					bodyStartColumn + 1,
+					Math.min(endColumn, span.bodyEndColumn + columnOffset),
+				);
+				visibleSpans.push({ ...span, startColumn, endColumn, bodyStartColumn, bodyEndColumn });
 				// Same columns, plus the colours, for anything that wants to sit next to
 				// this pill later — a bubble today, whatever the next action needs.
 				anchors.set(span.key, {
 					key: span.key,
 					startColumn: bodyStartColumn,
+					endColumn: bodyEndColumn,
 					centerColumn: Math.floor((startColumn + endColumn - 1) / 2),
 					terminalWidth: width,
 					background: span.bg,
@@ -360,6 +365,7 @@ export function installFooter(
 					runPillAction(action, ctx, {
 						key: hit.key,
 						startColumn: hit.bodyStartColumn,
+						endColumn: hit.bodyEndColumn,
 						centerColumn: Math.floor((hit.startColumn + hit.endColumn - 1) / 2),
 						terminalWidth: width,
 						background: hit.bg,

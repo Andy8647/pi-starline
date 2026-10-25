@@ -146,16 +146,17 @@ The queue bubble, the model and thinking pickers and any future panel open throu
 `ctx.ui.custom(..., { overlay: true })`. The footer stays one line; nothing about
 the layout changes when a popover is open.
 
-**As built:** the popover grows up out of the pill it belongs to, like a menu out of
-a menu bar. `pill-bubble.ts` is the shared component: an action passes its content
-plus the `PillAnchor` the footer recorded for that pill (first coloured column,
-centre column, terminal width, the pill's own background and foreground SGR), and
-gets a block in the pill's colours. Placement is `anchor: "bottom-left"` +
-`offsetX` at the pill's first coloured column and `offsetY: -1`, so the block's last
-row sits directly on the footer row and the colour runs from the bubble into the
-pill. Near the right edge the block shifts left just enough to stay on screen.
-Without an anchor — the `/starline` command when the pill is not drawn — it
-centres and floats. Opening a second bubble closes the first, so clicking another
+**As built:** the popover is a rounded outline in the pill's colour whose bottom
+edge opens over the pill, like a folder tab, so the pill reads as its handle.
+`pill-bubble.ts` is the shared component: an action passes its content plus the
+`PillAnchor` the footer recorded for that pill (the pill's coloured columns, centre
+column, terminal width, background and foreground SGR). Placement is
+`anchor: "bottom-left"`, `offsetX` three columns left of the pill and
+`offsetY: -1`, so the bottom edge sits directly on the footer row and breaks over
+the pill's columns (`╰──┘ ⋯ └──╯`). Near the right edge the box shifts left just
+enough to stay on screen; when that leaves no edge beside the pill, the bottom
+closes instead. Without an anchor — the `/starline` command when the pill is not
+drawn — it centres with a closed bottom. Opening a second bubble closes the first, so clicking another
 pill swaps the popover instead of stacking overlays; clicking the same pill again
 closes its bubble, like a menu-bar item. The anchor carries the pill's key for
 that.
@@ -171,17 +172,28 @@ and subagents bubbles tick once a second while open (the subagents one asks
 pi-subagents again each tick, skipping a tick while an answer is outstanding), and
 every way a bubble ends runs `onClose` exactly once, which is where the timer stops.
 
-The shape is a square block on purpose. A terminal colours whole cells, so rounded
-corners and a pointing tail can only be faked with glyphs, and three attempts
-(box-drawing corners over a fill, quadrant-cut corners `▗ ▖ ▝ ▘`, a `▼` tail on its
-own row) all left seams where the glyphs met the fill. Colour plus adjacency says
-which pill a bubble belongs to without any of that. The only shaping is a half-block
-row (`▄`) on top — and `▀` underneath when floating — which halves the padding and
-cannot misalign.
+**Why an outline.** A terminal colours whole cells, so a rounded corner drawn over
+a fill leaves the fill's square corner around the curve. Four filled versions were
+tried and dropped (box-drawing corners over a fill, quadrant-cut corners
+`▗ ▖ ▝ ▘`, a `▼` tail, a plain block on the pill). With nothing filled, `╭ ╮ ╰ ╯`
+are simply round, and the inside keeps the terminal's own background — which on a
+translucent terminal shows the blurred window behind it. Colour goes on the
+outline, the title (which rides in the top edge, `╭─ Thinking ─╮`) and the selected
+row. All of the look is in `buildBubble()`; placement, targets, refresh and the
+protocol do not depend on it. Other directions considered (soft tint, dark card with
+an accent strip, a rail, stacked pills, a drop shadow, real pixels through the kitty
+graphics protocol) were compared in a gallery before choosing.
 
-The panel closes on Escape (and Enter) through its own `handleInput`. Pi owns the
-overlay, but not the meaning of Escape inside it, so the dismiss key is part of the
-component rather than something the overlay stack does for us.
+**Choosing a target.** The mouse and the keyboard move one selection: hovering a
+target selects it, ↑/↓ step through the targets (wrapping), Enter runs the selected
+one or closes the bubble when none is selected, Escape closes. The selected row is
+filled with the pill's colour, like a menu highlight. Pi owns the overlay but not
+the meaning of keys inside it, so these are the component's own `handleInput`.
+
+**Opening.** The first overlay unfolds upward from the pill over 90 ms
+(`pill.bubbleAnimation`, on by default): it is anchored at its bottom, so drawing
+only its last rows and adding one per frame grows it out of the pill. Rows not yet
+drawn are not clickable. A reopen for width is not animated.
 
 ### 5. The pointer becomes a hand over a target
 

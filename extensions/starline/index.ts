@@ -54,6 +54,7 @@ import { readPackageVersionResult } from "./package-version";
 import { installPasteCollapse } from "./paste-collapse";
 import { setModelSwitcher } from "./pill-actions";
 import { publishPillApi } from "./pill-api";
+import { setPillBubbleAnimation } from "./pill-bubble";
 import {
 	createProjectRefreshScheduler,
 	type ScheduleProjectRefreshOptions,
@@ -94,6 +95,12 @@ function isTuiContext(ctx: ExtensionContext): boolean {
 		return false;
 	}
 }
+
+/**
+ * How long a pill's bubble takes to unfold from the pill: long enough to read as
+ * growing out of it, short enough never to be waited on.
+ */
+const BUBBLE_ANIMATION_MS = 90;
 
 export default function (pi: ExtensionAPI) {
 	// Published before anything else so a bridge that registers in `session_start`
@@ -597,6 +604,7 @@ export default function (pi: ExtensionAPI) {
 		installQueueRowHiding();
 		installSubagentFleet();
 		installModelSwitcher();
+		setPillBubbleAnimation(currentConfig.pill.bubbleAnimation ? BUBBLE_ANIMATION_MS : 0);
 		applyConfiguredUi(ctx);
 		installMousePatches();
 		refresh();

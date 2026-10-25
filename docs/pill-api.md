@@ -16,10 +16,12 @@ installed.
 
 ## What a pill gets
 
-- A click opens a bubble in the pill's own colour, growing up out of the pill. A
-  second click on the same pill closes it, and so does Escape.
+- A click opens a bubble: a rounded outline in the pill's colour that opens over
+  the pill like a folder tab, your title in its top edge. A second click on the
+  same pill closes it, and so does Escape.
 - Body lines can be targets: underlined, the pointer turns into a hand over them,
-  and a click runs your callback.
+  and the row under the pointer is highlighted in the pill's colour. ↑/↓ move the
+  same highlight and Enter runs it; a click runs it too.
 - The content can be live: the bubble re-reads it while open.
 - The same action runs from the keyboard as `/starline <key>`.
 

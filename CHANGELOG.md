@@ -18,8 +18,7 @@ npm.
   the pill footer a new `queue` segment appears while messages are waiting for the
   current turn to end — an inbox icon and the count (`3`), gone again as soon as
   the queue drains, so it costs nothing the rest of the time. Clicking it, or running
-  `/starline queue`, opens a bubble that grows up out of the pill, in the pill's own
-  colour, with the count in the heading (`2 messages queued`) and the first lines of
+  `/starline queue`, opens a bubble on the pill, with the count in the heading (`2 messages queued`) and the first lines of
   each message in the body. When Pi does not let the count be read, the pill says
   `queued` instead; with icons off it reads `3 queued`. The icon is `icons.queue`.
 
@@ -45,14 +44,14 @@ npm.
   labels, and the click falls through instead of being swallowed. Every action also
   has a `/starline` subcommand, so nothing new is mouse-only.
 
-- **A popover any pill action can reuse.** `pill-bubble.ts` positions an overlay
-  against a pill's anchor (its first coloured column, the terminal width, its
-  colours) and paints a block in the pill's background, lined up with the pill and
-  sitting directly on the footer row, so the colour runs from the bubble into the
-  pill. No rounded corners or tail: in a terminal those are glyph fakes that leave
-  seams at the cell edges. Clicking a second pill swaps the bubble instead of
-  stacking overlays, clicking the same pill again closes its bubble, and a body
-  line that declares a callback is underlined and runs it when clicked. The model
+- **A popover any pill action can reuse.** A rounded outline in the pill's colour,
+  sitting on the pill with its bottom edge open over it like a folder tab, the
+  title in the top edge and nothing filled, so a translucent terminal shows through.
+  It unfolds upward from the pill in 90 ms (`pill.bubbleAnimation: false` turns that
+  off). Clicking a second pill swaps the bubble instead of stacking overlays, and
+  clicking the same pill again closes it. A body line that declares a callback is
+  underlined; hovering it or moving to it with ↑/↓ highlights it in the pill's
+  colour, and a click or Enter runs it. The model
   picker and the subagents list use the same popover. Design and phases are in
   [docs/clickable-pills.md](https://github.com/Andy8647/pi-starline/blob/main/docs/clickable-pills.md).
 

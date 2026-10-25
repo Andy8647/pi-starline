@@ -22,8 +22,10 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 export type PillAnchor = {
 	/** The pill's segment key; a click on the pill whose bubble is open closes it. */
 	key?: string;
-	/** First column painted in the pill's colour; the bubble's left edge lines up with it. */
+	/** First column painted in the pill's colour. */
 	startColumn?: number;
+	/** First column after the pill's colour, where its arrow or cap begins. */
+	endColumn?: number;
 	/** Column of the pill's centre on the footer line. */
 	centerColumn: number;
 	/** Width the footer was rendered at, which is the terminal width. */

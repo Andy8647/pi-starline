@@ -65,6 +65,8 @@ export type PillSpan = {
 	 * background; anything that has to line up with the pill's edge uses this.
 	 */
 	bodyStartColumn: number;
+	/** First column after the pill's own colour: where its arrow or cap starts. */
+	bodyEndColumn: number;
 	/** Background SGR the pill was painted with, for anything that has to match it. */
 	bg: string;
 	/** Foreground SGR, or "" when the text carried its own styling. */
@@ -318,6 +320,7 @@ export function renderPillBar(
 		const startColumn = index === 0 ? capStart : column;
 		const bodyStartColumn = column;
 		emit(`${pill.bg}${pill.fg}${pill.bold ? BOLD : ""} ${pill.text} ${RESET}`);
+		const bodyEndColumn = column;
 
 		const next = pills[index + 1];
 		if (next) {
@@ -345,6 +348,7 @@ export function renderPillBar(
 			startColumn,
 			endColumn: column,
 			bodyStartColumn,
+			bodyEndColumn,
 			bg: pill.bg,
 			fg: pill.fg,
 		});
@@ -360,7 +364,11 @@ export function renderPillBar(
 			const endColumn = Math.min(span.endColumn, visible);
 			if (endColumn > startColumn) {
 				const bodyStartColumn = Math.min(span.bodyStartColumn, endColumn - 1);
-				options.onSpan({ ...span, startColumn, endColumn, bodyStartColumn });
+				const bodyEndColumn = Math.max(
+					bodyStartColumn + 1,
+					Math.min(span.bodyEndColumn, endColumn),
+				);
+				options.onSpan({ ...span, startColumn, endColumn, bodyStartColumn, bodyEndColumn });
 			}
 		}
 	}
