@@ -52,6 +52,7 @@ import { installMouse } from "./mouse";
 import { setActiveEditor } from "./mouse/editor-mouse";
 import { readPackageVersionResult } from "./package-version";
 import { installPasteCollapse } from "./paste-collapse";
+import { setModelSwitcher } from "./pill-actions";
 import { publishPillApi } from "./pill-api";
 import {
 	createProjectRefreshScheduler,
@@ -319,6 +320,20 @@ export default function (pi: ExtensionAPI) {
 		fleet.refresh();
 	};
 
+	/**
+	 * The model pill's picker switches through `pi`, which actions do not get.
+	 * A scoped model that pins a thinking level brings it along, as ctrl+p does.
+	 */
+	const installModelSwitcher = () => {
+		setModelSwitcher(async ({ model, thinkingLevel }) => {
+			const switched = await pi.setModel(model as Parameters<typeof pi.setModel>[0]);
+			if (switched && thinkingLevel) {
+				pi.setThinkingLevel(thinkingLevel as Parameters<typeof pi.setThinkingLevel>[0]);
+			}
+			return switched;
+		});
+	};
+
 	/** A foreground run starts with no event of its own, only the tool call. */
 	const refreshFleetForTool = (event: { toolName?: string }) => {
 		if (event.toolName === SUBAGENT_TOOL_NAME) getActiveSubagentFleet()?.refresh();
@@ -581,6 +596,7 @@ export default function (pi: ExtensionAPI) {
 		installSessionCapture();
 		installQueueRowHiding();
 		installSubagentFleet();
+		installModelSwitcher();
 		applyConfiguredUi(ctx);
 		installMousePatches();
 		refresh();
@@ -605,6 +621,7 @@ export default function (pi: ExtensionAPI) {
 			uninstallSessionCapture();
 			uninstallQueueRowHiding();
 			setActiveSubagentFleet(undefined);
+			setModelSwitcher(undefined);
 			uninstallPrototypePatches();
 			setWorkingIndicator(undefined);
 			stopSessionTimer();

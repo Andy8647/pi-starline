@@ -56,6 +56,12 @@ npm.
   popover for free. Design and phases are in
   [docs/clickable-pills.md](https://github.com/Andy8647/pi-starline/blob/main/docs/clickable-pills.md).
 
+- **The model pill switches models.** Clicking it lists the session's scoped models
+  — the ones ctrl+p cycles — with the current one marked; click another to switch,
+  bringing along any thinking level the scope pins. With no scope it lists up to
+  eight available models and points at `/model` for the rest. `/starline model`
+  steps to the next one, like ctrl+p.
+
 - **A pill for running subagents.** With `pi-subagents` installed, a `subagents`
   pill appears while subagents are running and counts them (`2 agents`). Click it, or
   run `/starline subagents`, for one line per run: agent, model, how long it has

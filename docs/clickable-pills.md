@@ -56,8 +56,10 @@ works without staging anything.
   event to it first, and only then calls its own handler.
 - **`ctx.ui.custom(factory, { overlay: true })`** opens a focused component on top
   of everything — the popover primitive, no layout work needed.
-- **`ModelSelectorComponent`** is exported from `@earendil-works/pi-coding-agent`, so
-  the model picker can be Pi's own instead of a look-alike.
+- **`ctx.scopedModels`** is the set ctrl+p cycles (`enabledModels` / `--models`), and
+  `pi.setModel` switches. The model picker lists those in the bubble rather than
+  embedding Pi's full `ModelSelectorComponent`: a handful of models is what fits a
+  bubble, and `/model` is still there for the whole catalogue.
 - **`ctx.ui.setStatus(key, text)`** is how another extension publishes a pill
   today; `extensionStatus:<key>` in `pill.segments` already renders one.
   `pi-subagents` never calls `setStatus`, but it publishes a versioned in-process
@@ -310,7 +312,7 @@ field on the extension context plus a switch for the rows; `live-session.ts` and
 | Phase | Content | Effort |
 | --- | --- | --- |
 | 1 ✅ | Footer `handleMouse`, pill span sink, action table, `/starline` action commands, speech-bubble popover, two actions (queue status → bubble listing what is queued; thinking level → pick from the list, or step from the command) | M |
-| 2 | Model picker via `ModelSelectorComponent` | M |
+| 2 ✅ | Model picker: the session's scoped models in the bubble, switched with `pi.setModel` | S |
 | 3 | Branch switcher (list local branches, confirm on a dirty worktree, `git checkout`) | M |
 | 4 ✅ | Extension-status click hook: a status key opts in by publishing structured data — shipped as the published pill API, which also covers `pi-subagents` and any other extension | S–M |
 | 5 ✅ | `subagents` pill: count of running subagents, bubble listing them, read from pi-subagents' public RPC | S |

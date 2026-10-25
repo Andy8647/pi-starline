@@ -156,7 +156,7 @@ function makeFooter(options: { queued?: boolean; config?: ReturnType<typeof merg
 		options.config ??
 		mergeConfig({
 			footerStyle: "pill",
-			pill: { segments: ["model", "queue"] },
+			pill: { segments: ["cwd", "queue"] },
 			colorSources: { starship: "theme" },
 		});
 
@@ -211,8 +211,8 @@ describe("footer pill clicks", () => {
 	it("leaves a segment without an action unhandled", () => {
 		const { footer, custom } = makeFooter({ queued: true });
 		const line = footer.render(width)[0] ?? "";
-		// The model pill is a read-out: it is drawn, it just does nothing.
-		const x = columnOf(line, "kimi");
+		// The cwd pill is a read-out: it is drawn, it just does nothing.
+		const x = columnOf(line, "project");
 
 		expect(footer.handleMouse?.({ type: "click", x, y: 0, width })).toBeUndefined();
 		expect(footer.handleMouse?.({ type: "press", x, y: 0, width })).toBeUndefined();
@@ -236,7 +236,7 @@ describe("footer pill clicks", () => {
 
 			renderer.event = { type: "move", x: columnOf(line, "queued"), y: 0, width };
 			renderer.handleMouseEvent(hover);
-			renderer.event = { type: "move", x: columnOf(line, "kimi"), y: 0, width };
+			renderer.event = { type: "move", x: columnOf(line, "project"), y: 0, width };
 			renderer.handleMouseEvent(hover);
 
 			expect(renderer.terminal.write.mock.calls.map(([data]) => data)).toEqual([
@@ -296,7 +296,8 @@ describe("pill actions", () => {
 	it("only builtin segments have actions; a status with the same key does not", () => {
 		expect(pillActionFor("queue")).toBeTypeOf("function");
 		expect(pillActionFor("thinking")).toBeTypeOf("function");
-		expect(pillActionFor("model")).toBeUndefined();
+		expect(pillActionFor("model")).toBeTypeOf("function");
+		expect(pillActionFor("cwd")).toBeUndefined();
 		expect(pillActionFor("gitBranch")).toBeUndefined();
 		expect(pillActionFor("extensionStatus:queue")).toBeUndefined();
 	});

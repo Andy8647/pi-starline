@@ -37,6 +37,8 @@ pieces of one product, not a theme:
 - **Clickable thinking pill** — click it for a list of the thinking levels the model
   supports and pick one; `/starline thinking` steps to the next level from the
   keyboard
+- **Clickable model pill** — click it to switch between your scoped models (the
+  ones ctrl+p cycles)
 - **Subagents pill** — with `pi-subagents` installed, a pill counts the running
   subagents; click it for each run's agent, model, time and tokens
 - **Bridged pills** — another extension can make its own status pill clickable and

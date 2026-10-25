@@ -178,6 +178,131 @@ function showThinkingLevel({ ctx, pill, via }: PillActionContext): void {
 	);
 }
 
+/** The parts of a Pi model the picker reads. */
+export type PickableModel = { provider: string; id: string; name?: string };
+
+/** A model offered by the picker, with the thinking level its scope pins, if any. */
+export type ModelChoice = { model: PickableModel; thinkingLevel?: string };
+
+/**
+ * Switch the session's model. Registered by the extension entry, which holds `pi`;
+ * an action only gets the context, and `setModel` is not on it.
+ */
+export type ModelSwitcher = (choice: ModelChoice) => Promise<boolean>;
+
+let modelSwitcher: ModelSwitcher | undefined;
+
+export function setModelSwitcher(switcher: ModelSwitcher | undefined): void {
+	modelSwitcher = switcher;
+}
+
+/** Without a model scope the picker falls back to the whole catalogue, capped. */
+const MAX_UNSCOPED_MODELS = 8;
+
+const sameModel = (a: PickableModel | undefined, b: PickableModel | undefined) =>
+	a !== undefined && b !== undefined && a.provider === b.provider && a.id === b.id;
+
+const modelLabel = (model: PickableModel) => `${model.id} · ${model.provider}`;
+
+/**
+ * What the model picker offers: the session's scoped models — the ones ctrl+p
+ * cycles, from `enabledModels` or `--models` — or, with no scope, the available
+ * models with auth, capped so the bubble stays a bubble. The current model is
+ * always in the list.
+ */
+export function modelChoices(ctx: ExtensionContext): { choices: ModelChoice[]; more: number } {
+	const current = ctx.model as PickableModel | undefined;
+	const scoped = Array.isArray(ctx.scopedModels) ? ctx.scopedModels : [];
+	if (scoped.length > 0) {
+		return {
+			choices: scoped.map((entry) => ({
+				model: entry.model as PickableModel,
+				thinkingLevel: entry.thinkingLevel,
+			})),
+			more: 0,
+		};
+	}
+	let available: PickableModel[] = [];
+	try {
+		available = (ctx.modelRegistry?.getAvailable() ?? []) as PickableModel[];
+	} catch {
+		available = [];
+	}
+	const listed = available.slice(0, MAX_UNSCOPED_MODELS);
+	// Counted before the current model is put in front: it may not be one of the
+	// available ones at all, and it must not hide one that is.
+	const more = Math.max(0, available.length - listed.length);
+	if (current && !listed.some((model) => sameModel(model, current))) listed.unshift(current);
+	return { choices: listed.map((model) => ({ model })), more };
+}
+
+async function switchModel(ctx: ExtensionContext, choice: ModelChoice): Promise<boolean> {
+	let switched = false;
+	try {
+		switched = (await modelSwitcher?.(choice)) === true;
+	} catch {
+		switched = false;
+	}
+	if (!switched && ctx.hasUI) {
+		ctx.ui.notify(`Could not switch to ${modelLabel(choice.model)}`, "error");
+	}
+	return switched;
+}
+
+/** The model pill's bubble: every choice, the current one marked. */
+export function modelPickerContent(ctx: ExtensionContext): PillBubbleContent {
+	const { choices, more } = modelChoices(ctx);
+	const current = ctx.model as PickableModel | undefined;
+	if (choices.length === 0 || !modelSwitcher) {
+		return {
+			title: "Model",
+			body: [
+				current ? `Current model: ${modelLabel(current)}.` : "No model is selected.",
+				"Use /model to pick one.",
+			],
+			hint: "esc to close",
+		};
+	}
+	const body: PillBubbleContent["body"] = choices.map((choice) =>
+		sameModel(choice.model, current)
+			? `● ${modelLabel(choice.model)}`
+			: {
+					text: `○ ${modelLabel(choice.model)}`,
+					onSelect: () => void switchModel(ctx, choice),
+				},
+	);
+	if (more > 0) body.push(`+${more} more in /model`);
+	return { title: "Model", body, hint: "click a model · /model for all · esc to close" };
+}
+
+/**
+ * A click opens the picker. The command steps to the next choice, the same way
+ * ctrl+p cycles scoped models, and reports where it landed.
+ */
+async function showModels({ ctx, pill, via }: PillActionContext): Promise<void> {
+	if (via === "click") {
+		showPillBubble(ctx, modelPickerContent(ctx), pill);
+		return;
+	}
+	const { choices } = modelChoices(ctx);
+	const current = ctx.model as PickableModel | undefined;
+	const index = choices.findIndex((choice) => sameModel(choice.model, current));
+	const next = choices[(index + 1) % Math.max(1, choices.length)];
+	if (!next || choices.length < 2 || !(await switchModel(ctx, next))) {
+		showPillBubble(ctx, modelPickerContent(ctx), pill);
+		return;
+	}
+	showPillBubble(
+		ctx,
+		{
+			title: "Model",
+			body: [`${current ? current.id : "none"} → ${next.model.id}`],
+			hint: "esc to close",
+		},
+		pill,
+	);
+}
+
 /** `45s`, `3m 12s`, `1h 05m`: what a glance at a running agent needs. */
 export function formatElapsed(milliseconds: number): string {
 	const seconds = Math.max(0, Math.floor(milliseconds / 1000));
@@ -239,6 +364,7 @@ async function showSubagents({ ctx, pill }: PillActionContext): Promise<void> {
  * handled, so nothing is swallowed.
  */
 export const PILL_ACTIONS: Readonly<Partial<Record<string, PillAction>>> = {
+	model: showModels,
 	queue: showQueuedMessages,
 	subagents: showSubagents,
 	thinking: showThinkingLevel,
