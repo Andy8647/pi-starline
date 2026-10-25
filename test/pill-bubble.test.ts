@@ -260,3 +260,117 @@ describe("showPillBubble", () => {
 		expect(bubble.handleMouse?.({ type: "click", x: 3, y: 99 })).toBeUndefined();
 	});
 });
+
+describe("bubble handle", () => {
+	type Mounted = BubbleComponent & { dispose(): void };
+
+	/** Mount the overlay the latest `custom` call asked for, with a renderer that can repaint. */
+	function mount(custom: ReturnType<typeof vi.fn>, index = -1) {
+		const call = index < 0 ? custom.mock.calls.at(index) : custom.mock.calls[index];
+		const [factory, options] = call ?? [];
+		const tui = { requestRender: vi.fn() };
+		const done = vi.fn();
+		const bubble = (factory as (...args: unknown[]) => Mounted)(tui, {}, {}, done);
+		const width = (options as { overlayOptions: { width: number } }).overlayOptions.width;
+		return { bubble, tui, done, width };
+	}
+
+	it("is closed from the start without a UI, and says so to onClose at once", () => {
+		const { ctx } = fakeContext(false);
+		const handle = showPillBubble(ctx, content, anchor());
+		const onClose = vi.fn();
+		handle.onClose(onClose);
+		expect(handle.isOpen()).toBe(false);
+		expect(onClose).toHaveBeenCalledTimes(1);
+	});
+
+	it("reads function content again on refresh and repaints in place", () => {
+		const { ctx, custom } = fakeContext();
+		let count = 1;
+		const handle = showPillBubble(ctx, () => ({ body: [`count ${count}`] }), anchor());
+		const { bubble, tui, width } = mount(custom);
+		expect(bubble.render(width).map(strip).join("\n")).toContain("count 1");
+
+		count = 2;
+		handle.refresh();
+		expect(tui.requestRender).toHaveBeenCalledTimes(1);
+		expect(custom).toHaveBeenCalledTimes(1);
+		expect(bubble.render(width).map(strip).join("\n")).toContain("count 2");
+	});
+
+	it("reopens wider when a line outgrows it, then takes the old overlay down", () => {
+		const { ctx, custom } = fakeContext();
+		let text = "short";
+		const handle = showPillBubble(ctx, () => ({ body: [text] }), anchor());
+		const first = mount(custom);
+
+		text = "x".repeat(40);
+		handle.refresh();
+		expect(custom).toHaveBeenCalledTimes(2);
+		// Until the wider one is up, the narrower one stays.
+		expect(first.done).not.toHaveBeenCalled();
+		const second = mount(custom);
+		expect(second.width).toBeGreaterThan(first.width);
+		expect(first.done).toHaveBeenCalledTimes(1);
+		// Pi disposing the replaced overlay is not the bubble closing.
+		first.bubble.dispose();
+		expect(handle.isOpen()).toBe(true);
+
+		// And it does not narrow again.
+		text = "short";
+		handle.refresh();
+		expect(custom).toHaveBeenCalledTimes(2);
+	});
+
+	it("runs onClose once, whichever way the bubble ends", () => {
+		const endings: Array<(parts: ReturnType<typeof mount>, handle: { close(): void }) => void> = [
+			({ bubble }) => bubble.handleInput("\x1b"),
+			(_parts, handle) => handle.close(),
+			({ bubble }) => bubble.dispose(),
+			() => closePillBubble(),
+		];
+		for (const end of endings) {
+			const { ctx, custom } = fakeContext();
+			const handle = showPillBubble(ctx, content, anchor());
+			const parts = mount(custom);
+			const onClose = vi.fn();
+			handle.onClose(onClose);
+			end(parts, handle);
+			handle.close();
+			expect(onClose).toHaveBeenCalledTimes(1);
+			expect(handle.isOpen()).toBe(false);
+		}
+	});
+
+	it("closes the first bubble's handle when a second one replaces it", () => {
+		const { ctx, custom } = fakeContext();
+		const first = showPillBubble(ctx, content, anchor({ key: "queue" }));
+		mount(custom);
+		const onClose = vi.fn();
+		first.onClose(onClose);
+
+		showPillBubble(ctx, content, anchor({ key: "thinking" }));
+		expect(onClose).toHaveBeenCalledTimes(1);
+		expect(isPillBubbleOpenFor("thinking")).toBe(true);
+	});
+
+	it("ignores refresh once closed, and keeps the old content when the source throws", () => {
+		const { ctx, custom } = fakeContext();
+		let fail = false;
+		const read = vi.fn(() => {
+			if (fail) throw new Error("source broke");
+			return { body: ["steady"] };
+		});
+		const handle = showPillBubble(ctx, read, anchor());
+		const { bubble, width } = mount(custom);
+
+		fail = true;
+		handle.refresh();
+		expect(bubble.render(width).map(strip).join("\n")).toContain("steady");
+
+		handle.close();
+		const calls = read.mock.calls.length;
+		handle.refresh();
+		expect(read.mock.calls.length).toBe(calls);
+	});
+});

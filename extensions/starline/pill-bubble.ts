@@ -47,46 +47,22 @@ const BOTTOM_EDGE = "▀";
 const MIN_BUBBLE_WIDTH = 24;
 const MAX_BUBBLE_WIDTH = 64;
 
-/**
- * What the bubble needs to know about the pill it points at. The footer records
- * one of these per pill span, so any action can ask for "the bubble that belongs
- * to my pill" without knowing anything about the footer.
- */
-export type PillAnchor = {
-	/**
-	 * The segment key of the pill. A click on the pill whose bubble is already
-	 * open closes it instead of opening it again.
-	 */
-	key?: string;
-	/**
-	 * First column painted in the pill's colour. The bubble lines its left edge up
-	 * with it; without it the bubble is centred on `centerColumn` instead.
-	 */
-	startColumn?: number;
-	/** Column of the pill's centre on the footer line. */
-	centerColumn: number;
-	/** Width the footer was rendered at, which is the terminal width. */
-	terminalWidth: number;
-	/** Background SGR the pill was painted with. */
-	background: string;
-	/** Foreground SGR of the pill; "" derives a legible one from the background. */
-	foreground: string;
-};
+import type {
+	PillAnchor,
+	PillBubbleContent,
+	PillBubbleHandle,
+	PillBubbleSource,
+} from "../../types/pill-api";
 
-/**
- * A body line. A plain string is information; an object with `onSelect` is a
- * target: it renders underlined and runs the callback when clicked.
- */
-export type PillBubbleLine = string | { text: string; onSelect: () => void };
-
-export type PillBubbleContent = {
-	/** Bold first line, optional. */
-	title?: string;
-	/** Body lines, wrapped to the bubble. */
-	body: PillBubbleLine[];
-	/** Muted last line, e.g. the key that dismisses it. */
-	hint?: string;
-};
+// The public shapes live in the published types file, so the protocol other
+// extensions compile against and the one Starline implements cannot drift.
+export type {
+	PillAnchor,
+	PillBubbleContent,
+	PillBubbleHandle,
+	PillBubbleLine,
+	PillBubbleSource,
+} from "../../types/pill-api";
 
 /** A click target's row range in the rendered bubble. */
 type BubbleTarget = { startLine: number; endLine: number; onSelect: () => void };
@@ -221,109 +197,192 @@ export function renderPillBubble(input: {
 }
 
 /**
- * The open bubble's close function, so opening another one replaces it rather
- * than stacking two overlays on the same footer.
+ * The open bubble, so opening another one replaces it rather than stacking two
+ * overlays on the same footer.
  */
-let closeActiveBubble: (() => void) | undefined;
-/** The pill the open bubble belongs to, when it was opened from one. */
-let activeBubbleKey: string | undefined;
+let activeBubble: { handle: PillBubbleHandle; key?: string } | undefined;
 
 /** Dismiss the open bubble, if any. */
 export function closePillBubble(): void {
-	closeActiveBubble?.();
+	activeBubble?.handle.close();
 }
 
 /** Whether the open bubble is the one the pill `key` opened. */
 export function isPillBubbleOpenFor(key: string): boolean {
-	return closeActiveBubble !== undefined && activeBubbleKey === key;
+	return activeBubble !== undefined && activeBubble.key === key;
+}
+
+function closedHandle(): PillBubbleHandle {
+	return {
+		refresh() {},
+		close() {},
+		isOpen: () => false,
+		onClose(callback) {
+			callback();
+		},
+	};
 }
 
 /**
- * Open the bubble for a pill action. Resolves when the bubble is dismissed
- * (Escape or Enter), which is why callers fire-and-forget it.
+ * Open the bubble for a pill action and return its handle.
+ *
+ * `content` may be a function, read again on every `refresh()`, so a bubble can
+ * show numbers that change while it is open. Pi fixes an overlay's width when it
+ * opens, so a refresh whose content no longer fits reopens the overlay wider in
+ * the same place; it never narrows while open, which would make it jitter.
+ * Everything that ends the bubble — Escape, a click on a target, a second click on
+ * its pill, another bubble replacing it, the session ending — runs the `onClose`
+ * callbacks exactly once.
  */
 export function showPillBubble(
 	ctx: ExtensionContext,
-	content: PillBubbleContent,
+	source: PillBubbleSource,
 	anchor?: PillAnchor,
-): void {
-	if (!ctx.hasUI) return;
+): PillBubbleHandle {
+	if (!ctx.hasUI) return closedHandle();
 	// One bubble at a time: clicking a second pill swaps the popover instead of
 	// leaving the first one underneath it.
 	closePillBubble();
 
+	const read = (): PillBubbleContent => (typeof source === "function" ? source() : source);
 	const fallbackWidth = process.stdout.columns ?? 80;
-	const width = pillBubbleWidth(content, anchor?.terminalWidth ?? fallbackWidth);
-	const placement = pillBubblePlacement(anchor, width, fallbackWidth);
+	const terminalWidth = anchor?.terminalWidth ?? fallbackWidth;
 
-	void ctx.ui
-		.custom<void>(
-			(_tui, theme, _keybindings, done) => {
-				let mounted = true;
-				let targets: BubbleTarget[] = [];
-				const close = () => {
-					if (!mounted) return;
-					mounted = false;
-					if (closeActiveBubble === close) {
-						closeActiveBubble = undefined;
-						activeBubbleKey = undefined;
-					}
-					done(undefined);
-				};
-				closeActiveBubble = close;
-				activeBubbleKey = anchor?.key;
+	let content = read();
+	let width = pillBubbleWidth(content, terminalWidth);
+	let open = true;
+	const closeCallbacks: Array<() => void> = [];
+	/** The overlay on screen now; replaced when a refresh needs a wider one. */
+	let overlay: { dismiss: () => void; requestRender: () => void } | undefined;
 
-				return {
-					render(renderWidth: number): string[] {
-						const built = buildBubble({
-							content,
-							width: renderWidth,
-							background:
-								anchor?.background ??
-								resolveBackgroundSgr(theme as ThemeLike, "theme", "borderMuted") ??
-								"",
-							foreground: anchor?.foreground,
-							attached: placement.attached,
-						});
-						// Only the rows the last render drew can be clicked.
-						targets = built.targets;
-						return built.lines;
-					},
-					invalidate() {},
-					handleInput(data: string): void {
-						if (matchesKey(data, Key.escape) || matchesKey(data, Key.enter)) close();
-					},
-					/**
-					 * Overlays get mouse events with coordinates local to the overlay, so a
-					 * target is just a row range. A press is claimed and the callback runs on
-					 * the click, the same split the footer uses.
-					 */
-					handleMouse(event: BubbleMouseEvent): BubbleMouseResult | undefined {
-						if (!Number.isFinite(event.x) || !Number.isFinite(event.y)) return undefined;
-						const target = targets.find(
-							(entry) => event.y >= entry.startLine && event.y <= entry.endLine,
-						);
-						if (!target) return undefined;
-						if (event.type === "move") {
-							requestPointerShape("pointer");
+	const finish = () => {
+		if (!open) return;
+		open = false;
+		if (activeBubble?.handle === handle) activeBubble = undefined;
+		for (const callback of closeCallbacks.splice(0)) {
+			try {
+				callback();
+			} catch {
+				// One bridge's cleanup failing must not stop the others.
+			}
+		}
+	};
+
+	const handle: PillBubbleHandle = {
+		refresh() {
+			if (!open) return;
+			try {
+				content = read();
+			} catch {
+				return;
+			}
+			const needed = pillBubbleWidth(content, terminalWidth);
+			if (needed > width) {
+				width = needed;
+				mount();
+			} else {
+				overlay?.requestRender();
+			}
+		},
+		close() {
+			if (!open) return;
+			const current = overlay;
+			overlay = undefined;
+			finish();
+			current?.dismiss();
+		},
+		isOpen: () => open,
+		onClose(callback) {
+			if (open) closeCallbacks.push(callback);
+			else callback();
+		},
+	};
+	activeBubble = { handle, key: anchor?.key };
+
+	function mount(): void {
+		const previous = overlay;
+		const placement = pillBubblePlacement(anchor, width, fallbackWidth);
+		let instance: { dismiss: () => void; requestRender: () => void } | undefined;
+
+		void ctx.ui
+			.custom<void>(
+				(tui, theme, _keybindings, done) => {
+					let mounted = true;
+					let targets: BubbleTarget[] = [];
+					instance = {
+						dismiss: () => {
+							if (!mounted) return;
+							mounted = false;
+							done(undefined);
+						},
+						requestRender: () => {
+							if (mounted) (tui as { requestRender?: () => void }).requestRender?.();
+						},
+					};
+					overlay = instance;
+					// The new overlay is up; only now take the narrower one down, so a
+					// refresh never shows a frame with no bubble at all.
+					previous?.dismiss();
+
+					return {
+						render(renderWidth: number): string[] {
+							const built = buildBubble({
+								content,
+								width: renderWidth,
+								background:
+									anchor?.background ??
+									resolveBackgroundSgr(theme as ThemeLike, "theme", "borderMuted") ??
+									"",
+								foreground: anchor?.foreground,
+								attached: placement.attached,
+							});
+							// Only the rows the last render drew can be clicked.
+							targets = built.targets;
+							return built.lines;
+						},
+						invalidate() {},
+						handleInput(data: string): void {
+							if (matchesKey(data, Key.escape) || matchesKey(data, Key.enter)) handle.close();
+						},
+						/**
+						 * Overlays get mouse events with coordinates local to the overlay, so a
+						 * target is just a row range. A press is claimed and the callback runs on
+						 * the click, the same split the footer uses.
+						 */
+						handleMouse(event: BubbleMouseEvent): BubbleMouseResult | undefined {
+							if (!Number.isFinite(event.x) || !Number.isFinite(event.y)) return undefined;
+							const target = targets.find(
+								(entry) => event.y >= entry.startLine && event.y <= entry.endLine,
+							);
+							if (!target) return undefined;
+							if (event.type === "move") {
+								requestPointerShape("pointer");
+								return { handled: true };
+							}
+							if (event.type === "click") {
+								handle.close();
+								target.onSelect();
+							}
 							return { handled: true };
-						}
-						if (event.type === "click") {
-							close();
-							target.onSelect();
-						}
-						return { handled: true };
-					},
-					dispose(): void {
-						mounted = false;
-						if (closeActiveBubble === close) {
-							closeActiveBubble = undefined;
-							activeBubbleKey = undefined;
-						}
-					},
-				};
-			},
-			{ overlay: true, overlayOptions: placement.options },
-		)
-		.catch(() => {});
+						},
+						dispose(): void {
+							mounted = false;
+							// Pi took this overlay down without us asking (the session ended,
+							// the UI was torn down). A replaced overlay is not the bubble closing.
+							if (overlay === instance) {
+								overlay = undefined;
+								finish();
+							}
+						},
+					};
+				},
+				{ overlay: true, overlayOptions: placement.options },
+			)
+			.catch(() => {
+				if (overlay === instance || instance === undefined) finish();
+			});
+	}
+
+	mount();
+	return handle;
 }

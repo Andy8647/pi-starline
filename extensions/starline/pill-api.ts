@@ -19,35 +19,27 @@
  *       api.showBubble(ctx, { title: "Balance", body: ["5h: 42%", "7d: 12%"] }, pill);
  *     });
  *
- * The same action is reachable from the keyboard as `/starline <key>`.
+ * The same action is reachable from the keyboard as `/starline <key>`. Types for
+ * other extensions are in `types/pill-api.d.ts`; the guide is `docs/pill-api.md`.
  */
 
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { type PillAnchor, type PillBubbleContent, showPillBubble } from "./pill-bubble";
+import type { PillApi, PillApiAction } from "../../types/pill-api";
+import { showPillBubble } from "./pill-bubble";
 
 export const PILL_API_SYMBOL = Symbol.for("pi-starline.pill-api.v1");
 
-export type PillApiContext = {
-	ctx: ExtensionContext;
-	/** Geometry and colours of the pill that was clicked, when there was one. */
-	pill?: PillAnchor;
-	/**
-	 * "click" from the pill, "command" from `/starline <key>`. A bubble's targets
-	 * need a pointer, so an action that offers choices can do something direct
-	 * from the command instead. Optional: hosts before it was added do not send it.
-	 */
-	via?: "click" | "command";
-};
-
-export type PillApiAction = (context: PillApiContext) => void;
-
-export type PillApi = {
-	version: 1;
-	/** Make the pill published under `key` clickable. Returns an unregister handle. */
-	register(key: string, action: PillApiAction): () => void;
-	/** Open the standard bubble, pointed at `pill` when one is known. */
-	showBubble(ctx: ExtensionContext, content: PillBubbleContent, pill?: PillAnchor): void;
-};
+// The published shapes: `types/pill-api.d.ts` is what other extensions compile
+// against, so it is also what this file implements.
+export type {
+	PillAnchor,
+	PillApi,
+	PillApiAction,
+	PillApiContext,
+	PillBubbleContent,
+	PillBubbleHandle,
+	PillBubbleLine,
+	PillBubbleSource,
+} from "../../types/pill-api";
 
 /**
  * One action per key: a second registration replaces the first, which is what a
@@ -70,18 +62,19 @@ export function externalPillAction(key: string): PillApiAction | undefined {
 }
 
 /**
- * Publish the API on `globalThis`. Idempotent: a second Starline instance (or a
- * reload that keeps the global) adopts the first object, so every bridge holds
- * the same registry.
+ * Publish the API on `globalThis`, replacing any earlier object.
+ *
+ * The newest Starline wins. This runs when the extension loads, which is before
+ * any `session_start`, so bridges always register on the object published by the
+ * Starline that is actually running. Keeping an older object instead would, after
+ * a `/reload` that re-imports this module, leave bridges registering into the
+ * previous module's registry while the new footer reads its own.
  */
 export function publishPillApi(): void {
-	const host = globalThis as Record<PropertyKey, unknown>;
-	const existing = host[PILL_API_SYMBOL] as PillApi | undefined;
-	if (existing?.version === 1) return;
 	const api: PillApi = {
 		version: 1,
 		register: registerExternalPillAction,
 		showBubble: (ctx, content, pill) => showPillBubble(ctx, content, pill),
 	};
-	host[PILL_API_SYMBOL] = api;
+	(globalThis as Record<PropertyKey, unknown>)[PILL_API_SYMBOL] = api;
 }

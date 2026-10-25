@@ -32,11 +32,24 @@ describe("the published pill API", () => {
 		expect(api.showBubble).toBeTypeOf("function");
 	});
 
-	it("keeps one registry per process", () => {
+	it("lets the newest Starline replace an older object, so bridges reach the running one", () => {
+		const stale = { version: 1, register: vi.fn(), showBubble: vi.fn() };
+		(globalThis as Record<PropertyKey, unknown>)[PILL_API_SYMBOL] = stale;
 		publishPillApi();
-		const first = (globalThis as Record<PropertyKey, unknown>)[PILL_API_SYMBOL];
+		const api = (globalThis as Record<PropertyKey, unknown>)[PILL_API_SYMBOL] as PillApi;
+		expect(api).not.toBe(stale);
+
+		const action = vi.fn();
+		cleanups.push(api.register("pi-balance", action));
+		expect(stale.register).not.toHaveBeenCalled();
+		expect(pillActionFor("pi-balance")).toBe(action);
+	});
+
+	it("hands bridges the bubble handle", () => {
 		publishPillApi();
-		expect((globalThis as Record<PropertyKey, unknown>)[PILL_API_SYMBOL]).toBe(first);
+		const api = (globalThis as Record<PropertyKey, unknown>)[PILL_API_SYMBOL] as PillApi;
+		const handle = api.showBubble({ hasUI: false } as never, { body: ["x"] });
+		expect(handle?.isOpen()).toBe(false);
 	});
 
 	it("makes a status key clickable and hands over the pill", () => {

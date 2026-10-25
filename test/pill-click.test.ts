@@ -14,6 +14,7 @@ import {
 	queuedSegmentText,
 	runPillAction,
 } from "../extensions/starline/pill-actions";
+import { closePillBubble } from "../extensions/starline/pill-bubble";
 import { DEFAULT_PILL_CONFIG, type PillConfig } from "../extensions/starline/pill-config";
 import { registerStarlineSettingsCommand } from "../extensions/starline/settings-command";
 import { createInitialState } from "../extensions/starline/state";
@@ -29,6 +30,9 @@ const plain = (text: string) => stripVTControlCharacters(text);
 
 afterEach(() => {
 	forgetLiveSession();
+	// A bubble counts as open from the moment it is shown; one left over would
+	// turn the next test's click on the same pill into a close.
+	closePillBubble();
 });
 
 function spansOf(
@@ -440,6 +444,45 @@ describe("pill actions", () => {
 			expect(text).toContain("first thing");
 			expect(text).toContain("second");
 		} finally {
+			dispose();
+			prototype.prompt = originalPrompt;
+			forgetLiveSession();
+		}
+	});
+
+	it("keeps the queue bubble current while it is open", async () => {
+		const prototype = AgentSession.prototype as unknown as { prompt: unknown };
+		const originalPrompt = prototype.prompt;
+		prototype.prompt = vi.fn(async () => {});
+		const dispose = installLiveSessionCapture();
+		vi.useFakeTimers();
+		try {
+			let steering = ["first"];
+			const session = { getSteeringMessages: () => steering, getFollowUpMessages: () => [] };
+			await (prototype.prompt as (this: unknown, text: string) => Promise<void>).call(
+				session,
+				"hi",
+			);
+			const custom = vi.fn().mockResolvedValue(undefined);
+			const ctx = { hasUI: true, hasPendingMessages: () => true, ui: { custom } } as never;
+			runPillAction(pillActionFor("queue") as never, ctx);
+
+			const [factory, options] = custom.mock.calls[0] ?? [];
+			const tui = { requestRender: vi.fn() };
+			const bubble = (factory as BubbleFactory)(tui, theme, {}, vi.fn());
+			const width = (options as { overlayOptions: { width: number } }).overlayOptions.width;
+			expect(bubble.render(width).map(plain).join("\n")).toContain("1 message queued");
+
+			steering = ["first", "second"];
+			await vi.advanceTimersByTimeAsync(1_000);
+			expect(tui.requestRender).toHaveBeenCalled();
+			expect(bubble.render(width).map(plain).join("\n")).toContain("2 messages queued");
+
+			steering = [];
+			await vi.advanceTimersByTimeAsync(1_000);
+			expect(bubble.render(width).map(plain).join("\n")).toContain("Nothing is queued.");
+		} finally {
+			vi.useRealTimers();
 			dispose();
 			prototype.prompt = originalPrompt;
 			forgetLiveSession();

@@ -142,7 +142,7 @@ export function pillActionFor(key: string): PillAction | undefined;
 
 ### 4. Popovers are overlays, not layout
 
-The queue bubble, the branch switcher and any future panel open through
+The queue bubble, the model and thinking pickers and any future panel open through
 `ctx.ui.custom(..., { overlay: true })`. The footer stays one line; nothing about
 the layout changes when a popover is open.
 
@@ -156,7 +156,20 @@ row sits directly on the footer row and the colour runs from the bubble into the
 pill. Near the right edge the block shifts left just enough to stay on screen.
 Without an anchor — the `/starline` command when the pill is not drawn — it
 centres and floats. Opening a second bubble closes the first, so clicking another
-pill swaps the popover instead of stacking overlays.
+pill swaps the popover instead of stacking overlays; clicking the same pill again
+closes its bubble, like a menu-bar item. The anchor carries the pill's key for
+that.
+
+**Live bubbles.** `showPillBubble` takes the content or a function returning it, and
+returns a handle (`refresh`, `close`, `isOpen`, `onClose`). A refresh re-reads the
+function and repaints through the overlay's own `requestRender`. Pi fixes an
+overlay's width when it opens, so a refresh whose content no longer fits mounts a
+wider overlay in the same place and only then dismisses the narrower one, so there
+is never a frame without a bubble; it never narrows while open, which would make it
+jitter. Starline does not poll the function: the owner calls `refresh()`. The queue
+and subagents bubbles tick once a second while open (the subagents one asks
+pi-subagents again each tick, skipping a tick while an answer is outstanding), and
+every way a bubble ends runs `onClose` exactly once, which is where the timer stops.
 
 The shape is a square block on purpose. A terminal colours whole cells, so rounded
 corners and a pointing tail can only be faked with glyphs, and three attempts
@@ -200,55 +213,31 @@ owning extension says what a click means, and gets the same bubble without
 rendering or positioning anything.
 
 **As built:** Starline publishes an object on `globalThis` under
-`Symbol.for("pi-starline.pill-api.v1")`. A global symbol rather than an import, for
-the same reason `@xzzpig/pi-mouse-events` uses one: load order is not controlled by
-either side, and an extension should not depend on a package that may be loaded
-twice.
+`Symbol.for("pi-starline.pill-api.v1")` with `register(key, action)` and
+`showBubble(ctx, content, pill)`. How to use it, with templates for an extension's
+own pill and for a bridge to someone else's, is in [pill-api.md](pill-api.md); the
+types ship as `types/pill-api.d.ts`, which Starline's own code also imports, so the
+published shapes and the implementation cannot drift.
 
-```ts
-const api = globalThis[Symbol.for("pi-starline.pill-api.v1")];
+The design choices behind it:
 
-api?.register("pi-balance", ({ ctx, pill }) => {
-  api.showBubble(
-    ctx,
-    {
-      title: "Balance",
-      body: [
-        "5h: 42% left",
-        "7d: 12% left",
-        {
-          text: "▸ 7-day breakdown",
-          onSelect: () => api.showBubble(ctx, { title: "7d", body: ["Mon 3%", "Tue 2%"] }, pill),
-        },
-      ],
-      hint: "esc to close",
-    },
-    pill,
-  );
-});
-```
+- **A global symbol, not an import.** Load order is not controlled by either side,
+  and an extension should not depend on a package that may be loaded twice; the
+  same reason `@xzzpig/pi-mouse-events` publishes one. Without Starline the lookup
+  is `undefined` and the caller's `?.` skips everything.
+- **The newest object wins.** Starline publishes when its module loads, before any
+  `session_start`, and bridges register from `session_start`. Replacing an older
+  object therefore never loses a registration, while keeping it would, after a
+  `/reload` that re-imports the module, leave bridges registering into the previous
+  module's registry while the new footer reads its own.
+- **The key is the status key**, which is also the pill's span key, so no mapping
+  is needed. Starline's own segment names win, so a status cannot hijack `queue`.
+- **Additive, still v1.** The handle, the function content and `via` were added
+  without breaking a v1 caller: an older Starline returns nothing from
+  `showBubble`, which a caller detects with `handle?.`.
 
-- The key is the status key, which is also the pill's span key, so no extra
-  mapping is needed. Starline's own segment names win over a bridge, so a status
-  cannot hijack `queue`.
-- `pill` is the anchor the footer recorded for that pill (centre column, terminal
-  width, its colours). Passing it through is what makes the bubble point at the
-  right pill; omit it and the bubble centres.
-- A body entry as an object is a target: it renders underlined, and a click runs
-  `onSelect` and closes the bubble. A callback that opens another bubble replaces
-  the first, which is how a breakdown view works.
-- Register from `session_start`: it runs after every extension in the process has
-  loaded, so the API exists whatever the load order. `/reload` re-runs it, so the
-  bridge survives a reload — and re-registering replaces the old action.
-- The same action is reachable from the keyboard as `/starline <key>` (for
-  example `/starline pi-balance`), because the command path resolves through the
-  same table. The context's `via` says which way it came (`"click"` or
-  `"command"`); a bubble's targets need a pointer, so an action that offers
-  choices can act directly from the command instead.
-
-`register` returns an unregister handle; a stale handle cannot remove a newer
-registration for the same key. `scripts/balance-probe.ts` in the working tree is a
-stand-in for `pi-balance` used to exercise this end to end.
+`scripts/balance-probe.ts` in the working tree is a stand-in for `pi-balance` used to
+exercise this end to end.
 
 ## What the queue bubble shows
 
@@ -287,7 +276,8 @@ answer; it asks again on the package's lifecycle events (`subagent:async-started
 `tool_execution_start`/`end` for the `subagent` tool, since a foreground run starts
 with no event of its own. Bursts collapse into one request, there is no timer, and
 the footer only redraws when the count changes. A click asks once more (400 ms,
-then the cached answer) so the elapsed times are current. Without pi-subagents the
+then the cached answer), and the open bubble asks again every second so elapsed
+times, tokens and the list stay current until it closes. Without pi-subagents the
 requests go unanswered and the pill never appears.
 
 Verified against pi-subagents 0.82.0: the same request from a probe extension gets

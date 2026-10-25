@@ -83,13 +83,24 @@ npm.
 - **Other extensions can make their pills clickable.** Starline publishes a pill
   API on `globalThis` under `Symbol.for("pi-starline.pill-api.v1")`. An extension
   that publishes a status with `ctx.ui.setStatus()` registers an action for that
-  key and opens the standard bubble with its own detail — `pi-balance` can show 5h
-  and 7d numbers, without rendering or positioning anything. Every bridged action is also reachable as `/starline <key>`, and the
-  action is told which way it was reached (`via: "click" | "command"`). The
-  protocol, a working example and the load-order/`/reload` rules are in
-  [docs/clickable-pills.md](https://github.com/Andy8647/pi-starline/blob/main/docs/clickable-pills.md#a-protocol-for-other-extensions).
+  key and opens the standard bubble with its own detail — `pi-balance` can show its
+  5h and 7d numbers without rendering or positioning anything. For an extension you
+  do not own, a small bridge extension can do the same from whatever it publishes.
+  Every action is also reachable as `/starline <key>`, and is told which way it was
+  reached (`via: "click" | "command"`).
+
+  Bubbles can be live: pass a function as the content and `showBubble` returns a
+  handle with `refresh()`, `close()`, `isOpen()` and `onClose()`. The queue and
+  subagents bubbles use it to stay current while open. Types ship in the package as
+  `pi-starline/types/pill-api` for `import type`; nothing is imported at runtime.
+  The guide, with templates for both cases, is
+  [docs/pill-api.md](https://github.com/Andy8647/pi-starline/blob/main/docs/pill-api.md).
 
 **Changed**
+
+- The README is down to what Starline does and how to install it. The git status
+  indicators and the list of 57 detected runtimes moved to
+  [docs/segments.md](https://github.com/Andy8647/pi-starline/blob/main/docs/segments.md).
 
 - Reading the queued messages and switching the thinking level need the live
   `AgentSession`, which the extension context does not expose. Two small wrappers

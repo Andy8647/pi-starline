@@ -20,7 +20,8 @@
 		"tui"
 	],
 	"files": [
-		"extensions"
+		"extensions",
+		"types"
 	],
 	"scripts": {
 		"lint": "biome check .",

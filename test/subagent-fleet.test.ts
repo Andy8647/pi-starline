@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { formatElapsed, subagentsBubbleContent } from "../extensions/starline/pill-actions";
+import {
+	formatElapsed,
+	pillActionFor,
+	runPillAction,
+	subagentsBubbleContent,
+} from "../extensions/starline/pill-actions";
+import { closePillBubble } from "../extensions/starline/pill-bubble";
 import {
 	createSubagentFleet,
 	type EventBusLike,
@@ -64,6 +70,7 @@ function answerStatus(bus: EventBusLike, fleet: () => { entries: Entry[]; totalA
 }
 
 afterEach(() => {
+	closePillBubble();
 	setActiveSubagentFleet(undefined);
 	vi.useRealTimers();
 });
@@ -250,5 +257,44 @@ describe("subagents bubble", () => {
 		expect(formatElapsed(45_000)).toBe("45s");
 		expect(formatElapsed(192_000)).toBe("3m 12s");
 		expect(formatElapsed(3_900_000)).toBe("1h 05m");
+	});
+});
+
+describe("live subagents bubble", () => {
+	it("asks again every second while open, and stops when it closes", async () => {
+		vi.useFakeTimers();
+		const { bus } = createBus();
+		let entries: Entry[] = [{ agent: "scout", startedAt: Date.now() }];
+		const requests = answerStatus(bus, () => ({ entries }));
+		const fleet = createSubagentFleet(bus, { onChange: () => {}, delayMs: 1 });
+		setActiveSubagentFleet(fleet);
+
+		const custom = vi.fn().mockResolvedValue(undefined);
+		const ctx = { hasUI: true, ui: { custom, notify: vi.fn() } } as never;
+		runPillAction(pillActionFor("subagents") as never, ctx);
+		await vi.advanceTimersByTimeAsync(0);
+		expect(custom).toHaveBeenCalledTimes(1);
+
+		const [factory, options] = custom.mock.calls[0] ?? [];
+		const tui = { requestRender: vi.fn() };
+		const bubble = (factory as (...args: unknown[]) => { render(width: number): string[] })(
+			tui,
+			{},
+			{},
+			vi.fn(),
+		);
+		const width = (options as { overlayOptions: { width: number } }).overlayOptions.width;
+		const opened = requests.length;
+
+		entries = [...entries, { agent: "reviewer", startedAt: Date.now() }];
+		await vi.advanceTimersByTimeAsync(1_000);
+		expect(requests.length).toBe(opened + 1);
+		expect(tui.requestRender).toHaveBeenCalled();
+		const text = bubble.render(width).map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+		expect(text.join("\n")).toContain("2 subagents running");
+
+		closePillBubble();
+		await vi.advanceTimersByTimeAsync(3_000);
+		expect(requests.length).toBe(opened + 1);
 	});
 });

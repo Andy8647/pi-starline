@@ -21,7 +21,12 @@ import {
 	setThinkingLevel,
 } from "./live-session";
 import { externalPillAction } from "./pill-api";
-import { type PillAnchor, type PillBubbleContent, showPillBubble } from "./pill-bubble";
+import {
+	type PillAnchor,
+	type PillBubbleContent,
+	type PillBubbleHandle,
+	showPillBubble,
+} from "./pill-bubble";
 import { PILL_SEGMENT_VARIABLES } from "./pill-config";
 import { type FleetSnapshot, getActiveSubagentFleet } from "./subagent-fleet";
 
@@ -75,6 +80,26 @@ export function queuedSegmentText(ctx: ExtensionContext, icon = ""): string {
 	return icon ? `${icon} queued` : "queued";
 }
 
+/** How often an open bubble whose numbers move re-reads them. */
+const LIVE_BUBBLE_INTERVAL_MS = 1_000;
+
+/**
+ * Re-run `tick` every second while `handle` is open, then stop. The timer never
+ * keeps Pi alive on its own, and stops itself if the bubble has already gone.
+ */
+function whileOpen(handle: PillBubbleHandle, tick: () => void): void {
+	if (!handle.isOpen()) return;
+	const timer = setInterval(() => {
+		if (!handle.isOpen()) {
+			clearInterval(timer);
+			return;
+		}
+		tick();
+	}, LIVE_BUBBLE_INTERVAL_MS);
+	timer.unref?.();
+	handle.onClose(() => clearInterval(timer));
+}
+
 /**
  * Cap on listed messages. More than a few turns a bubble into a wall, and the
  * count in the title already says how many there are.
@@ -106,6 +131,10 @@ export function queuedBubbleContent(): PillBubbleContent {
 	}
 
 	const messages = [...pending.steering, ...pending.followUp];
+	// The bubble stays open while the turn ends and the queue drains under it.
+	if (messages.length === 0) {
+		return { title: "Queued messages", body: ["Nothing is queued."], hint: "esc to close" };
+	}
 	const listed = messages.slice(0, MAX_LISTED_MESSAGES).map((message) => `· ${oneLine(message)}`);
 	if (messages.length > listed.length) {
 		listed.push(`· +${messages.length - listed.length} more`);
@@ -123,7 +152,9 @@ function showQueuedMessages({ ctx, pill }: PillActionContext): void {
 		if (ctx.hasUI) ctx.ui.notify("No messages are queued", "info");
 		return;
 	}
-	showPillBubble(ctx, queuedBubbleContent(), pill);
+	// Live: the queue drains as the turn ends, and new messages join it.
+	const handle = showPillBubble(ctx, queuedBubbleContent, pill);
+	whileOpen(handle, () => handle.refresh());
 }
 
 function thinkingUnavailable(ctx: ExtensionContext): PillBubbleContent {
@@ -362,7 +393,19 @@ async function showSubagents({ ctx, pill }: PillActionContext): Promise<void> {
 		if (ctx.hasUI) ctx.ui.notify("pi-subagents is not installed or not answering", "info");
 		return;
 	}
-	showPillBubble(ctx, subagentsBubbleContent(fresh ?? fleet.snapshot()), pill);
+	// Live: elapsed time and tokens move every second, and runs come and go. Each
+	// tick asks pi-subagents again; the content reads whatever the last answer was.
+	const handle = showPillBubble(ctx, () => subagentsBubbleContent(fleet.snapshot()), pill);
+	let asking = false;
+	whileOpen(handle, () => {
+		// A slow answer skips a tick rather than stacking requests behind it.
+		if (asking) return;
+		asking = true;
+		void fleet.fetch(LIVE_BUBBLE_INTERVAL_MS).then(() => {
+			asking = false;
+			handle.refresh();
+		});
+	});
 }
 
 /**
