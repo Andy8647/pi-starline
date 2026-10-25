@@ -30,12 +30,12 @@ pieces of one product, not a theme:
   reflow — and long statuses (`Retrying (1/3) in 4s...`) keep Pi's
   `── … ────` line on the editor's top border
 - **Clickable queue pill** — while messages wait for the current turn, the pill bar
-  gains a `queued` pill; click it (or run `/starline queue`) and a speech bubble in
-  the pill's own colour opens above it, listing how many messages are waiting and
+  gains a `queued` pill; click it (or run `/starline queue`) and a bubble in
+  the pill's own colour grows up out of it, listing how many messages are waiting and
   their first lines. Pi's own duplicate `Steering: …` rows above the editor are
   hidden while the pill is on
-- **Clickable thinking pill** — one click steps to the next thinking level the model
-  supports and reports the step in the same bubble; `/starline thinking` for the
+- **Clickable thinking pill** — click it for a list of the thinking levels the model
+  supports and pick one; `/starline thinking` steps to the next level from the
   keyboard
 - **Bridged pills** — another extension can make its own status pill clickable and
   open the same bubble with its detail (`pi-balance` 5h/7d numbers, `pi-subagents`

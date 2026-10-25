@@ -144,23 +144,25 @@ The queue bubble, the branch switcher and any future panel open through
 `ctx.ui.custom(..., { overlay: true })`. The footer stays one line; nothing about
 the layout changes when a popover is open.
 
-**As built:** the popover is a speech bubble that points at the pill it belongs to.
-`pill-bubble.ts` is the shared component: an action passes its content plus the
-`PillAnchor` the footer recorded for that pill (centre column, terminal width, the
-pill's own background and foreground SGR), and gets a block in the pill's colours.
-Placement is `anchor: "bottom-left"` + `offsetX` at the pill's centre and
-`offsetY: -1`, so the bubble sits on the row above the footer and its tail (a `▼`
-on its own row) lands over the pill. Without an anchor — the `/starline` command
-when the pill is not drawn — the bubble centres and drops the tail. Opening a
-second bubble closes the first, so clicking another pill swaps the popover instead
-of stacking overlays.
+**As built:** the popover grows up out of the pill it belongs to, like a menu out of
+a menu bar. `pill-bubble.ts` is the shared component: an action passes its content
+plus the `PillAnchor` the footer recorded for that pill (first coloured column,
+centre column, terminal width, the pill's own background and foreground SGR), and
+gets a block in the pill's colours. Placement is `anchor: "bottom-left"` +
+`offsetX` at the pill's first coloured column and `offsetY: -1`, so the block's last
+row sits directly on the footer row and the colour runs from the bubble into the
+pill. Near the right edge the block shifts left just enough to stay on screen.
+Without an anchor — the `/starline` command when the pill is not drawn — it
+centres and floats. Opening a second bubble closes the first, so clicking another
+pill swaps the popover instead of stacking overlays.
 
-The shape is a filled block, not an outlined box. A terminal can only colour whole
-cells, so an outline leaves the four corners square while the curve hides inside
-them; cutting the corner cells with quadrant glyphs (`▗ ▖ ▝ ▘`) and drawing the tail
-as a filled triangle makes the silhouette itself rounded. The heading is a body
-row so nothing interrupts the top edge. Terminals stop at a one-cell radius, which
-is what those glyphs are.
+The shape is a square block on purpose. A terminal colours whole cells, so rounded
+corners and a pointing tail can only be faked with glyphs, and three attempts
+(box-drawing corners over a fill, quadrant-cut corners `▗ ▖ ▝ ▘`, a `▼` tail on its
+own row) all left seams where the glyphs met the fill. Colour plus adjacency says
+which pill a bubble belongs to without any of that. The only shaping is a half-block
+row (`▄`) on top — and `▀` underneath when floating — which halves the padding and
+cannot misalign.
 
 The panel closes on Escape (and Enter) through its own `handleInput`. Pi owns the
 overlay, but not the meaning of Escape inside it, so the dismiss key is part of the
@@ -216,7 +218,9 @@ api?.register("pi-balance", ({ ctx, pill }) => {
   bridge survives a reload — and re-registering replaces the old action.
 - The same action is reachable from the keyboard as `/starline <key>` (for
   example `/starline pi-balance`), because the command path resolves through the
-  same table.
+  same table. The context's `via` says which way it came (`"click"` or
+  `"command"`); a bubble's targets need a pointer, so an action that offers
+  choices can act directly from the command instead.
 
 `register` returns an unregister handle; a stale handle cannot remove a newer
 registration for the same key. `scripts/balance-probe.ts` in the working tree is a
@@ -236,9 +240,12 @@ mouse layer uses. The queue bubble then lists the count and up to three messages
 followed by `+N more`. When neither wrapper is in place (older Pi) the bubble
 falls back to explaining the wait, and the pill still says `queued`.
 
-The same captured session drives the thinking action: `cycleThinkingLevel()`
-reads `getAvailableThinkingLevels()`, drops `off` so the pill cannot click itself
-off the screen, and steps with `setThinkingLevel()`.
+The same captured session drives the thinking action. A click opens a list of
+every level from `getAvailableThinkingLevels()`, minus `off` so the pill cannot
+click itself off the screen; the current level is marked, the others are targets
+that call `setThinkingLevel()`. Opening the list changes nothing. `/starline
+thinking` has no pointer to pick with, so it steps to the next level instead and
+reports `from → to`.
 
 ## Hiding Pi's own queue rows
 
@@ -258,7 +265,7 @@ field on the extension context plus a switch for the rows; `live-session.ts` and
 
 | Phase | Content | Effort |
 | --- | --- | --- |
-| 1 ✅ | Footer `handleMouse`, pill span sink, action table, `/starline` action commands, speech-bubble popover, two actions (queue status → bubble listing what is queued; thinking level → step and report it) | M |
+| 1 ✅ | Footer `handleMouse`, pill span sink, action table, `/starline` action commands, speech-bubble popover, two actions (queue status → bubble listing what is queued; thinking level → pick from the list, or step from the command) | M |
 | 2 | Model picker via `ModelSelectorComponent` | M |
 | 3 | Branch switcher (list local branches, confirm on a dirty worktree, `git checkout`) | M |
 | 4 ✅ | Extension-status click hook: a status key opts in by publishing structured data — shipped as the published pill API, which also covers `pi-subagents` and any other extension | S–M |

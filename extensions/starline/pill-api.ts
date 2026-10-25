@@ -31,6 +31,12 @@ export type PillApiContext = {
 	ctx: ExtensionContext;
 	/** Geometry and colours of the pill that was clicked, when there was one. */
 	pill?: PillAnchor;
+	/**
+	 * "click" from the pill, "command" from `/starline <key>`. A bubble's targets
+	 * need a pointer, so an action that offers choices can do something direct
+	 * from the command instead. Optional: hosts before it was added do not send it.
+	 */
+	via?: "click" | "command";
 };
 
 export type PillApiAction = (context: PillApiContext) => void;

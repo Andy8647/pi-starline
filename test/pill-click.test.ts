@@ -355,44 +355,92 @@ describe("pill actions", () => {
 		}
 	});
 
-	it("cycles thinking and reports the step", async () => {
+	/** Capture a fake session with these levels, run `body`, then put Pi back. */
+	async function withThinkingSession(
+		levels: string[],
+		current: string,
+		body: (session: { setThinkingLevel: ReturnType<typeof vi.fn> }) => void,
+	): Promise<void> {
 		const prototype = AgentSession.prototype as unknown as { prompt: unknown };
 		const originalPrompt = prototype.prompt;
 		prototype.prompt = vi.fn(async () => {});
 		const dispose = installLiveSessionCapture();
 		try {
 			const session = {
-				thinkingLevel: "high",
-				getAvailableThinkingLevels: () => ["off", "low", "high", "xhigh"],
+				thinkingLevel: current,
+				getAvailableThinkingLevels: () => levels,
 				setThinkingLevel: vi.fn(),
 			};
 			await (prototype.prompt as (this: unknown, text: string) => Promise<void>).call(
 				session,
 				"hi",
 			);
-
-			const custom = vi.fn().mockResolvedValue(undefined);
-			const action = pillActionFor("thinking");
-			runPillAction(action as never, { hasUI: true, ui: { custom } } as never, {
-				centerColumn: 20,
-				terminalWidth: 80,
-				background: "\x1b[48;5;3m",
-				foreground: "",
-			});
-
-			const [factory, options] = custom.mock.calls[0] ?? [];
-			const width =
-				(options as { overlayOptions?: { width?: number } }).overlayOptions?.width ?? 40;
-			const bubble = (factory as BubbleFactory)({}, theme, {}, vi.fn());
-			const text = bubble.render(width).map(plain).join("\n");
-
-			expect(text).toContain("high → xhigh");
-			expect(session.setThinkingLevel).toHaveBeenCalledWith("xhigh");
+			body(session);
 		} finally {
 			dispose();
 			prototype.prompt = originalPrompt;
 			forgetLiveSession();
 		}
+	}
+
+	const pillAnchor = {
+		startColumn: 18,
+		centerColumn: 20,
+		terminalWidth: 80,
+		background: "\x1b[48;5;3m",
+		foreground: "",
+	};
+
+	it("opens the level list on click without changing the level", async () => {
+		await withThinkingSession(["off", "low", "high", "xhigh"], "high", (session) => {
+			const custom = vi.fn().mockResolvedValue(undefined);
+			runPillAction(
+				pillActionFor("thinking") as never,
+				{ hasUI: true, ui: { custom } } as never,
+				pillAnchor,
+			);
+			expect(session.setThinkingLevel).not.toHaveBeenCalled();
+
+			const [factory, options] = custom.mock.calls[0] ?? [];
+			const width =
+				(options as { overlayOptions?: { width?: number } }).overlayOptions?.width ?? 40;
+			const bubble = (factory as BubbleFactory)(
+				{},
+				theme,
+				{},
+				vi.fn(),
+			) as ReturnType<BubbleFactory> & {
+				handleMouse(event: { type: string; x: number; y: number }): unknown;
+			};
+			const lines = bubble.render(width).map(plain);
+			expect(lines.join("\n")).not.toContain("off");
+			expect(lines.some((line) => line.includes("● high"))).toBe(true);
+
+			// The current level is not a target; another level is, and picks it.
+			const current = lines.findIndex((line) => line.includes("● high"));
+			expect(bubble.handleMouse({ type: "click", x: 3, y: current })).toBeUndefined();
+			const low = lines.findIndex((line) => line.includes("○ low"));
+			bubble.handleMouse({ type: "click", x: 3, y: low });
+			expect(session.setThinkingLevel).toHaveBeenCalledWith("low");
+		});
+	});
+
+	it("steps to the next level from the command and reports the step", async () => {
+		await withThinkingSession(["off", "low", "high", "xhigh"], "high", (session) => {
+			const custom = vi.fn().mockResolvedValue(undefined);
+			runPillAction(
+				pillActionFor("thinking") as never,
+				{ hasUI: true, ui: { custom } } as never,
+				pillAnchor,
+				"command",
+			);
+			const [factory, options] = custom.mock.calls[0] ?? [];
+			const width =
+				(options as { overlayOptions?: { width?: number } }).overlayOptions?.width ?? 40;
+			const bubble = (factory as BubbleFactory)({}, theme, {}, vi.fn());
+			expect(bubble.render(width).map(plain).join("\n")).toContain("high → xhigh");
+			expect(session.setThinkingLevel).toHaveBeenCalledWith("xhigh");
+		});
 	});
 
 	it("reports the current level when the session cannot cycle it", () => {

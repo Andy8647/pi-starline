@@ -101,35 +101,64 @@ export function readPendingMessages(): PendingMessages | undefined {
 
 export type ThinkingCycle = { from: string; to: string };
 
+export type ThinkingLevels = {
+	/** Levels the model supports, in Pi's order, without "off". */
+	levels: string[];
+	/** The session's level now; "" when it does not say. */
+	current: string;
+};
+
 /**
- * Step to the next thinking level the model supports.
+ * The levels the thinking pill can switch between.
  *
  * "off" is filtered out on purpose: the thinking pill only exists while thinking
- * is on, so a click that removes its own target would be a surprise. Returns
- * undefined when the session was never seen or the model has no other level.
+ * is on, so a choice that removes its own pill would be a surprise and leave no
+ * way back from the same place. Returns undefined when the session was never
+ * seen, cannot set the level, or the model has nothing to choose from.
  */
-export function cycleThinkingLevel(): ThinkingCycle | undefined {
+export function readThinkingLevels(): ThinkingLevels | undefined {
 	const session = liveSession;
 	if (!session) return undefined;
 	try {
 		const readLevels = session.getAvailableThinkingLevels;
-		const setLevel = session.setThinkingLevel;
-		if (typeof readLevels !== "function" || typeof setLevel !== "function") return undefined;
-
+		if (typeof readLevels !== "function" || typeof session.setThinkingLevel !== "function") {
+			return undefined;
+		}
 		const levels = readLevels.call(session);
 		if (!Array.isArray(levels)) return undefined;
 		const usable = levels.filter(
 			(level): level is string => typeof level === "string" && level !== "off",
 		);
 		if (usable.length === 0) return undefined;
-
-		const from = typeof session.thinkingLevel === "string" ? session.thinkingLevel : "";
-		const index = usable.indexOf(from);
-		const to = usable[(index + 1) % usable.length];
-		if (!to) return undefined;
-		setLevel.call(session, to);
-		return { from: from || to, to };
+		const current = typeof session.thinkingLevel === "string" ? session.thinkingLevel : "";
+		return { levels: usable, current };
 	} catch {
 		return undefined;
 	}
+}
+
+/** Switch the live session to `level`. False when it could not be done. */
+export function setThinkingLevel(level: string): boolean {
+	const session = liveSession;
+	const setLevel = session?.setThinkingLevel;
+	if (!session || typeof setLevel !== "function") return false;
+	try {
+		setLevel.call(session, level);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Step to the next level `readThinkingLevels` offers, wrapping around. This is
+ * the keyboard path; a click opens the list instead.
+ */
+export function cycleThinkingLevel(): ThinkingCycle | undefined {
+	const read = readThinkingLevels();
+	if (!read) return undefined;
+	const index = read.levels.indexOf(read.current);
+	const to = read.levels[(index + 1) % read.levels.length];
+	if (!to || !setThinkingLevel(to)) return undefined;
+	return { from: read.current || to, to };
 }

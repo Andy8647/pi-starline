@@ -18,9 +18,9 @@ npm.
   the pill footer a new `queue` segment appears while messages are waiting for the
   current turn to end — a pill reading `queued`, gone again as soon as the queue
   drains, so it costs nothing the rest of the time. Clicking it, or running
-  `/starline queue`, opens a speech bubble just above the pill: rounded box in the
-  pill's own colour, tail pointing at the pill, the count in the heading (`2
-  messages queued`) and the first lines of each message in the body. The pill keeps
+  `/starline queue`, opens a bubble that grows up out of the pill, in the pill's own
+  colour, with the count in the heading (`2 messages queued`) and the first lines of
+  each message in the body. The pill keeps
   saying a word rather than a number, because it is one segment wide.
 
   Pi's own `Steering: …` rows and the dequeue hint above the editor are hidden while
@@ -32,10 +32,11 @@ npm.
   colours the pill and the bubble, and `$queue` renders the same word in a text
   `footerFormat`.
 
-- **The thinking pill steps the level.** Clicking it (or running `/starline
-  thinking`) moves to the next thinking level the model supports and says so in the
-  same bubble (`medium → high`). `off` is skipped, so a click never removes the pill
-  it just came from.
+- **The thinking pill picks the level.** Clicking it opens a list of the thinking
+  levels the model supports, with the current one marked; click another to switch.
+  Opening the list changes nothing. `/starline thinking` has no pointer to pick
+  with, so it steps to the next level and says so (`medium → high`). `off` is not
+  offered, so a choice never removes the pill it came from.
 
 - **Pills can now be clicked.** The footer maps a mouse click to the pill under the
   pointer and runs that segment's action: the pill bar records the columns each
@@ -44,11 +45,12 @@ npm.
   labels, and the click falls through instead of being swallowed. Every action also
   has a `/starline` subcommand, so nothing new is mouse-only.
 
-- **A speech bubble any pill action can reuse.** `pill-bubble.ts` positions an
-  overlay against a pill's anchor (its centre column, the terminal width, its
-  colours), paints a block in the pill's background with the four corners cut out,
-  and hangs a filled tail above the pill. The heading sits inside the block, so
-  nothing interrupts the shape. Clicking a second pill swaps the bubble instead of
+- **A popover any pill action can reuse.** `pill-bubble.ts` positions an overlay
+  against a pill's anchor (its first coloured column, the terminal width, its
+  colours) and paints a block in the pill's background, lined up with the pill and
+  sitting directly on the footer row, so the colour runs from the bubble into the
+  pill. No rounded corners or tail: in a terminal those are glyph fakes that leave
+  seams at the cell edges. Clicking a second pill swaps the bubble instead of
   stacking overlays, and a body line that declares a callback is underlined and
   runs it when clicked. The next actions (model picker, branch switcher) get the
   popover for free. Design and phases are in
@@ -59,7 +61,8 @@ npm.
   that publishes a status with `ctx.ui.setStatus()` registers an action for that
   key and opens the standard bubble with its own detail — `pi-balance` can show 5h
   and 7d numbers, `pi-subagents` its runs, without rendering or positioning
-  anything. Every bridged action is also reachable as `/starline <key>`. The
+  anything. Every bridged action is also reachable as `/starline <key>`, and the
+  action is told which way it was reached (`via: "click" | "command"`). The
   protocol, a working example and the load-order/`/reload` rules are in
   [docs/clickable-pills.md](https://github.com/Andy8647/pi-starline/blob/main/docs/clickable-pills.md#a-protocol-for-other-extensions).
 

@@ -14,7 +14,12 @@
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
-import { cycleThinkingLevel, readPendingMessages } from "./live-session";
+import {
+	cycleThinkingLevel,
+	readPendingMessages,
+	readThinkingLevels,
+	setThinkingLevel,
+} from "./live-session";
 import { externalPillAction } from "./pill-api";
 import { type PillAnchor, type PillBubbleContent, showPillBubble } from "./pill-bubble";
 import { PILL_SEGMENT_VARIABLES } from "./pill-config";
@@ -28,6 +33,12 @@ export type PillActionContext = {
 	 * segment removed from `pill.segments`); bubbles then fall back to centred.
 	 */
 	pill?: PillAnchor;
+	/**
+	 * How the action was reached. A click can offer a choice in the bubble; the
+	 * `/starline` command has no pointer to make one with, so an action that
+	 * offers choices does something direct instead.
+	 */
+	via: "click" | "command";
 };
 
 export type PillAction = (context: PillActionContext) => void | Promise<void>;
@@ -108,36 +119,60 @@ function showQueuedMessages({ ctx, pill }: PillActionContext): void {
 	showPillBubble(ctx, queuedBubbleContent(), pill);
 }
 
+function thinkingUnavailable(ctx: ExtensionContext): PillBubbleContent {
+	const current = ctx.thinkingLevel ?? "";
+	return {
+		title: "Thinking",
+		body: current
+			? [`Current level: ${current}.`, "This session cannot change it from here."]
+			: ["This model has no thinking level to change."],
+		hint: "esc to close",
+	};
+}
+
 /**
- * Step the thinking level and say where it landed.
- *
- * The pill is the read-out, so the bubble only has to report the step; the footer
- * re-renders from `thinking_level_select` and shows the new level in place.
+ * What the thinking pill's bubble offers: every level the model supports, the
+ * current one marked and the others clickable. Picking one closes the bubble;
+ * the footer re-renders from `thinking_level_select`, so the pill itself is the
+ * confirmation.
  */
-function showThinkingLevel({ ctx, pill }: PillActionContext): void {
-	const cycled = cycleThinkingLevel();
-	if (!cycled) {
-		const current = ctx.thinkingLevel ?? "";
-		showPillBubble(
-			ctx,
-			{
-				title: "Thinking",
-				body: current
-					? [`Current level: ${current}.`, "This session cannot change it from here."]
-					: ["This model has no thinking level to cycle."],
-				hint: "esc to close",
-			},
-			pill,
-		);
+export function thinkingPickerContent(ctx: ExtensionContext): PillBubbleContent {
+	const read = readThinkingLevels();
+	if (!read) return thinkingUnavailable(ctx);
+	return {
+		title: "Thinking",
+		body: read.levels.map((level) =>
+			level === read.current
+				? `● ${level}`
+				: {
+						text: `○ ${level}`,
+						onSelect: () => {
+							if (!setThinkingLevel(level) && ctx.hasUI) {
+								ctx.ui.notify(`Could not switch thinking to ${level}`, "error");
+							}
+						},
+					},
+		),
+		hint: "click a level · esc to close",
+	};
+}
+
+/**
+ * A click opens the level list; it changes nothing until a level is picked, so
+ * looking is free. The command has no pointer to pick with, so it steps to the
+ * next level and says where it landed.
+ */
+function showThinkingLevel({ ctx, pill, via }: PillActionContext): void {
+	if (via === "click") {
+		showPillBubble(ctx, thinkingPickerContent(ctx), pill);
 		return;
 	}
+	const cycled = cycleThinkingLevel();
 	showPillBubble(
 		ctx,
-		{
-			title: "Thinking",
-			body: [`${cycled.from} → ${cycled.to}`],
-			hint: "esc to close",
-		},
+		cycled
+			? { title: "Thinking", body: [`${cycled.from} → ${cycled.to}`], hint: "esc to close" }
+			: thinkingUnavailable(ctx),
 		pill,
 	);
 }
@@ -169,9 +204,14 @@ export function pillActionFor(key: string): PillAction | undefined {
  * throwing action must not take down the render loop that dispatched the click,
  * and the keyboard path is still available.
  */
-export function runPillAction(action: PillAction, ctx: ExtensionContext, pill?: PillAnchor): void {
+export function runPillAction(
+	action: PillAction,
+	ctx: ExtensionContext,
+	pill?: PillAnchor,
+	via: PillActionContext["via"] = "click",
+): void {
 	try {
-		const pending = action({ ctx, pill });
+		const pending = action({ ctx, pill, via });
 		if (pending) void pending.catch(() => {});
 	} catch {
 		// Nothing to report: the action's own guards are what keep this rare.

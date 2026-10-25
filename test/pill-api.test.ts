@@ -47,7 +47,7 @@ describe("the published pill API", () => {
 		expect(resolved).toBeTypeOf("function");
 		runPillAction(resolved as never, { hasUI: false } as never, anchor);
 
-		expect(action).toHaveBeenCalledWith({ ctx: { hasUI: false }, pill: anchor });
+		expect(action).toHaveBeenCalledWith({ ctx: { hasUI: false }, pill: anchor, via: "click" });
 	});
 
 	it("forgets an action when the bridge unregisters", () => {

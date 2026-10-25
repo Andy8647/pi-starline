@@ -5,6 +5,8 @@ import {
 	forgetLiveSession,
 	installLiveSessionCapture,
 	readPendingMessages,
+	readThinkingLevels,
+	setThinkingLevel,
 } from "../extensions/starline/live-session";
 
 /**
@@ -177,6 +179,44 @@ describe("thinking cycle", () => {
 		};
 		const dispose = await capture(session as unknown as ThinkingSession);
 		try {
+			expect(cycleThinkingLevel()).toBeUndefined();
+		} finally {
+			dispose();
+		}
+	});
+
+	it("lists the levels without off, and switches to the one asked for", async () => {
+		const session: ThinkingSession = {
+			thinkingLevel: "medium",
+			getAvailableThinkingLevels: () => ["off", "low", "medium", "high"],
+			setThinkingLevel: vi.fn(),
+		};
+		const dispose = await capture(session);
+		try {
+			expect(readThinkingLevels()).toEqual({
+				levels: ["low", "medium", "high"],
+				current: "medium",
+			});
+			expect(setThinkingLevel("low")).toBe(true);
+			expect(session.setThinkingLevel).toHaveBeenCalledWith("low");
+		} finally {
+			dispose();
+		}
+		expect(readThinkingLevels()).toBeUndefined();
+		expect(setThinkingLevel("low")).toBe(false);
+	});
+
+	it("reports a failed switch instead of throwing", async () => {
+		const session: ThinkingSession = {
+			thinkingLevel: "low",
+			getAvailableThinkingLevels: () => ["low", "high"],
+			setThinkingLevel: vi.fn(() => {
+				throw new Error("not now");
+			}),
+		};
+		const dispose = await capture(session);
+		try {
+			expect(setThinkingLevel("high")).toBe(false);
 			expect(cycleThinkingLevel()).toBeUndefined();
 		} finally {
 			dispose();

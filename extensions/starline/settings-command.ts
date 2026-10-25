@@ -674,7 +674,7 @@ export function registerStarlineSettingsCommand(pi: ExtensionAPI, deps: Settings
 			const actionKey = args.trim().toLowerCase();
 			const action = pillActionFor(actionKey);
 			if (action) {
-				runPillAction(action, ctx, getPillAnchor(actionKey));
+				runPillAction(action, ctx, getPillAnchor(actionKey), "command");
 				return;
 			}
 
