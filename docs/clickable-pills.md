@@ -170,10 +170,10 @@ window that grew keeps the bubble on its footer. The footer row is exempt on
 purpose: a press there is a pill asking for its own bubble to close or another
 pill replacing it, and closing on the press as well would make the same pill's
 second click close and immediately reopen. The press is read where every pointer
-report arrives — the `handleMouseEvent` patch that already drives the hand
-pointer — through `mouse/pointer-events.ts`, so the bubble does not take a second
+report arrives, at the `handleMouseEvent` patch that already drives the hand
+pointer, through `mouse/pointer-events.ts`: the bubble does not take a second
 patch on the same method. It follows `mouse.enabled`, the same switch as the hand
-pointer: with Starline's mouse features off, Escape and the pill remain the ways
+pointer, so with Starline's mouse features off Escape and the pill remain the ways
 out.
 
 **Live bubbles.** `showPillBubble` takes the content or a function returning it, and
