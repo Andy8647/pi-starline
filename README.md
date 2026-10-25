@@ -43,7 +43,7 @@ Starline makes Pi's fullscreen mode feel like a finished terminal app:
 
 ## Install
 
-Needs **Pi 0.84.4 or newer** and a [Nerd Font](https://www.nerdfonts.com/) (or set `icons.mode` to `"ascii"`).
+Needs **Pi 0.84.4 or newer** (0.85.0 or newer for clickable pills) and a [Nerd Font](https://www.nerdfonts.com/) (or set `icons.mode` to `"ascii"`).
 
 ```bash
 pi install npm:pi-starline

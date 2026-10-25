@@ -54,8 +54,8 @@ const separatorText: Record<SeparatorStyle, string> = {
 };
 
 /**
- * Pi's component mouse event and result. Pi calls `handleMouse` only from pi-tui
- * 1.4; on an older Pi the method is simply never called.
+ * Pi's component mouse event and result. Pi dispatches to `handleMouse` from
+ * pi-tui 0.85.0; on 0.84.x the method is simply never called.
  */
 export type FooterMouseEvent = TuiMouseEvent;
 
