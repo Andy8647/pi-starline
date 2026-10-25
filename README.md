@@ -37,6 +37,10 @@ pieces of one product, not a theme:
 - **Clickable thinking pill** — one click steps to the next thinking level the model
   supports and reports the step in the same bubble; `/starline thinking` for the
   keyboard
+- **Bridged pills** — another extension can make its own status pill clickable and
+  open the same bubble with its detail (`pi-balance` 5h/7d numbers, `pi-subagents`
+  runs, …) through a small published API — see
+  [Clickable pills](https://github.com/Andy8647/pi-starline/blob/main/docs/clickable-pills.md#a-protocol-for-other-extensions)
 - Right side shows context usage, token counts, and cost
 - Built-in footer segments can be shown or hidden individually from `/starline`
 - Fully custom Starship-style layout via a `footerFormat` template string — see [Footer Format Template](https://github.com/Andy8647/pi-starline/blob/main/docs/configuration.md#footer-format-template)

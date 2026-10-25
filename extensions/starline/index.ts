@@ -52,6 +52,7 @@ import { installMouse } from "./mouse";
 import { setActiveEditor } from "./mouse/editor-mouse";
 import { readPackageVersionResult } from "./package-version";
 import { installPasteCollapse } from "./paste-collapse";
+import { publishPillApi } from "./pill-api";
 import {
 	createProjectRefreshScheduler,
 	type ScheduleProjectRefreshOptions,
@@ -87,6 +88,10 @@ function isTuiContext(ctx: ExtensionContext): boolean {
 }
 
 export default function (pi: ExtensionAPI) {
+	// Published before anything else so a bridge that registers in `session_start`
+	// finds it, whichever order the extensions were loaded in.
+	publishPillApi();
+
 	const state: FooterState = createInitialState(emptyGitStatus());
 	const sessionLifecycle = new SessionLifecycle();
 

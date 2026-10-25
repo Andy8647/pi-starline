@@ -46,12 +46,22 @@ npm.
 
 - **A speech bubble any pill action can reuse.** `pill-bubble.ts` positions an
   overlay against a pill's anchor (its centre column, the terminal width, its
-  colours), paints the content in the pill's background and cuts a tail into the
-  bottom border at the column above the pill. The heading sits inside the bubble so
-  the rounded outline stays unbroken. Clicking a second pill swaps the bubble
-  instead of stacking overlays. The next actions (model picker, branch switcher) get
-  the popover for free. Design and phases are in
+  colours), paints a block in the pill's background with the four corners cut out,
+  and hangs a filled tail above the pill. The heading sits inside the block, so
+  nothing interrupts the shape. Clicking a second pill swaps the bubble instead of
+  stacking overlays, and a body line that declares a callback is underlined and
+  runs it when clicked. The next actions (model picker, branch switcher) get the
+  popover for free. Design and phases are in
   [docs/clickable-pills.md](https://github.com/Andy8647/pi-starline/blob/main/docs/clickable-pills.md).
+
+- **Other extensions can make their pills clickable.** Starline publishes a pill
+  API on `globalThis` under `Symbol.for("pi-starline.pill-api.v1")`. An extension
+  that publishes a status with `ctx.ui.setStatus()` registers an action for that
+  key and opens the standard bubble with its own detail — `pi-balance` can show 5h
+  and 7d numbers, `pi-subagents` its runs, without rendering or positioning
+  anything. Every bridged action is also reachable as `/starline <key>`. The
+  protocol, a working example and the load-order/`/reload` rules are in
+  [docs/clickable-pills.md](https://github.com/Andy8647/pi-starline/blob/main/docs/clickable-pills.md#a-protocol-for-other-extensions).
 
 **Changed**
 

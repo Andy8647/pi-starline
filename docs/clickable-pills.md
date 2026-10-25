@@ -1,10 +1,12 @@
 # Clickable pills — design note
 
-Status: **phase 1 implemented.** The footer has a `handleMouse`, the pill renderer
-records hit areas and colours, actions live in one table, and the queue pill plus
-`/starline queue` are the first (mouse + keyboard) pair. Popovers are a shared
-speech bubble that points at the pill it belongs to, so phases 2–4 add content
-rather than plumbing.
+Status: **phase 1 implemented, plus the bridge for other extensions.** The footer
+has a `handleMouse`, the pill renderer records hit areas and colours, actions live
+in one table, and the queue pill plus `/starline queue` are the first (mouse +
+keyboard) pair. Popovers are a shared speech bubble that points at the pill it
+belongs to, bubble rows can be clickable, and any extension can register an action
+for its own status pill through a published API. Phases 2–4 add content rather than
+plumbing.
 
 This document was written before the code so the pieces could be argued about
 separately. Paragraphs marked **As built** were corrected against Pi 1.4.0 while
@@ -145,21 +147,80 @@ the layout changes when a popover is open.
 **As built:** the popover is a speech bubble that points at the pill it belongs to.
 `pill-bubble.ts` is the shared component: an action passes its content plus the
 `PillAnchor` the footer recorded for that pill (centre column, terminal width, the
-pill's own background and foreground SGR), and gets a rounded box in the pill's
-colours. Placement is `anchor: "bottom-left"` + `offsetX` at the pill's centre and
-`offsetY: -1`, so the bubble sits on the row above the footer and its tail (a `▽`
-cut into the bottom border) lands over the pill. Without an anchor — the
-`/starline` command when the pill is not drawn — the bubble centres and drops the
-tail. Opening a second bubble closes the first, so clicking another pill swaps the
-popover instead of stacking overlays.
+pill's own background and foreground SGR), and gets a block in the pill's colours.
+Placement is `anchor: "bottom-left"` + `offsetX` at the pill's centre and
+`offsetY: -1`, so the bubble sits on the row above the footer and its tail (a `▼`
+on its own row) lands over the pill. Without an anchor — the `/starline` command
+when the pill is not drawn — the bubble centres and drops the tail. Opening a
+second bubble closes the first, so clicking another pill swaps the popover instead
+of stacking overlays.
 
-The heading is a body row rather than a gap in the top border, which keeps the
-outline unbroken and the four rounded corners readable. Terminals stop at a
-one-cell radius (`╭ ╮ ╰ ╯`), so that is the roundest a cell grid allows.
+The shape is a filled block, not an outlined box. A terminal can only colour whole
+cells, so an outline leaves the four corners square while the curve hides inside
+them; cutting the corner cells with quadrant glyphs (`▗ ▖ ▝ ▘`) and drawing the tail
+as a filled triangle makes the silhouette itself rounded. The heading is a body
+row so nothing interrupts the top edge. Terminals stop at a one-cell radius, which
+is what those glyphs are.
 
 The panel closes on Escape (and Enter) through its own `handleInput`. Pi owns the
 overlay, but not the meaning of Escape inside it, so the dismiss key is part of the
 component rather than something the overlay stack does for us.
+
+## A protocol for other extensions
+
+Starline already draws other extensions' status pills (`ctx.ui.setStatus(key, text)`
+rendered by the `extensionStatus` segment). The protocol is the other half: the
+owning extension says what a click means, and gets the same bubble without
+rendering or positioning anything.
+
+**As built:** Starline publishes an object on `globalThis` under
+`Symbol.for("pi-starline.pill-api.v1")`. A global symbol rather than an import, for
+the same reason `@xzzpig/pi-mouse-events` uses one: load order is not controlled by
+either side, and an extension should not depend on a package that may be loaded
+twice.
+
+```ts
+const api = globalThis[Symbol.for("pi-starline.pill-api.v1")];
+
+api?.register("pi-balance", ({ ctx, pill }) => {
+  api.showBubble(
+    ctx,
+    {
+      title: "Balance",
+      body: [
+        "5h: 42% left",
+        "7d: 12% left",
+        {
+          text: "▸ 7-day breakdown",
+          onSelect: () => api.showBubble(ctx, { title: "7d", body: ["Mon 3%", "Tue 2%"] }, pill),
+        },
+      ],
+      hint: "esc to close",
+    },
+    pill,
+  );
+});
+```
+
+- The key is the status key, which is also the pill's span key, so no extra
+  mapping is needed. Starline's own segment names win over a bridge, so a status
+  cannot hijack `queue`.
+- `pill` is the anchor the footer recorded for that pill (centre column, terminal
+  width, its colours). Passing it through is what makes the bubble point at the
+  right pill; omit it and the bubble centres.
+- A body entry as an object is a target: it renders underlined, and a click runs
+  `onSelect` and closes the bubble. A callback that opens another bubble replaces
+  the first, which is how a breakdown view works.
+- Register from `session_start`: it runs after every extension in the process has
+  loaded, so the API exists whatever the load order. `/reload` re-runs it, so the
+  bridge survives a reload — and re-registering replaces the old action.
+- The same action is reachable from the keyboard as `/starline <key>` (for
+  example `/starline pi-balance`), because the command path resolves through the
+  same table.
+
+`register` returns an unregister handle; a stale handle cannot remove a newer
+registration for the same key. `scripts/balance-probe.ts` in the working tree is a
+stand-in for `pi-balance` used to exercise this end to end.
 
 ## What the queue bubble shows
 
@@ -200,7 +261,7 @@ field on the extension context plus a switch for the rows; `live-session.ts` and
 | 1 ✅ | Footer `handleMouse`, pill span sink, action table, `/starline` action commands, speech-bubble popover, two actions (queue status → bubble listing what is queued; thinking level → step and report it) | M |
 | 2 | Model picker via `ModelSelectorComponent` | M |
 | 3 | Branch switcher (list local branches, confirm on a dirty worktree, `git checkout`) | M |
-| 4 | Extension-status click hook: a status key opts in by publishing structured data | S–M |
+| 4 ✅ | Extension-status click hook: a status key opts in by publishing structured data — shipped as the published pill API, which also covers `pi-subagents` and any other extension | S–M |
 | — | `pi-subagents` status bridge (separate package, no changes here) | S |
 
 Phase 1 was the only phase that touched rendering; phases 2–4 are actions added to a
@@ -208,6 +269,8 @@ table that already works, which is the point of doing it in that order. Phase 1
 landed as `extensions/starline/pill-actions.ts` (the table and the queue action),
 `pill-bubble.ts` (the shared popover), `PillSpan` in `pill.ts`, and `handleMouse` in
 `footer.ts`, with `live-session.ts` as the temporary bridge to the queue contents.
+Phase 4 landed as `pill-api.ts`, and a bridged status pill is exercised end to end by
+`scripts/balance-probe.ts`.
 
 ## What this does not need
 

@@ -15,6 +15,7 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import { cycleThinkingLevel, readPendingMessages } from "./live-session";
+import { externalPillAction } from "./pill-api";
 import { type PillAnchor, type PillBubbleContent, showPillBubble } from "./pill-bubble";
 import { PILL_SEGMENT_VARIABLES } from "./pill-config";
 
@@ -151,15 +152,16 @@ export const PILL_ACTIONS: Readonly<Partial<Record<string, PillAction>>> = {
 };
 
 /**
- * The action for a pill span's key, if it names a builtin segment.
+ * The action for a pill span's key.
  *
- * Extension statuses share the key space (their spans carry the status key), so
- * the builtin-segment test keeps a third-party status named `queue` from opening
- * our bubble. Status actions get their own hook when they exist.
+ * A segment key Starline owns (a builtin segment) wins over a bridge, so a status
+ * cannot hijack `queue`. Everything else is looked up in the published API, which
+ * is how `extensionStatus:<key>` pills become clickable. No entry anywhere means
+ * the pill is a label and the click falls through.
  */
 export function pillActionFor(key: string): PillAction | undefined {
-	if (!(key in PILL_SEGMENT_VARIABLES)) return undefined;
-	return PILL_ACTIONS[key];
+	if (key in PILL_SEGMENT_VARIABLES) return PILL_ACTIONS[key];
+	return externalPillAction(key);
 }
 
 /**

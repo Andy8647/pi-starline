@@ -6,9 +6,15 @@
  * and gets a bubble in the pill's own colour, sitting above the footer with a
  * tail aimed at the pill.
  *
- * Pi's overlay positioning is what makes this possible without layout work:
- * `anchor: "bottom-left"` + `offsetX` puts the bubble at a column we choose, and
- * `offsetY: -1` lifts it off the footer row so the last line can carry the tail.
+ * The shape is a filled block, not an outlined box: a terminal can only colour
+ * whole cells, so an outline leaves the corners square while the curve hides
+ * inside them. Cutting the four corner cells with quadrant glyphs and drawing the
+ * tail as a filled triangle makes the silhouette itself rounded.
+ *
+ * Pi's overlay positioning is what makes the placement possible without layout
+ * work: `anchor: "bottom-left"` + `offsetX` puts the bubble at a column we choose,
+ * and `offsetY: -1` lifts it off the footer row so the last line can carry the
+ * tail.
  */
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -20,13 +26,19 @@ import {
 	wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
 import { contrastTextSgr } from "./pill";
-import { resolveBackgroundSgr, type ThemeLike } from "./style";
+import { resolveBackgroundSgr, type ThemeLike, toForegroundSgr } from "./style";
 
 const RESET = "\x1b[0m";
 const BOLD = "\x1b[1m";
 const DIM = "\x1b[2m";
-/** Ends both bold and dim (SGR 22), without resetting colour. */
-const ATTR_OFF = "\x1b[22m";
+const UNDERLINE = "\x1b[4m";
+/** Ends bold, dim and underline (SGR 22 + 24) without touching the colours. */
+const STYLE_OFF = "\x1b[22m\x1b[24m";
+const DEFAULT_BG = "\x1b[49m";
+
+/** Quadrants that keep the inside of each corner, leaving the outside cut away. */
+const CORNERS = { topLeft: "▗", topRight: "▖", bottomLeft: "▝", bottomRight: "▘" };
+const TAIL = "▼";
 
 /** A bubble narrow enough to read as a bubble, wide enough for a sentence. */
 const MIN_BUBBLE_WIDTH = 24;
@@ -48,28 +60,47 @@ export type PillAnchor = {
 	foreground: string;
 };
 
+/**
+ * A body line. A plain string is information; an object with `onSelect` is a
+ * target: it renders underlined and runs the callback when clicked.
+ */
+export type PillBubbleLine = string | { text: string; onSelect: () => void };
+
 export type PillBubbleContent = {
-	/** Bold heading, optional. */
+	/** Bold first line, optional. */
 	title?: string;
-	/** Body paragraphs, wrapped to the bubble. */
-	body: string[];
+	/** Body lines, wrapped to the bubble. */
+	body: PillBubbleLine[];
 	/** Muted last line, e.g. the key that dismisses it. */
 	hint?: string;
 };
+
+/** A click target's row range in the rendered bubble. */
+type BubbleTarget = { startLine: number; endLine: number; onSelect: () => void };
+
+type BubbleMouseEvent = {
+	type?: string;
+	x: number;
+	y: number;
+	width?: number;
+};
+
+type BubbleMouseResult = { handled?: boolean };
 
 function clamp(value: number, min: number, max: number): number {
 	return Math.max(min, Math.min(max, value));
 }
 
 /**
- * The bubble's width: its longest line plus the two borders and their padding,
- * kept between the bounds so a one-word pill still gets a readable bubble and a
- * wall of text does not become a full-width panel.
+ * The bubble's width: its longest line plus the padding, kept between the bounds
+ * so a one-word pill still gets a readable bubble and a wall of text does not
+ * become a full-width panel.
  */
 export function pillBubbleWidth(content: PillBubbleContent, terminalWidth: number): number {
+	const body = content.body.map((line) => (typeof line === "string" ? line : line.text));
 	const longest = Math.max(
 		0,
-		...[content.title ?? "", ...content.body, content.hint ?? ""].map((line) => visibleWidth(line)),
+		...[content.title ?? "", ...body, content.hint ?? ""].map((line) => visibleWidth(line)),
 	);
 	const ceiling = Math.max(8, Math.min(MAX_BUBBLE_WIDTH, terminalWidth - 4));
 	return Math.min(Math.max(MIN_BUBBLE_WIDTH, longest + 4), ceiling);
@@ -107,8 +138,69 @@ export function pillBubblePlacement(
 }
 
 /**
- * Render the bubble: a rounded box in the pill's colours, the body wrapped to
- * fit, and a `▽` cut into the bottom border where the tail points.
+ * Build the bubble's lines and the click targets that go with them, in one pass
+ * so a target can never describe a row the renderer did not draw.
+ */
+function buildBubble(input: {
+	content: PillBubbleContent;
+	width: number;
+	background: string;
+	foreground?: string;
+	tailColumn?: number;
+}): { lines: string[]; targets: BubbleTarget[] } {
+	const width = Math.max(6, Math.floor(input.width));
+	const innerWidth = Math.max(1, width - 4);
+	const background = input.background;
+	const foreground = input.foreground || contrastTextSgr(background);
+	// The corner glyphs are the fill colour drawn as a foreground, on the
+	// terminal's own background, so the cell outside the curve stays empty.
+	const fillFg = toForegroundSgr(background) ?? "";
+
+	const corner = (glyph: string) => `${DEFAULT_BG}${fillFg}${glyph}${RESET}`;
+	const fill = (count: number) => (count > 0 ? `${background}${" ".repeat(count)}${RESET}` : "");
+	const row = (text: string, style = "") =>
+		`${background}${foreground}${style}  ${text}${STYLE_OFF}${" ".repeat(
+			Math.max(0, innerWidth - visibleWidth(text)),
+		)}  ${RESET}`;
+
+	const lines: string[] = [
+		`${corner(CORNERS.topLeft)}${fill(width - 2)}${corner(CORNERS.topRight)}`,
+	];
+	const targets: BubbleTarget[] = [];
+
+	if (input.content.title) lines.push(row(input.content.title, BOLD));
+
+	for (const entry of input.content.body) {
+		const text = typeof entry === "string" ? entry : entry.text;
+		const startLine = lines.length;
+		// A clickable line is underlined so it reads as a target. Padding is
+		// appended after the style is switched off, or the spaces get underlined too.
+		for (const wrapped of wrapTextWithAnsi(text, innerWidth)) {
+			lines.push(row(wrapped, typeof entry === "string" ? "" : UNDERLINE));
+		}
+		if (typeof entry !== "string" && lines.length > startLine) {
+			targets.push({ startLine, endLine: lines.length - 1, onSelect: entry.onSelect });
+		}
+	}
+
+	if (input.content.hint) lines.push(row(input.content.hint, DIM));
+
+	lines.push(`${corner(CORNERS.bottomLeft)}${fill(width - 2)}${corner(CORNERS.bottomRight)}`);
+
+	if (input.tailColumn !== undefined) {
+		const column = clamp(Math.round(input.tailColumn), 2, width - 3);
+		lines.push(
+			`${" ".repeat(column)}${corner(TAIL)}${" ".repeat(Math.max(0, width - column - 1))}`,
+		);
+	}
+
+	return { lines, targets };
+}
+
+/**
+ * Render the bubble's lines. Kept as a plain string[] because that is what a
+ * component's `render` returns; `showPillBubble` uses the internal build so the
+ * click targets line up with the rows.
  */
 export function renderPillBubble(input: {
 	content: PillBubbleContent;
@@ -117,40 +209,7 @@ export function renderPillBubble(input: {
 	foreground?: string;
 	tailColumn?: number;
 }): string[] {
-	const width = Math.max(6, Math.floor(input.width));
-	const innerWidth = Math.max(1, width - 4);
-	const background = input.background;
-	const foreground = input.foreground || contrastTextSgr(background);
-
-	// Every line is painted edge to edge, padding included, so the bubble reads as
-	// one solid block instead of text floating over the transcript.
-	const paint = (text: string) => {
-		const padding = Math.max(0, width - visibleWidth(text));
-		return `${background}${foreground}${text}${" ".repeat(padding)}${RESET}`;
-	};
-	const row = (text: string) =>
-		paint(`│ ${text}${" ".repeat(Math.max(0, innerWidth - visibleWidth(text)))} │`);
-
-	const lines: string[] = [paint(`╭${"─".repeat(Math.max(0, width - 2))}╮`)];
-	// The heading is a body row, not a gap in the top border: an unbroken outline
-	// is what makes the four rounded corners read as a shape rather than a panel.
-	if (input.content.title) lines.push(row(`${BOLD}${input.content.title}${ATTR_OFF}`));
-
-	for (const paragraph of input.content.body) {
-		for (const line of wrapTextWithAnsi(paragraph, innerWidth)) lines.push(row(line));
-	}
-	if (input.content.hint) lines.push(row(`${DIM}${input.content.hint}${ATTR_OFF}`));
-
-	const bottom: string[] = Array.from({ length: width }, (_, column) =>
-		column === 0 ? "╰" : column === width - 1 ? "╯" : "─",
-	);
-	if (input.tailColumn !== undefined) {
-		// Kept inside the border: the corners and the corner-adjacent dash stay.
-		bottom[clamp(Math.round(input.tailColumn), 2, width - 3)] = "▽";
-	}
-	lines.push(paint(bottom.join("")));
-
-	return lines;
+	return buildBubble(input).lines;
 }
 
 /**
@@ -186,6 +245,7 @@ export function showPillBubble(
 		.custom<void>(
 			(_tui, theme, _keybindings, done) => {
 				let mounted = true;
+				let targets: BubbleTarget[] = [];
 				const close = () => {
 					if (!mounted) return;
 					mounted = false;
@@ -196,7 +256,7 @@ export function showPillBubble(
 
 				return {
 					render(renderWidth: number): string[] {
-						return renderPillBubble({
+						const built = buildBubble({
 							content,
 							width: renderWidth,
 							background:
@@ -206,10 +266,30 @@ export function showPillBubble(
 							foreground: anchor?.foreground,
 							tailColumn: placement.tailColumn,
 						});
+						// Only the rows the last render drew can be clicked.
+						targets = built.targets;
+						return built.lines;
 					},
 					invalidate() {},
 					handleInput(data: string): void {
 						if (matchesKey(data, Key.escape) || matchesKey(data, Key.enter)) close();
+					},
+					/**
+					 * Overlays get mouse events with coordinates local to the overlay, so a
+					 * target is just a row range. A press is claimed and the callback runs on
+					 * the click, the same split the footer uses.
+					 */
+					handleMouse(event: BubbleMouseEvent): BubbleMouseResult | undefined {
+						if (!Number.isFinite(event.x) || !Number.isFinite(event.y)) return undefined;
+						const target = targets.find(
+							(entry) => event.y >= entry.startLine && event.y <= entry.endLine,
+						);
+						if (!target) return undefined;
+						if (event.type === "click") {
+							close();
+							target.onSelect();
+						}
+						return { handled: true };
 					},
 					dispose(): void {
 						mounted = false;
