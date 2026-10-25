@@ -42,6 +42,7 @@ import {
 	resolveSessionStartEpoch,
 } from "./format";
 import { emptyGitStatus, readGitHost, readGitStatus } from "./git";
+import { setActiveGitStatus } from "./git-live";
 import { gitProbeOptions } from "./git-probe";
 import { LiveContextController } from "./live-context";
 import { forgetLiveSession, installLiveSessionCapture } from "./live-session";
@@ -105,6 +106,9 @@ export default function (pi: ExtensionAPI) {
 	publishPillApi();
 
 	const state: FooterState = createInitialState(emptyGitStatus());
+	// The git pill's bubble reads the same object the footer draws from, so a
+	// click costs no extra \`git status\`.
+	setActiveGitStatus(state);
 	const sessionLifecycle = new SessionLifecycle();
 
 	let currentConfig: PolishedTuiConfig = loadConfig();
@@ -607,6 +611,7 @@ export default function (pi: ExtensionAPI) {
 			uninstallSessionCapture();
 			uninstallQueueRowHiding();
 			setActiveSubagentFleet(undefined);
+			setActiveGitStatus(undefined);
 			setModelSwitcher(undefined);
 			uninstallPrototypePatches();
 			setWorkingIndicator(undefined);

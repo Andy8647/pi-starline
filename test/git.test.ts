@@ -20,6 +20,30 @@ describe("parseGitStatusPorcelain", () => {
 		const empty = emptyGitStatus();
 		expect(empty.commit).toBeUndefined();
 		expect(empty.metrics).toBeUndefined();
+		expect(empty.changes).toEqual([]);
+	});
+
+	it("remembers the changed paths for the pill's bubble", () => {
+		const status = parseGitStatusPorcelain(
+			[
+				"# branch.head main",
+				"1 .M N... 100644 100644 100644 abc abc src/app.ts",
+				"1 A. N... 000000 100644 100644 000 def src/new file.ts",
+				"2 R. N... 100644 100644 100644 abc def R100 src/moved.ts\tsrc/old.ts",
+				"? notes/todo.md",
+				"u UU N... 100644 100644 100644 100644 abc def ghi conflict.txt",
+			].join("\n"),
+			0,
+		);
+
+		expect(status.changes).toEqual([
+			// A path with a space stays whole; `2` lines carry a score field first.
+			{ code: "M", path: "src/app.ts" },
+			{ code: "A", path: "src/new file.ts" },
+			{ code: "R", path: "src/moved.ts" },
+			{ code: "?", path: "notes/todo.md" },
+			{ code: "U", path: "conflict.txt" },
+		]);
 	});
 
 	it("parses branch, ahead/behind, and file states", () => {

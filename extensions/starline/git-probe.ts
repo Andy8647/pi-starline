@@ -25,6 +25,6 @@ export function gitProbeOptions(
 	return {
 		readExactTag: wants("gitTag") || (wantsCommit && config.showTag),
 		readMetrics: wants("gitMetrics"),
-		readHost: wants("gitBranch") && config.hostIcon,
+		readHost: wants("git") && config.hostIcon,
 	};
 }

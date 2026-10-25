@@ -51,6 +51,17 @@ export type GitMetricsInfo = {
 	deleted: number;
 };
 
+/**
+ * One changed path, as `git status` reports it.
+ *
+ * `code` is a single letter for the pill's bubble: the index side when there is
+ * one (`M` staged), the worktree side otherwise. `?` untracked, `U` conflicted.
+ */
+export type GitChange = {
+	code: string;
+	path: string;
+};
+
 export type GitStatusSummary = {
 	branch?: string;
 	dirty: boolean;
@@ -68,6 +79,11 @@ export type GitStatusSummary = {
 	gitStateLabel?: string;
 	commit?: GitCommitInfo;
 	metrics?: GitMetricsInfo | null;
+	/**
+	 * Changed paths, in `git status` order, capped at `MAX_TRACKED_CHANGES`. Only
+	 * the bubble reads them; the pill itself is drawn from the counts.
+	 */
+	changes: GitChange[];
 };
 
 export type GitReadResult =
@@ -104,7 +120,34 @@ export function emptyGitStatus(): GitStatusSummary {
 		gitStateLabel: undefined,
 		commit: undefined,
 		metrics: undefined,
+		changes: [],
 	};
+}
+
+/** Cap on remembered paths: the bubble shows a dozen, the rest is `+N more`. */
+const MAX_TRACKED_CHANGES = 200;
+
+/**
+ * The rest of a porcelain v2 line after its fixed fields.
+ *
+ * The path is whatever follows the last space-separated field, so paths with
+ * spaces survive: `1 .M N... 100644 100644 100644 abc def my file.txt` keeps
+ * `my file.txt` whole.
+ */
+function porcelainPath(line: string, fields: number): string {
+	let index = 0;
+	for (let field = 0; field < fields; field += 1) {
+		index = line.indexOf(" ", index);
+		if (index < 0) return "";
+		index += 1;
+	}
+	return line.slice(index);
+}
+
+function addChange(status: GitStatusSummary, code: string, path: string): void {
+	const trimmed = path.trim();
+	if (!trimmed || status.changes.length >= MAX_TRACKED_CHANGES) return;
+	status.changes.push({ code: code === "." || code === " " ? "M" : code, path: trimmed });
 }
 
 export function parseGitStatusPorcelain(stdoutText: string, stashCount: number): GitStatusSummary {
@@ -147,10 +190,12 @@ export function parseGitStatusPorcelain(stdoutText: string, stashCount: number):
 
 		if (line.startsWith("? ")) {
 			status.untracked += 1;
+			addChange(status, "?", line.slice(2));
 			continue;
 		}
 		if (line.startsWith("u ")) {
 			status.conflicted += 1;
+			addChange(status, "U", porcelainPath(line, 10));
 			continue;
 		}
 		if (!(line.startsWith("1 ") || line.startsWith("2 "))) continue;
@@ -167,6 +212,11 @@ export function parseGitStatusPorcelain(stdoutText: string, stashCount: number):
 		if (y === "M") status.modified += 1;
 		else if (y === "D") status.deleted += 1;
 		else if (y === "T") status.typechanged += 1;
+
+		// `2` lines carry an extra score field before the path, and a rename adds
+		// `<tab>original` to it; the new name is what the bubble lists.
+		const path = porcelainPath(line, line.startsWith("2 ") ? 9 : 8).split("\t")[0] ?? "";
+		addChange(status, x !== "." ? x : y, path);
 	}
 
 	// Only populate commit info when we actually saw branch headers (inside

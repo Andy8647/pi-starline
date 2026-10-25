@@ -55,8 +55,7 @@ Default config values — copy this and change any value you want:
 			"model",
 			"thinking",
 			"cwd",
-			"gitBranch",
-			"gitStatus",
+			"git",
 			"context",
 			"cost",
 			"extensionStatus"
@@ -196,7 +195,7 @@ Default config values — copy this and change any value you want:
 - `icons`: every shown icon key is configurable; omit any key to use the Starline default. `icons.mode` is `auto` | `nerd` | `ascii` (default `auto`, same glyphs as nerd). ASCII mode swaps in plain fallbacks for statusline icons and runtime symbols — useful without a Nerd Font. Custom per-icon strings always win over mode defaults. Custom `icons.os` always wins; when left at the mode default, Starline maps the OS icon by platform. `rail` sets the vertical glyph drawn as the left rail of the active editor frame and previous user messages when `copyFriendly` is disabled (default `│`; any single Unicode vertical or block glyph). `editorPrompt` controls an optional copy-friendly editor prompt glyph; the default is `""` so copy-friendly mode stays rail-free.
 - `colorSources`: `theme` maps styles through Pi theme tokens; `terminal` emits terminal colors. `/starline` switches these sources; manual JSON controls specific style values.
 - `features`: `editor` enables Starline's custom editor, selector borders, and previous-message chrome. `statusLine` enables Starline's custom footer/status line. `copyFriendly` hides editor and previous-message rail glyphs so native terminal selection copies less chrome. All three can be changed from `/starline` or direct slash-command arguments.
-- `git`: everything the git segments read, see [Git](#git). Also drives which optional probes run: a tag lookup only happens when `gitCommit` or `gitTag` is in `pill.segments`, `git diff --numstat` only for `gitMetrics`, and the remote lookup only for `gitBranch` with `hostIcon` on.
+- `git`: everything the git segments read, see [Git](#git). Also drives which optional probes run: a tag lookup only happens when `gitCommit` or `gitTag` is in `pill.segments`, `git diff --numstat` only for `gitMetrics`, and the remote lookup only for the `git` pill with `hostIcon` on.
 - `extensionStatuses`: controls third-party statuses published by other Pi extensions through `ctx.ui.setStatus()`. `defaultPlacement` and each `placements` value can be `off`, `left`, `middle`, `right`, or `editor`. The `Extension segments` tab in `/starline` lists only statuses that are currently active. `editor` puts the status on the right-hand side of the editor's metadata row, next to the copy and paste hints — it is drawn there as one muted line, so `colors`, `icons`, and `colorMode` do not apply, and it needs both `features.editor` and `features.statusLine` on (the status map only reaches Starline through its footer). Publishing extensions can also make their pill clickable and open a bubble with their own detail through the pill API — see [Clickable pills for other extensions](pill-api.md).
 - The shown `editor*` values match the default `theme` source. Omit those keys to keep Starline's source-aware defaults when switching between `theme` and `terminal`.
 - `editorAccent` styles the active editor rail and previous user-message rail when `features.copyFriendly` is disabled.
@@ -273,8 +272,7 @@ The footer is a bar of coloured pills joined by seamless powerline arrows. `pill
 			"thinking",
 			"queue",
 			"cwd",
-			"gitBranch",
-			"gitStatus",
+			"git",
 			"extensionStatus:balance",
 			"context",
 			"cost",
@@ -289,7 +287,7 @@ The footer is a bar of coloured pills joined by seamless powerline arrows. `pill
 
 | Key | Values | Meaning |
 | --- | --- | --- |
-| `segments` | segment names (`cwd`, `gitBranch`, `context`, `cost`, …), plus `queue`, `subagents`, `extensionStatus`, `extensionStatus:<key>` | Order, left to right |
+| `segments` | segment names (`cwd`, `git`, `context`, `cost`, …), plus `queue`, `subagents`, `extensionStatus`, `extensionStatus:<key>` | Order, left to right |
 | `separator` | `powerline` (default), `powerline-thin`, `none` | Glyph between pills |
 | `bold` | `true` (default), `false` | Bold segment text |
 | `caps` | `round` (default), `right`, `none` | How the bar's ends are closed |

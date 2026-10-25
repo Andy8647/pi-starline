@@ -53,6 +53,13 @@ describe("branch", () => {
 		expect(git.branch).toBe("");
 	});
 
+	it("labels a detached HEAD instead of leaving the pill empty", () => {
+		const git = render(
+			state({ branch: undefined, commit: { oid: "abcdef1234", detached: true, tag: null } }),
+		);
+		expect(git.label).toBe("G HEAD");
+	});
+
 	it("swaps the branch glyph for the origin's forge logo when gitHostIcon is on", () => {
 		const git = render(state({ branch: "main", gitHost: "github" }), { git: { hostIcon: true } });
 		expect(git.icon).toBe("GH");
@@ -62,6 +69,23 @@ describe("branch", () => {
 	it("keeps the branch glyph when the toggle is off, however the remote looks", () => {
 		const git = render(state({ branch: "main", gitHost: "github" }), { git: { hostIcon: false } });
 		expect(git.icon).toBe("G");
+	});
+});
+
+describe("label", () => {
+	const dirty = state({
+		branch: "main",
+		modified: 2,
+		untracked: 1,
+		gitStateLabel: "REBASING",
+	});
+
+	it("puts the branch, the dirty block and the operation in one string", () => {
+		expect(render(dirty).label).toBe("G main [M?] REBASING");
+	});
+
+	it("leaves out the parts that have nothing to say", () => {
+		expect(render(state({ branch: "main" })).label).toBe("G main");
 	});
 });
 

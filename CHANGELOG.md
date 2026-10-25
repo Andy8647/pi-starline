@@ -22,6 +22,14 @@ colours, icons, the editor row, clickable pills — works as before.
 
 **Added**
 
+- **A clickable `git` pill.** Branch, dirty markers and any operation in progress
+  share one pill (`main [!?] REBASING`) instead of three. Clicking it lists what
+  changed — up to a dozen paths, ahead/behind and stashes above them — refreshed
+  while the bubble is open. It is read-only on purpose: no staging, no branch
+  switch, because an agent may be running in the same tree. `gitBranch`,
+  `gitStatus` and `gitState` in `pill.segments` are rewritten to `git`, so an
+  existing bar keeps its git pill.
+
 - **A *Pills* tab in \`/starline\`.** One row per segment; the value is its position
   in the bar, \`off\` hides it, and Space cycles through them. Picking a number
   inserts the segment there and shifts the rest along. The same list is still

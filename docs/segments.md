@@ -5,7 +5,7 @@ choose, order and colour them is in [configuration.md](configuration.md).
 
 ## Git status indicators
 
-The `gitStatus` segment, inside brackets after the branch (`[!?↑]`):
+The `git` pill carries the branch and its dirty markers together; the markers sit in brackets after the branch name (`main [!?↑]`):
 
 | Icon | Meaning    |
 | ---- | ---------- |

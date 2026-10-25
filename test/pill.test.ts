@@ -107,12 +107,22 @@ describe("normalizePillConfig", () => {
 });
 
 describe("isKnownPillSegment", () => {
-	it("accepts footer segment names, the status group, and addressed statuses", () => {
-		expect(isKnownPillSegment("gitBranch")).toBe(true);
+	it("accepts segment names, the status group, and addressed statuses", () => {
+		expect(isKnownPillSegment("git")).toBe(true);
 		expect(isKnownPillSegment("extensionStatus")).toBe(true);
 		expect(isKnownPillSegment("extensionStatus:balance")).toBe(true);
+		// The branch and the dirty block share one pill now; their old names are
+		// rewritten by the parser instead of being known segments.
+		expect(isKnownPillSegment("gitBranch")).toBe(false);
 		expect(isKnownPillSegment("git_branch")).toBe(false);
 		expect(isKnownPillSegment("nope")).toBe(false);
+	});
+
+	it("rewrites the split git names into one git pill", () => {
+		expect(normalizePillConfig({ segments: ["gitBranch", "cwd", "gitStatus"] }).segments).toEqual([
+			"git",
+			"cwd",
+		]);
 	});
 });
 
@@ -128,10 +138,10 @@ describe("collectPillInputs", () => {
 	// Text comes from the footer variable, but the colour is looked up by segment
 	// name — that is the key footer.ts's pillSpecFor switch dispatches on.
 	it("maps segment names onto footer variables and looks colours up by segment", () => {
-		const inputs = collectPillInputs(["cwd", "gitBranch"], [], renderVariable, specFor, () => "st");
+		const inputs = collectPillInputs(["cwd", "git"], [], renderVariable, specFor, () => "st");
 		expect(inputs).toEqual([
 			{ key: "cwd", text: "<cwd>", spec: "spec:cwd" },
-			{ key: "gitBranch", text: "<git_branch>", spec: "spec:gitBranch" },
+			{ key: "git", text: "<git>", spec: "spec:git" },
 		]);
 	});
 

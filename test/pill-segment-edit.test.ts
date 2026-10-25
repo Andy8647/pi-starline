@@ -51,6 +51,7 @@ describe("PILL_SEGMENT_NAMES", () => {
 	it("lists every built-in plus the catch-all, and everything the default bar uses", () => {
 		expect(PILL_SEGMENT_NAMES).toContain("extensionStatus");
 		expect(PILL_SEGMENT_NAMES).toContain("gitMetrics");
+		expect(PILL_SEGMENT_NAMES).toContain("git");
 		for (const segment of segments) expect(PILL_SEGMENT_NAMES).toContain(segment);
 	});
 });
@@ -140,8 +141,8 @@ describe("/starline Pills tab", () => {
 		// The first eight rows are on screen; the rest scroll.
 		expect(rendered).toMatch(/Model\s+1/);
 		expect(rendered).toMatch(/Thinking\s+2/);
-		expect(rendered).toMatch(/Git branch\s+6/);
-		expect(rendered).toContain("1/23");
+		expect(rendered).toMatch(/Git\s+6/);
+		expect(rendered).toContain("1/21");
 	});
 
 	it("moves the selected segment when its value is cycled", async () => {

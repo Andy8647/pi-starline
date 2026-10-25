@@ -18,6 +18,7 @@ Starline makes Pi's fullscreen mode feel like a finished terminal app:
 - Starship-style segments: `dirname`, `on  branch`, git status `[!?↑]`, runtime `via  v5.5.0` (57 runtimes), context, tokens, cost, plus optional session name, `user@host`, time, OS, session duration and project version.
 - A colour palette with `$name` references; the bar is built from `pill.segments`, in your order.
 - Other extensions' statuses from `ctx.ui.setStatus()` as pills, on either side, or on the editor row.
+- One git pill: branch and dirty markers together; click it for the changed files (read-only).
 - The model pill's icon spins while the agent works.
 
 **Clickable pills**
@@ -61,7 +62,7 @@ Everything else lives in `~/.pi/agent/starline.json`. The file is optional; miss
 
 ```json
 {
-	"pill": { "segments": ["model", "cwd", "gitBranch", "gitStatus", "context", "cost"] },
+	"pill": { "segments": ["model", "cwd", "git", "context", "cost"] },
 	"colors": { "gitBranch": "bold purple" },
 	"mouse": { "transcriptCleanCopy": false }
 }

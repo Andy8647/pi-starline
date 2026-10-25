@@ -41,8 +41,14 @@ export type GitSegments = {
 	icon: string;
 	/** Shortened branch name in branch colour; undefined on a detached HEAD. */
 	branchText: string | undefined;
-	/** `icon branch` as the bar shows it; "" when either part is missing. */
+	/** `icon branch` as the bar shows it; "" when there is no branch. */
 	branch: string;
+	/**
+	 * The whole thing in one pill: `icon branch [status] OPERATION`. This is what
+	 * the `git` segment draws, so a dirty tree reads next to the branch it is
+	 * dirty on rather than in a second pill of its own.
+	 */
+	label: string;
 	/** Dirty-worktree glyphs and ahead/behind in a `[...]` block; "" when clean. */
 	status: string;
 	/** `REBASING`-style operation label; "" when no operation is in progress. */
@@ -97,6 +103,13 @@ export function renderGitSegments(
 	const branchText = state.branch
 		? paint(config.colors.gitBranch, formatGitBranchText(state.branch, git.branch.maxLength))
 		: undefined;
+	// A detached HEAD has no branch name; `HEAD` still says where the tree is, and
+	// it is what the text footer used to print.
+	const headText =
+		branchText ??
+		(state.commit && !state.branch
+			? paint(config.colors.gitBranch, state.commit.oid ? "HEAD" : "")
+			: undefined);
 
 	const stashLabel =
 		state.stashed > 0 ? (counts ? `${icons.stashed}${state.stashed}` : icons.stashed) : "";
@@ -142,10 +155,18 @@ export function renderGitSegments(
 		config.colors.gitMetricsDeleted,
 	);
 
+	const branch = branchText ? (icon ? `${icon} ${branchText}` : branchText) : "";
+	const labelParts = [
+		headText ? (icon ? `${icon} ${headText}` : headText) : "",
+		status,
+		operation,
+	].filter(Boolean);
+
 	return {
 		icon,
 		branchText,
-		branch: branchText ? (icon ? `${icon} ${branchText}` : branchText) : "",
+		branch,
+		label: labelParts.join(" "),
 		status,
 		state: operation,
 		commit,

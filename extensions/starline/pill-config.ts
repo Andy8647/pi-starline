@@ -41,9 +41,7 @@ export const PILL_SEGMENT_VARIABLES: Record<string, string> = {
 	subagents: "subagents",
 	cwd: "cwd",
 	sessionName: "session_name",
-	gitBranch: "git_branch",
-	gitStatus: "git_status",
-	gitState: "git_state",
+	git: "git",
 	gitCommit: "git_commit",
 	gitTag: "git_tag",
 	gitMetrics: "git_metrics",
@@ -66,8 +64,7 @@ export const DEFAULT_PILL_CONFIG: PillConfig = {
 		"queue",
 		"subagents",
 		"cwd",
-		"gitBranch",
-		"gitStatus",
+		"git",
 		"context",
 		"cost",
 		EXTENSION_STATUS_SEGMENT,
@@ -142,15 +139,25 @@ export function movePillSegment(
 	return [...rest.slice(0, index), name, ...rest.slice(index)];
 }
 
+/** Segment names that became part of another one. */
+const LEGACY_SEGMENT_NAMES: Record<string, string> = {
+	gitBranch: "git",
+	gitStatus: "git",
+	gitState: "git",
+};
+
 function parseSegments(value: unknown): string[] {
 	if (!Array.isArray(value)) return DEFAULT_PILL_CONFIG.segments;
 	const segments: string[] = [];
 	for (const entry of value) {
 		if (typeof entry !== "string") continue;
-		const name = entry.trim();
+		// A bar that listed the branch and the dirty block separately now draws
+		// both in one pill, so the old names collapse into it instead of vanishing.
+		const renamed = LEGACY_SEGMENT_NAMES[entry.trim()] ?? entry.trim();
 		// Unknown names are dropped rather than rendered as empty pills, so a
 		// typo shortens the bar instead of punching a hole in it.
-		if (name && isKnownPillSegment(name) && !segments.includes(name)) segments.push(name);
+		if (renamed && isKnownPillSegment(renamed) && !segments.includes(renamed))
+			segments.push(renamed);
 	}
 	return segments;
 }

@@ -316,12 +316,8 @@ export function installFooter(
 							return cwdLabel;
 						case "session_name":
 							return sessionNameLabel;
-						case "git_branch":
-							return git.branch;
-						case "git_status":
-							return git.status;
-						case "git_state":
-							return git.state;
+						case "git":
+							return git.label;
 						case "runtime": {
 							if (!state.runtime) return "";
 							const symbol = resolveRuntimeSymbol(
@@ -413,11 +409,8 @@ export function installFooter(
 							return config.colors.cwd;
 						case "sessionName":
 							return config.colors.sessionName;
-						case "gitBranch":
+						case "git":
 							return config.colors.gitBranch;
-						case "gitStatus":
-						case "gitState":
-							return config.colors.gitStatus;
 						case "gitCommit":
 						case "gitTag":
 							return config.colors.gitCommit;
