@@ -44,7 +44,7 @@
 		"extensions": [
 			"./extensions"
 		],
-		"image": "https://raw.githubusercontent.com/Andy8647/pi-starline/main/assets/starline.png"
+		"image": "https://raw.githubusercontent.com/Andy8647/pi-starline/main/assets/cover.png"
 	},
 	"publishConfig": {
 		"access": "public"
