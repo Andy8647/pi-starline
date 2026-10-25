@@ -21,7 +21,9 @@ installed.
   same pill closes it, and so does Escape.
 - Body lines can be targets: underlined, the pointer turns into a hand over them,
   and the row under the pointer is highlighted in the pill's colour. ↑/↓ move the
-  same highlight and Enter runs it; a click runs it too.
+  same highlight and Enter runs it; a click runs it too. Mark the target that is
+  the present state with `current: true` (the active option in a picker) and the
+  bubble opens with it highlighted, so the arrows move from there.
 - The content can be live: the bubble re-reads it while open.
 - The same action runs from the keyboard as `/starline <key>`.
 
@@ -225,5 +227,5 @@ added; treat that as a click.
 | `api.register(key, action)` | returns an unregister function |
 | `action({ ctx, pill?, via? })` | `via` is `"click"` or `"command"` |
 | `api.showBubble(ctx, content, pill?)` | `content` is `PillBubbleContent` or a function returning one; returns `PillBubbleHandle` (0.4+) |
-| `PillBubbleContent` | `{ title?, body: Array<string \| { text, onSelect }>, hint? }` |
+| `PillBubbleContent` | `{ title?, body: Array<string \| { text, onSelect, current? }>, hint? }` |
 | `PillBubbleHandle` | `refresh()`, `close()`, `isOpen()`, `onClose(callback)` |

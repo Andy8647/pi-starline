@@ -39,9 +39,14 @@ export type PillAnchor = {
 /**
  * A body line. A plain string is information; an object with `onSelect` is a
  * target: it renders underlined, the pointer turns into a hand over it, and a
- * click closes the bubble and then runs the callback.
+ * click (or Enter while it is selected) closes the bubble and then runs the
+ * callback.
+ *
+ * `current: true` marks the target that stands for the present state, such as
+ * the active level in a picker: the bubble opens with it selected, so the arrow
+ * keys move from there. At most one should be current; the first one wins.
  */
-export type PillBubbleLine = string | { text: string; onSelect: () => void };
+export type PillBubbleLine = string | { text: string; onSelect: () => void; current?: boolean };
 
 export type PillBubbleContent = {
 	/** Bold first line, optional. */

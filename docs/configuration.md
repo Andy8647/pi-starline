@@ -330,7 +330,7 @@ A reference that does not resolve is left as written, so the segment renders uns
 | `separator` | `powerline` (default), `powerline-thin`, `none` | Glyph between pills |
 | `bold` | `true` (default), `false` | Bold segment text |
 | `caps` | `round` (default), `right`, `none` | How the bar's ends are closed |
-| `bubbleAnimation` | `true` (default), `false` | Unfold a clicked pill's bubble upward from the pill (90 ms) instead of showing it at once. Applies from the next session or `/reload`. |
+| `bubbleAnimation` | `true` (default), `false` | Unfold a clicked pill's bubble upward from the pill (60 ms) instead of showing it at once. Applies from the next session or `/reload`. |
 
 Notes:
 

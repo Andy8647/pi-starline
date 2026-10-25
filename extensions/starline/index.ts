@@ -100,7 +100,7 @@ function isTuiContext(ctx: ExtensionContext): boolean {
  * How long a pill's bubble takes to unfold from the pill: long enough to read as
  * growing out of it, short enough never to be waited on.
  */
-const BUBBLE_ANIMATION_MS = 90;
+const BUBBLE_ANIMATION_MS = 60;
 
 export default function (pi: ExtensionAPI) {
 	// Published before anything else so a bridge that registers in `session_start`

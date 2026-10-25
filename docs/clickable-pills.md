@@ -186,11 +186,14 @@ graphics protocol) were compared in a gallery before choosing.
 
 **Choosing a target.** The mouse and the keyboard move one selection: hovering a
 target selects it, ↑/↓ step through the targets (wrapping), Enter runs the selected
-one or closes the bubble when none is selected, Escape closes. The selected row is
+one or closes the bubble when none is selected, Escape closes. A target marked
+`current` (the active level or model in a picker, which is a target for exactly
+this reason) is selected when the bubble opens, so ↑ from `high` lands on `medium`;
+the selection follows that mark through refreshes until the user moves it. The selected row is
 filled with the pill's colour, like a menu highlight. Pi owns the overlay but not
 the meaning of keys inside it, so these are the component's own `handleInput`.
 
-**Opening.** The first overlay unfolds upward from the pill over 90 ms
+**Opening.** The first overlay unfolds upward from the pill over 60 ms
 (`pill.bubbleAnimation`, on by default): it is anchored at its bottom, so drawing
 only its last rows and adding one per frame grows it out of the pill. Rows not yet
 drawn are not clickable. A reopen for width is not animated.

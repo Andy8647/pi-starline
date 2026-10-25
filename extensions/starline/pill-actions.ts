@@ -180,8 +180,10 @@ export function thinkingPickerContent(ctx: ExtensionContext): PillBubbleContent 
 	return {
 		title: "Thinking",
 		body: read.levels.map((level) =>
+			// Every level is a target, the current one too: the bubble opens with it
+			// selected, so ↑/↓ move from where you are. Choosing it changes nothing.
 			level === read.current
-				? `● ${level}`
+				? { text: `● ${level}`, current: true, onSelect: () => {} }
 				: {
 						text: `○ ${level}`,
 						onSelect: () => {
@@ -191,7 +193,7 @@ export function thinkingPickerContent(ctx: ExtensionContext): PillBubbleContent 
 						},
 					},
 		),
-		hint: "click a level · esc to close",
+		hint: "↑↓ enter · click · esc",
 	};
 }
 
@@ -300,16 +302,17 @@ export function modelPickerContent(ctx: ExtensionContext): PillBubbleContent {
 			hint: "esc to close",
 		};
 	}
+	// The current model is a target too, opened selected, so ↑/↓ start from it.
 	const body: PillBubbleContent["body"] = choices.map((choice) =>
 		sameModel(choice.model, current)
-			? `● ${modelLabel(choice.model)}`
+			? { text: `● ${modelLabel(choice.model)}`, current: true, onSelect: () => {} }
 			: {
 					text: `○ ${modelLabel(choice.model)}`,
 					onSelect: () => void switchModel(ctx, choice),
 				},
 	);
 	if (more > 0) body.push(`+${more} more in /model`);
-	return { title: "Model", body, hint: "click a model · /model for all · esc to close" };
+	return { title: "Model", body, hint: "↑↓ enter · click · /model for all" };
 }
 
 /**

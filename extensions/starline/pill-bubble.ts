@@ -82,6 +82,20 @@ const TAB_INSET = 3;
 /** A click target's row range in the rendered bubble. */
 type BubbleTarget = { startLine: number; endLine: number; onSelect: () => void };
 
+/**
+ * The target a bubble opens with selected: the first one marked `current`, as an
+ * index into the targets (the object lines, in order).
+ */
+export function currentTargetIndex(content: PillBubbleContent): number | undefined {
+	let index = 0;
+	for (const line of content.body) {
+		if (typeof line === "string") continue;
+		if (line.current) return index;
+		index += 1;
+	}
+	return undefined;
+}
+
 type BubbleMouseEvent = {
 	type?: string;
 	x: number;
@@ -348,8 +362,13 @@ export function showPillBubble(
 	let content = read();
 	let width = pillBubbleWidth(content, terminalWidth, anchor);
 	let open = true;
-	/** Index of the selected target, shared by the mouse and the keyboard. */
-	let selected: number | undefined;
+	/**
+	 * Index of the selected target, shared by the mouse and the keyboard. It
+	 * starts on the target marked `current`, and follows that mark through
+	 * refreshes until the user moves it.
+	 */
+	let selected = currentTargetIndex(content);
+	let selectionMoved = false;
 	let mounts = 0;
 	const closeCallbacks: Array<() => void> = [];
 	/** The overlay on screen now; replaced when a refresh needs a wider one. */
@@ -376,6 +395,7 @@ export function showPillBubble(
 			} catch {
 				return;
 			}
+			if (!selectionMoved) selected = currentTargetIndex(content);
 			const needed = pillBubbleWidth(content, terminalWidth, anchor);
 			if (needed > width) {
 				width = needed;
@@ -443,6 +463,7 @@ export function showPillBubble(
 					previous?.dismiss();
 
 					const select = (index: number | undefined) => {
+						selectionMoved = true;
 						if (index === selected) return;
 						selected = index;
 						repaint();
@@ -475,15 +496,14 @@ export function showPillBubble(
 								shift = lines.length - shown;
 								lines = lines.slice(shift);
 							}
-							// Only the rows the last render drew can be clicked, in the
-							// overlay's own rows.
-							targets = built.targets
-								.filter((target) => target.startLine >= shift)
-								.map((target) => ({
-									...target,
-									startLine: target.startLine - shift,
-									endLine: target.endLine - shift,
-								}));
+							// In the overlay's own rows. Rows not drawn yet land above row 0,
+							// where no pointer can reach them, and every target keeps its
+							// index, so the keyboard's selection means the same row throughout.
+							targets = built.targets.map((target) => ({
+								...target,
+								startLine: target.startLine - shift,
+								endLine: target.endLine - shift,
+							}));
 							return lines;
 						},
 						invalidate() {},

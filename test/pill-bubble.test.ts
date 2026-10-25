@@ -2,6 +2,7 @@ import { visibleWidth } from "@earendil-works/pi-tui";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	closePillBubble,
+	currentTargetIndex,
 	isPillBubbleOpenFor,
 	type PillAnchor,
 	pillBubblePlacement,
@@ -544,5 +545,47 @@ describe("opening animation", () => {
 		);
 		const width = (options as { overlayOptions: { width: number } }).overlayOptions.width;
 		expect(bubble.render(width)).toHaveLength(3);
+	});
+});
+
+describe("the current target", () => {
+	const target = (text: string, current?: boolean) => ({ text, onSelect: vi.fn(), current });
+
+	it("is found among the targets only, the first marked one winning", () => {
+		expect(currentTargetIndex({ body: ["plain", target("a"), target("b", true)] })).toBe(1);
+		expect(currentTargetIndex({ body: [target("a", true), target("b", true)] })).toBe(0);
+		expect(currentTargetIndex({ body: ["plain", target("a")] })).toBeUndefined();
+	});
+
+	it("opens selected, and the selection follows the mark until the user moves it", () => {
+		const { ctx, custom } = fakeContext();
+		let current = 0;
+		const handle = showPillBubble(
+			ctx,
+			() => ({ body: ["a", "b", "c"].map((name, index) => target(name, index === current)) }),
+			anchor(),
+		);
+		const [factory, options] = custom.mock.calls.at(-1) ?? [];
+		const bubble = (factory as (...args: unknown[]) => BubbleComponent)(
+			{ requestRender: vi.fn() },
+			{},
+			{},
+			vi.fn(),
+		);
+		const width = (options as { overlayOptions: { width: number } }).overlayOptions.width;
+		const highlighted = () =>
+			strip(bubble.render(width).find((line) => line.includes(BACKGROUND)) ?? "");
+
+		expect(highlighted()).toContain("a");
+		current = 2;
+		handle.refresh();
+		expect(highlighted()).toContain("c");
+
+		bubble.handleInput("\x1b[A");
+		expect(highlighted()).toContain("b");
+		current = 0;
+		handle.refresh();
+		// Moved by the user: a refresh no longer pulls it back.
+		expect(highlighted()).toContain("b");
 	});
 });

@@ -67,7 +67,8 @@ describe("model picker", () => {
 		const content = modelPickerContent(ctx);
 		const body = content.body as Line[];
 
-		expect(body[0]).toBe("● deepseek-flash · deepseek");
+		// The current model is a target too, marked so the bubble opens on it.
+		expect(body[0]).toMatchObject({ text: "● deepseek-flash · deepseek", current: true });
 		const k3Line = body[1] as Exclude<Line, string>;
 		expect(k3Line.text).toBe("○ k3 · kimi-coding");
 		k3Line.onSelect();

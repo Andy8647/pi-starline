@@ -551,12 +551,34 @@ describe("pill actions", () => {
 			expect(lines.join("\n")).not.toContain("off");
 			expect(lines.some((line) => line.includes("● high"))).toBe(true);
 
-			// The current level is not a target; another level is, and picks it.
-			const current = lines.findIndex((line) => line.includes("● high"));
-			expect(bubble.handleMouse({ type: "click", x: 3, y: current })).toBeUndefined();
+			// Every level is a target; another level picks it.
 			const low = lines.findIndex((line) => line.includes("○ low"));
 			bubble.handleMouse({ type: "click", x: 3, y: low });
 			expect(session.setThinkingLevel).toHaveBeenCalledWith("low");
+		});
+	});
+
+	it("opens the level list on the current level, so ↑ goes to the one before it", async () => {
+		await withThinkingSession(["off", "low", "medium", "high", "max"], "high", (session) => {
+			const custom = vi.fn().mockResolvedValue(undefined);
+			runPillAction(
+				pillActionFor("thinking") as never,
+				{ hasUI: true, ui: { custom } } as never,
+				pillAnchor,
+			);
+			const [factory, options] = custom.mock.calls[0] ?? [];
+			const width =
+				(options as { overlayOptions?: { width?: number } }).overlayOptions?.width ?? 40;
+			const bubble = (factory as BubbleFactory)({}, theme, {}, vi.fn());
+			const highlighted = () =>
+				plain(bubble.render(width).find((line) => line.includes("\x1b[48;5;3m")) ?? "");
+
+			// Opens with the current level highlighted, not with nothing.
+			expect(highlighted()).toContain("● high");
+			bubble.handleInput("\x1b[A");
+			expect(highlighted()).toContain("○ medium");
+			bubble.handleInput("\r");
+			expect(session.setThinkingLevel).toHaveBeenCalledWith("medium");
 		});
 	});
 

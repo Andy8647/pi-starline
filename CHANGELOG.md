@@ -47,11 +47,13 @@ npm.
 - **A popover any pill action can reuse.** A rounded outline in the pill's colour,
   sitting on the pill with its bottom edge open over it like a folder tab, the
   title in the top edge and nothing filled, so a translucent terminal shows through.
-  It unfolds upward from the pill in 90 ms (`pill.bubbleAnimation: false` turns that
+  It unfolds upward from the pill in 60 ms (`pill.bubbleAnimation: false` turns that
   off). Clicking a second pill swaps the bubble instead of stacking overlays, and
   clicking the same pill again closes it. A body line that declares a callback is
   underlined; hovering it or moving to it with ↑/↓ highlights it in the pill's
-  colour, and a click or Enter runs it. The model
+  colour, and a click or Enter runs it. A line marked `current: true` opens
+  highlighted, so the thinking and model pickers start on the active choice and
+  ↑/↓ move from there. The model
   picker and the subagents list use the same popover. Design and phases are in
   [docs/clickable-pills.md](https://github.com/Andy8647/pi-starline/blob/main/docs/clickable-pills.md).
 
