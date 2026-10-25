@@ -12,6 +12,83 @@ npm.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-25
+
+Two things happened at once. The footer has one style now: pills. The text
+footer is gone, and with it the three settings that only existed to describe it
+(`footerStyle`, `footerFormat`, `separator`) and the per-segment toggle table
+(`footerSegments`); `pill.segments` is the only list that decides what appears
+and in what order. And the bar got shorter: the three git pills are one and the
+three token pills are one, each with its numbers behind a click.
+
+**Added**
+
+- **Compact pill text.** `extensionStatuses.formats` keeps a status to its number
+  (`Tavily: 41.1%` becomes `41.1%`, a status with no number keeps its words), and
+  `segmentOptions.subagents.format: "count"` drops the noun from the subagents
+  pill. Both default to what shipped.
+
+- **One clickable `context` pill.** The percentage is all the bar shows; clicking
+  it opens the window size, the tokens used this turn, the session's `↑in ↓out`
+  totals and the cache hit rate, refreshed while it streams. `tokens` and
+  `cacheHit` in `pill.segments` are rewritten to `context`, so an existing bar
+  keeps the numbers.
+
+- **A clickable `git` pill.** Branch, dirty markers and any operation in progress
+  share one pill (`main [!?] REBASING`) instead of three. Clicking it lists what
+  changed — up to a dozen paths, ahead/behind and stashes above them — refreshed
+  while the bubble is open. It is read-only on purpose: no staging, no branch
+  switch, because an agent may be running in the same tree. `gitBranch`,
+  `gitStatus` and `gitState` in `pill.segments` are rewritten to `git`, so an
+  existing bar keeps its git pill.
+
+- **A *Pills* tab in `/starline`.** One row per segment; the value is its position
+  in the bar, `off` hides it, and Space cycles through them. Picking a number
+  inserts the segment there and shifts the rest along. The same list is still
+  `pill.segments` in `starline.json`, so editing the file and the tab are the
+  same thing.
+
+**Removed**
+
+- **`footerStyle`.** The pill bar is the footer. A config file that still says
+  `"footerStyle": "text"` loads fine and shows the bar; the key is ignored.
+
+- **`footerFormat` and `/starline format`.** The Starship-style template only
+  ever drove the text footer. `pill.segments` replaces it: list the segments you
+  want, in your order. `editorMetadataFormat` keeps its own `$name` template, and
+  the parser is the same one.
+
+- **`separator` and `colors.separator`.** The text footer's separator glyph.
+  Pills are joined by the powerline arrows `pill.separator` picks.
+
+- **`footerSegments`.** All nineteen toggles, and the *Built-in segments* tab.
+  `pill.segments` is the list; drop a name to hide it. `gitCounts` moved to
+  `git.counts`. A pill that was listed but toggled off here now shows, which is
+  the behaviour the docs claimed all along.
+
+- **Side-by-side compatibility with pi-zentui.** The editor-factory marker, the
+  prototype patch registry and the polished-frame splitter no longer answer to
+  the pre-rename keys. Running both packages in one session now wraps the editor
+  twice, so remove one of them.
+
+- **Four colour keys that no longer reach the screen.** `colors.tokens`,
+  `colors.cacheHit`, `colors.gitStatus` and `colors.gitMetricsDeleted` only ever
+  coloured text inside a pill that was its own segment. Those pills are gone, and
+  a pill paints its whole label in one contrast colour, so the entries did
+  nothing. Nothing else moves: a pill's colour comes from `colors.*` as before,
+  it is just used as the background.
+
+- **`gitBranch`, `gitHostIcon`, `gitCommit`, `gitMetrics`.** The four flat keys
+  are now one `git` block: `git.branch.maxLength`, `git.hostIcon`,
+  `git.commit.{hashLength,onlyDetached,showTag}`, `git.metrics.{onlyNonzero,ignoreSubmodules}`,
+  plus `git.counts`. Existing values need to move into that block.
+
+**Fixed**
+
+- The optional git probes follow `pill.segments` instead of the removed toggles,
+  so a `gitTag` or `gitMetrics` pill reads its data without an unrelated segment
+  having to be switched on first.
+
 ## [0.4.0] - 2026-10-25
 
 Pills in the pill footer can now be clicked. The model, thinking, queue and

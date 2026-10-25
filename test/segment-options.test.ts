@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { defaultConfig, FOOTER_FORMAT_VARIABLES, mergeConfig } from "../extensions/starline/config";
+import { defaultConfig, mergeConfig } from "../extensions/starline/config";
 import {
 	buildCacheHitLabel,
 	buildContextDisplayLabel,
 	buildTokenLabel,
 	formatBareContextPercent,
 } from "../extensions/starline/format";
-import { PILL_SEGMENT_VARIABLES } from "../extensions/starline/pill-config";
+import { normalizePillConfig, PILL_SEGMENT_VARIABLES } from "../extensions/starline/pill-config";
 
 const totals = {
 	input: 12_000,
@@ -22,6 +22,7 @@ describe("segmentOptions parsing", () => {
 		expect(defaultConfig.segmentOptions).toEqual({
 			context: { format: "full" },
 			tokens: { cache: "percent" },
+			subagents: { format: "agents" },
 		});
 		expect(mergeConfig({}).segmentOptions).toEqual(defaultConfig.segmentOptions);
 	});
@@ -29,12 +30,21 @@ describe("segmentOptions parsing", () => {
 	it("accepts the documented values", () => {
 		expect(
 			mergeConfig({ segmentOptions: { context: { format: "percent" } } }).segmentOptions,
-		).toEqual({ context: { format: "percent" }, tokens: { cache: "percent" } });
+		).toEqual({
+			context: { format: "percent" },
+			tokens: { cache: "percent" },
+			subagents: { format: "agents" },
+		});
 		for (const cache of ["percent", "tokens", "off"] as const) {
 			expect(
 				mergeConfig({ segmentOptions: { tokens: { cache } } }).segmentOptions.tokens.cache,
 			).toBe(cache);
 		}
+		// The subagents pill can drop its noun, leaving the icon and the count.
+		expect(
+			mergeConfig({ segmentOptions: { subagents: { format: "count" } } }).segmentOptions.subagents
+				.format,
+		).toBe("count");
 	});
 
 	it("falls back to the default on anything unrecognised", () => {
@@ -45,6 +55,10 @@ describe("segmentOptions parsing", () => {
 		expect(
 			mergeConfig({ segmentOptions: { tokens: { cache: 7 } } }).segmentOptions.tokens.cache,
 		).toBe("percent");
+		expect(
+			mergeConfig({ segmentOptions: { subagents: { format: "number" } } }).segmentOptions.subagents
+				.format,
+		).toBe("agents");
 		expect(mergeConfig({ segmentOptions: "yes" }).segmentOptions).toEqual(
 			defaultConfig.segmentOptions,
 		);
@@ -145,10 +159,6 @@ describe("tokens cache format", () => {
 });
 
 describe("cacheHit as a standalone segment", () => {
-	it("is off by default, since tokens already carries the rate inline", () => {
-		expect(defaultConfig.footerSegments.cacheHit).toBe(false);
-	});
-
 	it("renders just the rate", () => {
 		expect(buildCacheHitLabel(totals)).toBe("87.3%");
 	});
@@ -166,13 +176,11 @@ describe("cacheHit as a standalone segment", () => {
 		expect(buildCacheHitLabel({ ...totals, latestCacheHitRate: undefined }, "⚡")).toBe("");
 	});
 
-	it("is a footerFormat variable and a pill segment", () => {
-		expect(FOOTER_FORMAT_VARIABLES).toContain("cache_hit");
-		expect(PILL_SEGMENT_VARIABLES.cacheHit).toBe("cache_hit");
-	});
-
-	it("has its own colour, defaulting alongside tokens", () => {
-		expect(defaultConfig.colors.cacheHit).toBe("bright-black");
-		expect(mergeConfig({ colors: { cacheHit: "#f9e2af" } }).colors.cacheHit).toBe("#f9e2af");
+	it("rides in the context pill instead of a segment of its own", () => {
+		expect(PILL_SEGMENT_VARIABLES.cacheHit).toBeUndefined();
+		expect(normalizePillConfig({ segments: ["cacheHit", "cwd"] }).segments).toEqual([
+			"context",
+			"cwd",
+		]);
 	});
 });

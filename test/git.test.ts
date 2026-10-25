@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -20,6 +20,30 @@ describe("parseGitStatusPorcelain", () => {
 		const empty = emptyGitStatus();
 		expect(empty.commit).toBeUndefined();
 		expect(empty.metrics).toBeUndefined();
+		expect(empty.changes).toEqual([]);
+	});
+
+	it("remembers the changed paths for the pill's bubble", () => {
+		const status = parseGitStatusPorcelain(
+			[
+				"# branch.head main",
+				"1 .M N... 100644 100644 100644 abc abc src/app.ts",
+				"1 A. N... 000000 100644 100644 000 def src/new file.ts",
+				"2 R. N... 100644 100644 100644 abc def R100 src/moved.ts\tsrc/old.ts",
+				"? notes/todo.md",
+				"u UU N... 100644 100644 100644 100644 abc def ghi conflict.txt",
+			].join("\n"),
+			0,
+		);
+
+		expect(status.changes).toEqual([
+			// A path with a space stays whole; `2` lines carry a score field first.
+			{ code: "M", path: "src/app.ts" },
+			{ code: "A", path: "src/new file.ts" },
+			{ code: "R", path: "src/moved.ts" },
+			{ code: "?", path: "notes/todo.md" },
+			{ code: "U", path: "conflict.txt" },
+		]);
 	});
 
 	it("parses branch, ahead/behind, and file states", () => {
@@ -231,8 +255,14 @@ describe("git probes never write to the repository", () => {
 		run("add", "file.txt");
 		run("commit", "--quiet", "-m", "initial");
 		// A changed file is what makes git want to refresh the index on the next
-		// status: without the opt-out, `status` rewrites it.
-		writeFileSync(join(root, "file.txt"), "one\ntwo\n");
+		// status: without the opt-out, `status` rewrites it. The mtime is pushed a
+		// little into the future, because git treats a file whose timestamp equals
+		// the index's as "racy" and may skip the refresh — which made the control
+		// test below fail now and then on fast disks.
+		const edited = join(root, "file.txt");
+		writeFileSync(edited, "one\ntwo\n");
+		const future = new Date(Date.now() + 2000);
+		utimesSync(edited, future, future);
 		return root;
 	}
 

@@ -4,7 +4,12 @@ import type {
 	ExtensionStatusPlacement,
 	PolishedTuiConfig,
 } from "./config";
-import { getExtensionStatusColorMode, getExtensionStatusPlacement } from "./config";
+import {
+	getExtensionStatusColorMode,
+	getExtensionStatusFormat,
+	getExtensionStatusPlacement,
+} from "./config";
+import { statusValueText } from "./format";
 
 export type ExtensionStatusSegment = {
 	key: string;
@@ -74,10 +79,12 @@ export function collectExtensionStatusSegments(
 		if (placement === "off") continue;
 
 		const colorMode = getExtensionStatusColorMode(config, key);
-		const text =
+		const published =
 			colorMode === "original"
 				? sanitizeExtensionStatusOriginalText(value)
 				: sanitizeExtensionStatusText(value);
+		const text =
+			getExtensionStatusFormat(config, key) === "value" ? statusValueText(published) : published;
 		if (!text) continue;
 
 		segments[placement].push({ key, text, placement, colorMode });

@@ -278,19 +278,6 @@ describe("footer pill clicks", () => {
 		expect(custom).not.toHaveBeenCalled();
 	});
 
-	it("has no targets in the text footer", () => {
-		const { footer, custom } = makeFooter({
-			queued: true,
-			// `$queue` in a text format renders the same word, without a hit area.
-			config: mergeConfig({ footerStyle: "text", footerFormat: "$queue" }),
-		});
-		const line = footer.render(width)[0] ?? "";
-		const x = columnOf(line, "queued");
-
-		expect(footer.handleMouse?.({ type: "click", x, y: 0, width })).toBeUndefined();
-		expect(custom).not.toHaveBeenCalled();
-	});
-
 	it("has no queue pill when nothing is queued", () => {
 		const { footer, custom } = makeFooter({ queued: false });
 		const line = footer.render(width)[0] ?? "";

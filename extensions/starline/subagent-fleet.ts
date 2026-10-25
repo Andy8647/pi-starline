@@ -15,6 +15,8 @@
  * requests simply go unanswered, the count stays 0 and the pill never appears.
  */
 
+import type { SubagentsFormat } from "./config";
+
 const REQUEST_EVENT = "subagents:rpc:v1:request";
 const READY_EVENT = "subagents:rpc:v1:ready";
 const REPLY_EVENT_PREFIX = "subagents:rpc:v1:reply:";
@@ -236,8 +238,9 @@ export function getActiveSubagentFleet(): SubagentFleet | undefined {
 }
 
 /** The pill's text: how many are running, or nothing so the pill is not drawn. */
-export function subagentsSegmentText(): string {
+export function subagentsSegmentText(format: SubagentsFormat = "agents"): string {
 	const total = activeFleet?.snapshot().totalActive ?? 0;
 	if (total <= 0) return "";
+	if (format === "count") return `${total}`;
 	return `${total} agent${total === 1 ? "" : "s"}`;
 }

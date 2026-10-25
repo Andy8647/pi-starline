@@ -13,10 +13,8 @@ import {
 	type ColorSource,
 	type ColorSourcesConfig,
 	type ContextStyle,
-	defaultConfig,
 	type ExtensionStatusColorMode,
 	type ExtensionStatusPlacement,
-	type FooterSegmentsConfig,
 	type GitBranchConfig,
 	type GitBranchMaxLength,
 	getExtensionStatusColorMode,
@@ -24,18 +22,17 @@ import {
 	type IconMode,
 	isExtensionStatusColorMode,
 	isExtensionStatusPlacement,
-	isSeparatorStyle,
 	type MouseConfig,
 	type PathDisplayConfig,
 	type PathDisplayMode,
 	type PolishedTuiConfig,
-	type SeparatorStyle,
 	type UiFeaturesConfig,
 } from "./config";
 import { sanitizeExtensionStatusText } from "./extension-status";
 import { isIconMode } from "./icons";
 import { pillActionFor, runPillAction } from "./pill-actions";
 import { getPillAnchor } from "./pill-anchors";
+import { movePillSegment, PILL_SEGMENT_NAMES, pillSegmentPosition } from "./pill-config";
 import type { SessionLifecycle } from "./session-lifecycle";
 import { EDITOR_BORDER_STYLE, renderChromeBorder, safeThemeFg } from "./style";
 
@@ -49,7 +46,6 @@ const extensionStatusPlacementValues: ExtensionStatusPlacement[] = [
 ];
 const extensionStatusColorModeValues: ExtensionStatusColorMode[] = ["themed", "original"];
 const contextStyleValues: ContextStyle[] = ["text", "gauge", "text+gauge"];
-const separatorStyleValues: SeparatorStyle[] = ["pipe", "dot", "chevron", "none"];
 const pathDisplayModeValues: PathDisplayMode[] = ["basename", "full"];
 const pathDepthValues = ["0", "1", "2", "3", "4", "5"] as const;
 const branchLengthPresetValues = ["full", "10", "20", "30", "40", "50"] as const;
@@ -57,25 +53,12 @@ const iconModeValues: IconMode[] = ["auto", "nerd", "ascii"];
 type FeatureState = "enabled" | "disabled";
 
 const featureStateValues: FeatureState[] = ["enabled", "disabled"];
-const settingsSections = [
-	"coloring",
-	"features",
-	"layout",
-	"builtinSegments",
-	"extensionSegments",
-] as const;
+const settingsSections = ["coloring", "features", "layout", "pills", "extensionSegments"] as const;
 
 type ColorSettingId = "starship" | "editorMessages";
 type FeatureSettingId = keyof UiFeaturesConfig;
-type FooterSegmentSettingId = keyof FooterSegmentsConfig;
 type SettingsSection = (typeof settingsSections)[number];
-type LayoutSettingId =
-	| "contextStyle"
-	| "separator"
-	| "pathDisplay"
-	| "pathDepth"
-	| "branchLength"
-	| "iconMode";
+type LayoutSettingId = "contextStyle" | "pathDisplay" | "pathDepth" | "branchLength" | "iconMode";
 
 type SettingsCommandDeps = {
 	sessionLifecycle: SessionLifecycle;
@@ -85,13 +68,11 @@ type SettingsCommandDeps = {
 		patch: Partial<UiFeaturesConfig>,
 		ctx: ExtensionContext,
 	) => { applied: boolean; reason?: string };
-	setFooterSegments: (patch: Partial<FooterSegmentsConfig>) => void;
-	setFooterFormat: (value: string) => void;
 	setIconMode: (mode: IconMode) => void;
 	setContextStyle: (style: ContextStyle) => void;
-	setSeparator: (separator: SeparatorStyle) => void;
 	setPathDisplay: (patch: Partial<PathDisplayConfig>) => void;
 	setGitBranch: (patch: Partial<GitBranchConfig>) => void;
+	setPillSegments: (segments: readonly string[]) => void;
 	getActiveExtensionStatuses: () => ReadonlyMap<string, string>;
 	setExtensionStatusPlacement: (key: string, placement: ExtensionStatusPlacement) => void;
 	setExtensionStatusColorMode: (key: string, colorMode: ExtensionStatusColorMode) => void;
@@ -126,56 +107,51 @@ const featureSettingDescriptions: Record<FeatureSettingId, string> = {
 		"Hide editor and previous-message rail glyphs for cleaner native terminal selection.",
 };
 
-const footerSegmentSettingLabels: Record<FooterSegmentSettingId, string> = {
-	model: "Model name",
-	thinking: "Thinking level",
-	cwd: "Current directory",
+/** Row label per bar segment. The order rows are listed in is fixed. */
+const pillSegmentLabels: Record<string, string> = {
+	model: "Model",
+	thinking: "Thinking",
+	queue: "Queue",
+	subagents: "Subagents",
+	cwd: "Directory",
 	sessionName: "Session name",
-	gitBranch: "Git branch",
-	gitStatus: "Git status",
-	gitCounts: "Git counts",
-	sessionDuration: "Session duration",
-	username: "Username@host",
-	time: "Current time",
-	os: "OS icon",
-	runtime: "Runtime",
-	context: "Context usage",
-	tokens: "Token counts",
-	cacheHit: "Cache hit rate",
-	cost: "Session cost",
-	packageVersion: "Package version",
+	git: "Git",
 	gitCommit: "Git commit",
+	gitTag: "Git tag",
 	gitMetrics: "Git line metrics",
+	runtime: "Runtime",
+	context: "Context",
+	cost: "Cost",
+	sessionDuration: "Session duration",
+	username: "user@host",
+	time: "Time",
+	os: "OS",
+	packageVersion: "Package version",
+	extensionStatus: "Other extensions",
 };
 
-const footerSegmentSettingDescriptions: Record<FooterSegmentSettingId, string> = {
-	model:
-		"Show the active model on the left. Off by default because the editor metadata line already shows it — drop $model from editorMetadataFormat to move it down here rather than showing it twice.",
-	thinking:
-		"Show the current thinking level on the left, coloured by level. Hidden while thinking is off. Off by default for the same reason as the model segment.",
-	cwd: "Show or hide the current working directory segment on the left.",
-	sessionName: "Show or hide the current Pi session name on the left, after the current directory.",
-	gitBranch: "Show or hide the git branch name on the left.",
-	gitStatus: "Show or hide git status icons and ahead/behind markers.",
-	gitCounts:
-		"Show numeric ahead/behind and stash counts (requires the Git status segment to be enabled).",
-	sessionDuration: "Show session running time on the left, after the runtime.",
-	username: "Show user@hostname on the left.",
-	time: "Show the current time (HH:MM) on the right.",
-	os: "Show an operating-system icon on the left.",
-	runtime: "Show or hide the detected runtime/language segment on the left.",
-	context: "Show or hide context usage on the right.",
-	tokens: "Show or hide input/output token counts on the right.",
-	cacheHit:
-		'Show the latest turn\'s cache hit rate as its own segment. Off by default; the tokens segment already carries it inline unless segmentOptions.tokens.cache is set to "off".',
-	cost: "Show or hide session cost on the right.",
-	packageVersion:
-		"Show the project’s own manifest version (package.json, Cargo.toml, pyproject.toml, …). Distinct from the runtime segment, which shows the installed toolchain version.",
-	gitCommit:
-		"Show the current commit hash (and optional exact-match tag). On detached HEAD this provides context the branch segment can’t. Starship `git_commit`-style; default off.",
-	gitMetrics:
-		"Show aggregate added/deleted line counts (e.g. `+12 −3`) via `git diff HEAD --numstat`. Complements the git status counts. Starship `git_metrics`-style; default off.",
-};
+const pillSegmentSettingPrefix = "pillSegment:";
+
+function pillSegmentSettingId(name: string): string {
+	return `${pillSegmentSettingPrefix}${name}`;
+}
+
+function pillSegmentFromId(id: string): string | undefined {
+	if (!id.startsWith(pillSegmentSettingPrefix)) return undefined;
+	const name = id.slice(pillSegmentSettingPrefix.length);
+	return PILL_SEGMENT_NAMES.includes(name) ? name : undefined;
+}
+
+/**
+ * Values a row cycles through: `off`, then every position the bar can hold.
+ *
+ * One past the current length is offered so a hidden segment can be appended;
+ * for a segment already in the bar, that value is its "move to the end".
+ */
+function pillSegmentValues(shown: number): string[] {
+	const positions = Array.from({ length: shown + 1 }, (_, index) => String(index + 1));
+	return ["off", ...positions];
+}
 
 const directCommandSuggestions = [
 	"editor enable",
@@ -193,21 +169,17 @@ const directCommandSuggestions = [
 	"queue",
 	"subagents",
 	"thinking",
-	"format clear",
-	"format $cwd on $git_branch $fill $context",
-	"format $cwd( on $git_branch)($git_status)$fill($context)( | $cost)",
 ];
 
 const sectionLabels: Record<SettingsSection, string> = {
 	coloring: "Coloring",
 	features: "Features",
 	layout: "Layout",
-	builtinSegments: "Built-in segments",
+	pills: "Pills",
 	extensionSegments: "Extension segments",
 };
 
 const thirdPartyStatusSettingPrefix = "thirdPartyStatus:";
-const footerSegmentSettingPrefix = "footerSegment:";
 type ThirdPartyStatusSettingKind = "placement" | "colorMode";
 
 function isColorSource(value: string): value is ColorSource {
@@ -220,19 +192,6 @@ function isColorSettingId(value: string): value is ColorSettingId {
 
 function isFeatureSettingId(value: string): value is FeatureSettingId {
 	return value === "editor" || value === "statusLine" || value === "copyFriendly";
-}
-
-/**
- * Derived from the defaults, so a segment cannot exist in the config and go
- * missing from the menu. The three that used to be missing here rendered as rows
- * that did nothing when toggled.
- */
-const footerSegmentSettingIds: ReadonlySet<string> = new Set(
-	Object.keys(defaultConfig.footerSegments),
-);
-
-function isFooterSegmentSettingId(value: string): value is FooterSegmentSettingId {
-	return footerSegmentSettingIds.has(value);
 }
 
 function isFeatureState(value: string): value is FeatureState {
@@ -267,7 +226,6 @@ function branchLengthValues(maxLength: GitBranchMaxLength): string[] {
 function isLayoutSettingId(value: string): value is LayoutSettingId {
 	return (
 		value === "contextStyle" ||
-		value === "separator" ||
 		value === "pathDisplay" ||
 		value === "pathDepth" ||
 		value === "branchLength" ||
@@ -293,25 +251,8 @@ function featurePatch(id: FeatureSettingId, value: FeatureState): Partial<UiFeat
 	return { [id]: value === "enabled" } as Partial<UiFeaturesConfig>;
 }
 
-function footerSegmentSettingId(key: FooterSegmentSettingId): string {
-	return `${footerSegmentSettingPrefix}${key}`;
-}
-
-function footerSegmentSettingFromId(id: string): FooterSegmentSettingId | undefined {
-	if (!id.startsWith(footerSegmentSettingPrefix)) return undefined;
-	const key = id.slice(footerSegmentSettingPrefix.length);
-	return isFooterSegmentSettingId(key) ? key : undefined;
-}
-
-function footerSegmentPatch(
-	id: FooterSegmentSettingId,
-	value: FeatureState,
-): Partial<FooterSegmentsConfig> {
-	return { [id]: value === "enabled" } as Partial<FooterSegmentsConfig>;
-}
-
 function usageText(): string {
-	return 'Usage: /starline [editor|statusline|copy-friendly] [enable|disable|toggle], /starline queue, or /starline format "<template>"';
+	return "Usage: /starline [editor|statusline|copy-friendly] [enable|disable|toggle], or /starline queue";
 }
 
 function featureNotification(
@@ -378,18 +319,6 @@ function parseMouseCommand(
 	return {
 		enabled: action === "toggle" ? !config.mouse.enabled : action === "enable",
 	};
-}
-
-function parseFormatCommand(args: string): { value: string | undefined } | undefined {
-	const trimmed = args.trim();
-	if (!trimmed.toLowerCase().startsWith("format")) return undefined;
-
-	const rest = trimmed.slice("format".length).trim();
-	if (!rest || rest.toLowerCase() === "clear") return { value: undefined };
-
-	const unquoted =
-		rest.startsWith('"') && rest.endsWith('"') && rest.length >= 2 ? rest.slice(1, -1) : rest;
-	return { value: unquoted };
 }
 
 function argumentCompletions(prefix: string): AutocompleteItem[] | null {
@@ -480,13 +409,6 @@ function buildItems(
 				values: contextStyleValues,
 			},
 			{
-				id: "separator",
-				label: "Separator",
-				description: "Choose the separator between default footer segments.",
-				currentValue: config.separator,
-				values: separatorStyleValues,
-			},
-			{
 				id: "pathDisplay",
 				label: "Path display",
 				description: "Show cwd as basename or full path (home contracted to ~).",
@@ -505,8 +427,8 @@ function buildItems(
 				id: "branchLength",
 				label: "Branch length",
 				description: "Show the full branch name or truncate it to a preset visible width.",
-				currentValue: String(config.gitBranch.maxLength),
-				values: branchLengthValues(config.gitBranch.maxLength),
+				currentValue: String(config.git.branch.maxLength),
+				values: branchLengthValues(config.git.branch.maxLength),
 			},
 			{
 				id: "iconMode",
@@ -518,14 +440,19 @@ function buildItems(
 		];
 	}
 
-	if (section === "builtinSegments") {
-		return (Object.keys(footerSegmentSettingLabels) as FooterSegmentSettingId[]).map((key) => ({
-			id: footerSegmentSettingId(key),
-			label: footerSegmentSettingLabels[key],
-			description: footerSegmentSettingDescriptions[key],
-			currentValue: featureValue(config.footerSegments[key]),
-			values: featureStateValues,
-		}));
+	if (section === "pills") {
+		const segments = config.pill.segments;
+		const values = pillSegmentValues(segments.length);
+		return PILL_SEGMENT_NAMES.map((name) => {
+			const position = pillSegmentPosition(segments, name);
+			return {
+				id: pillSegmentSettingId(name),
+				label: pillSegmentLabels[name] ?? name,
+				description: `Position in the bar (1 is leftmost). Space cycles off → 1…${segments.length + 1}.`,
+				currentValue: position > 0 ? String(position) : "off",
+				values,
+			};
+		});
 	}
 
 	const statuses = Array.from(activeStatuses.entries()).sort(([a], [b]) =>
@@ -609,25 +536,6 @@ export function registerStarlineSettingsCommand(pi: ExtensionAPI, deps: Settings
 		getArgumentCompletions: argumentCompletions,
 		handler: async (_args, ctx) => {
 			const args = typeof _args === "string" ? _args : "";
-
-			const formatCommand = parseFormatCommand(args);
-			if (formatCommand) {
-				try {
-					deps.setFooterFormat(formatCommand.value ?? "");
-					deps.requestRender();
-					if (ctx.hasUI) {
-						if (formatCommand.value === undefined) {
-							ctx.ui.notify("Footer format cleared (using default layout)", "info");
-						} else {
-							ctx.ui.notify(`Footer format: ${formatCommand.value}`, "info");
-						}
-					}
-				} catch (error) {
-					const message = error instanceof Error ? error.message : String(error);
-					if (ctx.hasUI) ctx.ui.notify(`Could not update footer format: ${message}`, "error");
-				}
-				return;
-			}
 
 			const directCommand = parseDirectFeatureCommand(args, deps.getConfig());
 			if (directCommand) {
@@ -746,15 +654,6 @@ export function registerStarlineSettingsCommand(pi: ExtensionAPI, deps: Settings
 										return;
 									}
 
-									if (id === "separator" && isSeparatorStyle(newValue)) {
-										deps.setSeparator(newValue);
-										settingsList.updateValue(id, newValue);
-										deps.requestRender();
-										ctx.ui.notify(`Separator: ${newValue}`, "info");
-										tui.requestRender();
-										return;
-									}
-
 									if (id === "pathDisplay" && isPathDisplayMode(newValue)) {
 										deps.setPathDisplay({ mode: newValue });
 										settingsList.updateValue(id, newValue);
@@ -794,13 +693,22 @@ export function registerStarlineSettingsCommand(pi: ExtensionAPI, deps: Settings
 									return;
 								}
 
-								const footerSegmentSetting = footerSegmentSettingFromId(id);
-								if (footerSegmentSetting && isFeatureState(newValue)) {
-									deps.setFooterSegments(footerSegmentPatch(footerSegmentSetting, newValue));
-									settingsList.updateValue(id, newValue);
+								const pillSegment = pillSegmentFromId(id);
+								if (pillSegment) {
+									const segments = movePillSegment(
+										deps.getConfig().pill.segments,
+										pillSegment,
+										newValue,
+									);
+									deps.setPillSegments(segments);
+									// Every row's position can change, so the list is rebuilt
+									// rather than patched — then the cursor is put back.
+									settingsList = makeSettingsList();
+									settingsList.selectItem(id);
 									deps.requestRender();
+									const label = pillSegmentLabels[pillSegment] ?? pillSegment;
 									ctx.ui.notify(
-										`${footerSegmentSettingLabels[footerSegmentSetting]}: ${newValue}`,
+										newValue === "off" ? `${label}: off` : `${label}: position ${newValue}`,
 										"info",
 									);
 									tui.requestRender();

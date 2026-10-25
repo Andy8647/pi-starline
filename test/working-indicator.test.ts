@@ -99,35 +99,24 @@ describe("modelPillIcon", () => {
 });
 
 describe("footerRendersModel", () => {
-	const pill = (segments: string[]) => mergeConfig({ footerStyle: "pill", pill: { segments } });
+	const pill = (segments: string[]) => mergeConfig({ pill: { segments } });
 
-	it("is true for the default text footer with the model segment on", () => {
-		expect(footerRendersModel(mergeConfig({ footerSegments: { model: true } }))).toBe(true);
-	});
-
-	it("is false when the model segment is off", () => {
-		expect(footerRendersModel(mergeConfig({ footerSegments: { model: false } }))).toBe(false);
-	});
-
-	it("follows the pill segment list", () => {
+	it("is true when the bar lists the model", () => {
 		expect(footerRendersModel(pill(["model", "cwd"]))).toBe(true);
+	});
+
+	it("is false when the bar does not list the model", () => {
 		expect(footerRendersModel(pill(["cwd", "gitBranch"]))).toBe(false);
 	});
 
-	it("follows the footer format variables", () => {
-		expect(footerRendersModel(mergeConfig({ footerFormat: "$model at $cwd" }))).toBe(true);
-		expect(footerRendersModel(mergeConfig({ footerFormat: `\${model}` }))).toBe(true);
-		expect(footerRendersModel(mergeConfig({ footerFormat: "$cwd in $git_branch" }))).toBe(false);
-	});
-
 	it("is false whenever the status line itself is off", () => {
-		const off = mergeConfig({ features: { statusLine: false }, footerStyle: "pill" });
+		const off = mergeConfig({ features: { statusLine: false } });
 		expect(footerRendersModel(off)).toBe(false);
 	});
 });
 
 describe("workingStatusForBorder", () => {
-	const pill = (segments: string[]) => mergeConfig({ footerStyle: "pill", pill: { segments } });
+	const pill = (segments: string[]) => mergeConfig({ pill: { segments } });
 
 	it("stays out of the border when the pill can carry the spinner", () => {
 		setWorkingIndicator(indicator("working"));

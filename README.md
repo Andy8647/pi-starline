@@ -6,7 +6,7 @@ A Starship-inspired statusline, Opencode-style editor chrome, and fullscreen mou
 
 Starline makes Pi's fullscreen mode feel like a finished terminal app:
 
-- **See the state:** a pill footer with directory, git, runtime, model, context, tokens and cost.
+- **See the state:** a pill footer with directory, git, runtime, model, context and cost; click one for the details behind it.
 - **Act on it:** click a pill to switch model or thinking level, see what is queued, or list running subagents.
 - **Type comfortably:** a bordered input box with the model inside the frame, paste collapse, and a `ctrl+g` hint for your `$EDITOR`.
 - **Drive with the mouse:** select and copy anywhere, click to move the caret, wheel to scroll the draft.
@@ -15,9 +15,10 @@ Starline makes Pi's fullscreen mode feel like a finished terminal app:
 
 **Footer**
 
-- Starship-style segments: `dirname`, `on  branch`, git status `[!?↑]`, runtime `via  v5.5.0` (57 runtimes), context, tokens, cost, plus optional session name, `user@host`, time, OS, session duration and project version.
-- Pill or text style, a colour palette with `$name` references, and a free-form `footerFormat` template.
+- Starship-style segments: directory, git (`main [!?↑]`), runtime `via  v5.5.0` (57 runtimes), context (click for tokens and cache), cost, plus optional session name, `user@host`, time, OS, session duration and project version.
+- A colour palette with `$name` references; the bar is built from `pill.segments`, in your order.
 - Other extensions' statuses from `ctx.ui.setStatus()` as pills, on either side, or on the editor row.
+- One git pill: branch and dirty markers together; click it for the changed files (read-only).
 - The model pill's icon spins while the agent works.
 
 **Clickable pills**
@@ -51,19 +52,17 @@ pi install npm:pi-starline
 pi install git:github.com/Andy8647/pi-starline
 ```
 
-Coming from pi-zentui? `mv ~/.pi/agent/zentui.json ~/.pi/agent/starline.json`, then rename any `colorMode: "zentui"` to `colorMode: "themed"`.
-
 What changed in each version: **[Changelog](https://github.com/Andy8647/pi-starline/blob/main/CHANGELOG.md)**.
 
 ## Configure
 
-`/starline` opens a menu for the everyday settings: colour sources, feature toggles, which segments show, and where other extensions' statuses go.
+`/starline` opens a menu for the everyday settings: colour sources, feature toggles, the order of the bar (`Pills`), and where other extensions' statuses go.
 
 Everything else lives in `~/.pi/agent/starline.json`. The file is optional; missing keys fall back to defaults.
 
 ```json
 {
-	"footerStyle": "pill",
+	"pill": { "segments": ["model", "cwd", "git", "context", "cost"] },
 	"colors": { "gitBranch": "bold purple" },
 	"mouse": { "transcriptCleanCopy": false }
 }
@@ -88,7 +87,7 @@ npm run pi:dev       # run Pi with this checkout and no other extensions
 
 ## Credits
 
-Forked from [pi-zentui](https://github.com/lmilojevicc/pi-zentui) by Luka, whose work is the foundation of this project; it has since grown a pill footer, a colour palette, clickable pills and mouse control of its own. Inspired by [Starship](https://starship.rs/) and [Opencode](https://github.com/opencode-ai/opencode).
+Started as a fork of [pi-zentui](https://github.com/lmilojevicc/pi-zentui) by Luka. Inspired by [Starship](https://starship.rs/) and [Opencode](https://github.com/opencode-ai/opencode).
 
 ## License
 

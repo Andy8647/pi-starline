@@ -33,7 +33,7 @@ The pill is your extension's status, published with Pi's own
 `ctx.ui.setStatus(key, text)`. The API makes it clickable; it does not create it.
 For the pill to show up:
 
-- The user's footer is the pill style (`footerStyle: "pill"`, the default).
+- The status line is on and the bar lists your status (`pill.segments`).
 - `pill.segments` contains `extensionStatus` (the default list does), which
   expands to every status, or `extensionStatus:<your key>`, which places yours.
   **Users who keep their own `pill.segments` with only specific

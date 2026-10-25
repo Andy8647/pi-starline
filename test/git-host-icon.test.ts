@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defaultConfig, getExtensionStatusIcon, mergeConfig } from "../extensions/starline/config";
-import { gitHostIconGlyph } from "../extensions/starline/footer";
 import { emptyGitStatus, parseGitRemoteHost } from "../extensions/starline/git";
+import { gitHostIconGlyph } from "../extensions/starline/git-segments";
 import {
 	ASCII_DEFAULT_ICONS,
 	ICON_GLYPH_KEYS,
@@ -66,15 +66,15 @@ describe("gitHostIconGlyph", () => {
 	});
 });
 
-describe("gitHostIcon config", () => {
+describe("git.hostIcon config", () => {
 	it("is off by default", () => {
-		expect(defaultConfig.gitHostIcon).toBe(false);
+		expect(defaultConfig.git.hostIcon).toBe(false);
 	});
 
 	it("only accepts a real boolean true", () => {
-		expect(mergeConfig({ gitHostIcon: true }).gitHostIcon).toBe(true);
-		expect(mergeConfig({ gitHostIcon: "yes" }).gitHostIcon).toBe(false);
-		expect(mergeConfig({}).gitHostIcon).toBe(false);
+		expect(mergeConfig({ git: { hostIcon: true } }).git.hostIcon).toBe(true);
+		expect(mergeConfig({ git: { hostIcon: "yes" } }).git.hostIcon).toBe(false);
+		expect(mergeConfig({}).git.hostIcon).toBe(false);
 	});
 });
 

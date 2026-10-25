@@ -55,19 +55,16 @@ export function formatGitMetricsSegment(
 	metrics: GitMetricsInfo | null | undefined,
 	config: { onlyNonzero: boolean },
 	colorSource: ColorSource,
-	addedStyle: ColorSpec,
-	deletedStyle: ColorSpec,
+	style: ColorSpec,
 ): string {
 	if (!metrics) return "";
 	const showAdded = !config.onlyNonzero || metrics.added > 0;
 	const showDeleted = !config.onlyNonzero || metrics.deleted > 0;
 	if (!showAdded && !showDeleted) return "";
 	const parts: string[] = [];
-	if (showAdded) {
-		parts.push(renderStyleForSource(theme, colorSource, addedStyle, `+${metrics.added}`));
-	}
+	if (showAdded) parts.push(renderStyleForSource(theme, colorSource, style, `+${metrics.added}`));
 	if (showDeleted) {
-		parts.push(renderStyleForSource(theme, colorSource, deletedStyle, `−${metrics.deleted}`));
+		parts.push(renderStyleForSource(theme, colorSource, style, `−${metrics.deleted}`));
 	}
 	return parts.join(" ");
 }
@@ -563,4 +560,18 @@ export function formatOsLabel(
 	platform: string = process.platform,
 ): string {
 	return resolveOsIcon(configuredIcon, mode, platform);
+}
+
+/**
+ * The number a status is about, for statuses configured as `formats: value`:
+ * `Tavily: 41.1%` → `41.1%`, `1 proc` → `1`, `¥1,447.55 spent` → `1,447.55`.
+ *
+ * Text with no number is returned unchanged: a status that is a word ("ready",
+ * "offline") is still the whole of what it has to say, and blanking it would
+ * leave an icon that means nothing.
+ */
+export function statusValueText(text: string): string {
+	const match = text.match(/-?\d[\d,.]*%?/);
+	if (!match) return text;
+	return match[0].replace(/\s+/g, "");
 }

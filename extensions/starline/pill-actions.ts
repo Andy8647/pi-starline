@@ -14,6 +14,9 @@
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
+import { activeContextSnapshot } from "./context-live";
+import { formatCount } from "./format";
+import { activeGitStatus } from "./git-live";
 import {
 	cycleThinkingLevel,
 	readPendingMessages,
@@ -412,10 +415,142 @@ async function showSubagents({ ctx, pill }: PillActionContext): Promise<void> {
 }
 
 /**
+ * What the context pill says when clicked: the numbers the bar has no room for.
+ *
+ * The pill keeps the percentage; the window, the tokens used, the session's
+ * in/out counts and the cache rate are all here. Same source as the pill, so the
+ * two cannot disagree while a turn streams.
+ */
+export function contextBubbleContent(): PillBubbleContent {
+	const snapshot = activeContextSnapshot();
+	if (!snapshot) {
+		return { title: "Context", body: ["Nothing has been sent yet."], hint: "esc to close" };
+	}
+
+	const body: string[] = [];
+	const percent =
+		snapshot.percent === undefined || !Number.isFinite(snapshot.percent)
+			? undefined
+			: Math.max(0, Math.min(100, Math.round(snapshot.percent)));
+	if (snapshot.contextWindow) {
+		const windowLabel = formatCount(snapshot.contextWindow);
+		const used = percent === undefined ? `window ${windowLabel}` : `${percent}% of ${windowLabel}`;
+		body.push(
+			snapshot.tokens === undefined ? used : `${used} · ${formatCount(snapshot.tokens)} used`,
+		);
+	}
+	if (snapshot.tokenLabel) body.push(`session ${snapshot.tokenLabel}`);
+	if (snapshot.cacheLabel) body.push(`cache ${snapshot.cacheLabel}`);
+
+	const title = percent === undefined ? "Context" : `${percent}% context`;
+	return {
+		title,
+		body: body.length > 0 ? body : ["No usage yet."],
+		hint: "esc to close",
+	};
+}
+
+function showContext({ ctx, pill }: PillActionContext): void {
+	if (!activeContextSnapshot()) {
+		if (ctx.hasUI) ctx.ui.notify("No context usage in this session", "info");
+		return;
+	}
+	// Live: tokens grow while a turn streams, and the footer pushes a new
+	// snapshot every render.
+	const handle = showPillBubble(ctx, contextBubbleContent, pill);
+	whileOpen(handle, () => handle.refresh());
+}
+
+/** How many changed paths the bubble lists before summarising the rest. */
+const MAX_LISTED_CHANGES = 12;
+/** The order the bubble groups changes in: what is staged first, then the rest. */
+const CHANGE_ORDER = ["M", "A", "R", "T", "D", "U", "?"];
+
+function changeLabel(code: string): string {
+	switch (code) {
+		case "?":
+			return "untracked";
+		case "U":
+			return "conflicted";
+		case "A":
+			return "added";
+		case "R":
+			return "renamed";
+		case "D":
+			return "deleted";
+		case "T":
+			return "type changed";
+		default:
+			return "modified";
+	}
+}
+
+/**
+ * What the git pill says when clicked: the branch, what is ahead/behind, and the
+ * changed paths. Read-only on purpose — there is no branch switch here and no
+ * staging, because an agent may be running in the same tree.
+ */
+export function gitBubbleContent(): PillBubbleContent {
+	const status = activeGitStatus();
+	if (!status) {
+		return { title: "Git", body: ["No repository in this project."], hint: "esc to close" };
+	}
+
+	const body: string[] = [];
+	if (status.gitStateLabel) body.push(`Operation: ${status.gitStateLabel}`);
+	if (status.ahead > 0 || status.behind > 0) {
+		const parts: string[] = [];
+		if (status.ahead > 0) parts.push(`${status.ahead} ahead`);
+		if (status.behind > 0) parts.push(`${status.behind} behind`);
+		body.push(parts.join(", "));
+	}
+	if (status.stashed > 0) body.push(`${status.stashed} stash${status.stashed === 1 ? "" : "es"}`);
+
+	const changes = [...status.changes].sort(
+		(a, b) => CHANGE_ORDER.indexOf(a.code) - CHANGE_ORDER.indexOf(b.code),
+	);
+	for (const change of changes.slice(0, MAX_LISTED_CHANGES)) {
+		// The word rather than the porcelain letter: `?` alone is unreadable and
+		// the bubble has room for one small label per line.
+		body.push(
+			`${changeLabel(change.code)} · ${truncateToWidth(change.path, MAX_MESSAGE_COLUMNS, "…")}`,
+		);
+	}
+	if (changes.length > MAX_LISTED_CHANGES) {
+		body.push(`+${changes.length - MAX_LISTED_CHANGES} more`);
+	}
+	if (changes.length === 0 && body.length === 0) {
+		body.push("Working tree clean.");
+	}
+
+	// A detached HEAD has no branch to name it by, and the pill shows `HEAD` too.
+	const name = status.branch ?? (status.commit?.oid ? "HEAD" : "Git");
+	return {
+		title: changes.length > 0 ? `${name} · ${changes.length} changed` : name,
+		body,
+		hint: changes.length > 0 ? "read-only · esc to close" : "esc to close",
+	};
+}
+
+function showGitChanges({ ctx, pill }: PillActionContext): void {
+	const status = activeGitStatus();
+	if (!status) {
+		if (ctx.hasUI) ctx.ui.notify("No git repository in this project", "info");
+		return;
+	}
+	// Live while open: the agent may touch files, and the next refresh re-reads
+	// them. Nothing here writes.
+	const handle = showPillBubble(ctx, gitBubbleContent, pill);
+	whileOpen(handle, () => handle.refresh());
+}
+
+/**
  * Segment key → action. Segments with no entry are labels: a click on one is not
  * handled, so nothing is swallowed.
  */
 export const PILL_ACTIONS: Readonly<Partial<Record<string, PillAction>>> = {
+	context: showContext,
+	git: showGitChanges,
 	model: showModels,
 	queue: showQueuedMessages,
 	subagents: showSubagents,

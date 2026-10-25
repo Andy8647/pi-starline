@@ -12,7 +12,6 @@ import {
 	defaultConfig,
 	type ExtensionStatusPlacement,
 	type PolishedTuiConfig,
-	type SeparatorStyle,
 } from "../extensions/starline/config";
 import { installFooter } from "../extensions/starline/footer";
 import { emptyGitStatus } from "../extensions/starline/git";
@@ -1164,174 +1163,6 @@ describe("Pi docs compliance", () => {
 		expect(footer?.render(120).join("\n")).toContain("[muted]");
 	});
 
-	it("renders third-party statuses on the right by default in sorted order", () => {
-		let footerFactory: FooterFactory | undefined;
-		const ctx = makeContext({
-			cwd: "/tmp/project",
-			ui: {
-				theme: makeTheme(),
-				setFooter(factory: FooterFactory | undefined) {
-					footerFactory = factory;
-				},
-				setEditorComponent() {},
-			},
-		});
-		const state = createInitialState(emptyGitStatus());
-		state.contextLabel = "1%/200k";
-		state.tokenLabel = "↑1 ↓2";
-		state.costLabel = "$0.001";
-
-		installFooter(ctx as never, state, () => defaultConfig, {
-			setRequestRender() {},
-			scheduleProjectRefresh() {},
-		});
-
-		const footer = footerFactory?.({ requestRender() {} }, makeTheme(), {
-			onBranchChange: () => () => {},
-			getExtensionStatuses: () =>
-				new Map<string, string>([
-					["zeta", "Z"],
-					["alpha", "A"],
-				]),
-		});
-		const rendered = footer?.render(160).join("\n") ?? "";
-
-		expect(rendered.indexOf("A")).toBeLessThan(rendered.indexOf("Z"));
-		expect(rendered.indexOf("Z")).toBeLessThan(rendered.indexOf("1%/200k"));
-		expect(rendered).toContain("↑1 ↓2");
-		expect(rendered).toContain("$0.001");
-	});
-
-	it.each([
-		["pipe", " | "],
-		["dot", " · "],
-		["chevron", " › "],
-		["none", " "],
-	] as Array<[SeparatorStyle, string]>)(
-		"renders %s separators between extension statuses and built-in right segments",
-		(separator, expectedSeparator) => {
-			let footerFactory: FooterFactory | undefined;
-			const ctx = makeContext({
-				cwd: "/tmp/project",
-				ui: {
-					theme: makeTheme(),
-					setFooter(factory: FooterFactory | undefined) {
-						footerFactory = factory;
-					},
-					setEditorComponent() {},
-				},
-			});
-			const state = createInitialState(emptyGitStatus());
-			state.tokenLabel = "tokens";
-			state.costLabel = "cost";
-			const config = { ...defaultConfig, separator };
-
-			installFooter(ctx as never, state, () => config, {
-				setRequestRender() {},
-				scheduleProjectRefresh() {},
-			});
-
-			const footer = footerFactory?.({ requestRender() {} }, makeTheme(), {
-				onBranchChange: () => () => {},
-				getExtensionStatuses: () =>
-					new Map<string, string>([
-						["beta", "B"],
-						["alpha", "A"],
-					]),
-			});
-			const rendered = footer?.render(160).join("\n") ?? "";
-
-			expect(rendered).toContain(["A", "B", "1%/200k", "tokens", "cost"].join(expectedSeparator));
-		},
-	);
-
-	it("keeps custom footer format $sep as a pipe", () => {
-		let footerFactory: FooterFactory | undefined;
-		const ctx = makeContext({
-			cwd: "/tmp/project",
-			ui: {
-				theme: makeTheme(),
-				setFooter(factory: FooterFactory | undefined) {
-					footerFactory = factory;
-				},
-				setEditorComponent() {},
-			},
-		});
-		const state = createInitialState(emptyGitStatus());
-		state.tokenLabel = "tokens";
-		const config = {
-			...defaultConfig,
-			separator: "dot" as const,
-			footerFormat: "$cwd$fill$context$sep$tokens",
-		};
-
-		installFooter(ctx as never, state, () => config, {
-			setRequestRender() {},
-			scheduleProjectRefresh() {},
-		});
-		const footer = footerFactory?.({ requestRender() {} }, makeTheme(), {
-			onBranchChange: () => () => {},
-			getExtensionStatuses: () => new Map<string, string>(),
-		});
-
-		expect(footer?.render(120).join("\n") ?? "").toContain("1%/200k | tokens");
-	});
-
-	it("honors third-party status placements and hides off statuses", () => {
-		let footerFactory: FooterFactory | undefined;
-		const ctx = makeContext({
-			cwd: "/tmp/project",
-			ui: {
-				theme: makeTheme(),
-				setFooter(factory: FooterFactory | undefined) {
-					footerFactory = factory;
-				},
-				setEditorComponent() {},
-			},
-		});
-		const state = createInitialState(emptyGitStatus());
-		state.contextLabel = "1%/200k";
-		state.tokenLabel = "↑1 ↓2";
-		state.costLabel = "$0.001";
-		const config = {
-			...configWithExtensionStatuses({
-				placements: {
-					alpha: "left",
-					alpha2: "left",
-					beta: "middle",
-					beta2: "middle",
-					gamma: "right",
-					hidden: "off",
-				},
-			}),
-			separator: "chevron" as const,
-		};
-
-		installFooter(ctx as never, state, () => config, {
-			setRequestRender() {},
-			scheduleProjectRefresh() {},
-		});
-
-		const footer = footerFactory?.({ requestRender() {} }, makeTheme(), {
-			onBranchChange: () => () => {},
-			getExtensionStatuses: () =>
-				new Map<string, string>([
-					["alpha", "left-status"],
-					["alpha2", "left-status-2"],
-					["beta", "middle-status"],
-					["beta2", "middle-status-2"],
-					["gamma", "right-status"],
-					["hidden", "hidden-status"],
-				]),
-		});
-		const rendered = footer?.render(180).join("\n") ?? "";
-
-		expect(rendered).toContain(" › left-status › left-status-2");
-		expect(rendered).toContain("middle-status › middle-status-2");
-		expect(rendered).toContain("right-status");
-		expect(rendered).not.toContain("hidden-status");
-	});
-
 	it("strips plugin ANSI and control sequences before rendering third-party statuses", () => {
 		let footerFactory: FooterFactory | undefined;
 		const ctx = makeContext({
@@ -1366,145 +1197,6 @@ describe("Pi docs compliance", () => {
 		expect(rendered).not.toContain("\nnext\tline");
 	});
 
-	it("styles third-party statuses with colors.extensionStatus", () => {
-		let footerFactory: FooterFactory | undefined;
-		const ctx = makeContext({
-			cwd: "/tmp/project",
-			ui: {
-				theme: makeTaggedTheme(),
-				setFooter(factory: FooterFactory | undefined) {
-					footerFactory = factory;
-				},
-				setEditorComponent() {},
-			},
-		});
-		const state = createInitialState(emptyGitStatus());
-		state.contextLabel = "1%/200k";
-		state.tokenLabel = "↑1 ↓2";
-		state.costLabel = "$0.001";
-
-		installFooter(ctx as never, state, () => configWithColors({ extensionStatus: "warning" }), {
-			setRequestRender() {},
-			scheduleProjectRefresh() {},
-		});
-
-		const footer = footerFactory?.({ requestRender() {} }, makeTaggedTheme(), {
-			onBranchChange: () => () => {},
-			getExtensionStatuses: () => new Map<string, string>([["alpha", "ok"]]),
-		});
-		const rendered = footer?.render(160).join("\n") ?? "";
-
-		expect(rendered).toContain("[warning]ok");
-	});
-
-	it("protects built-in right labels when third-party middle statuses are too wide", () => {
-		let footerFactory: FooterFactory | undefined;
-		const ctx = makeContext({
-			cwd: "/tmp/x",
-			ui: {
-				theme: makeTheme(),
-				setFooter(factory: FooterFactory | undefined) {
-					footerFactory = factory;
-				},
-				setEditorComponent() {},
-			},
-		});
-		const state = createInitialState(emptyGitStatus());
-		state.contextLabel = "1%/200k";
-		state.tokenLabel = "↑1 ↓2";
-		state.costLabel = "$0.001";
-		const config = configWithExtensionStatuses({ placements: { long: "middle" } });
-
-		installFooter(ctx as never, state, () => config, {
-			setRequestRender() {},
-			scheduleProjectRefresh() {},
-		});
-
-		const footer = footerFactory?.({ requestRender() {} }, makeTheme(), {
-			onBranchChange: () => () => {},
-			getExtensionStatuses: () =>
-				new Map<string, string>([["long", "middle-status-is-far-too-long"]]),
-		});
-		const line = footer?.render(44)[0] ?? "";
-
-		expect(line).toContain("1%/200k");
-		expect(line).toContain("↑1 ↓2");
-		expect(line).toContain("$0.001");
-		expect(visibleWidth(line)).toBeLessThanOrEqual(44);
-	});
-
-	it("truncates built-in and template branch aliases with the shared branch length", () => {
-		let footerFactory: FooterFactory | undefined;
-		const ctx = makeContext({
-			cwd: "/tmp/project",
-			ui: {
-				theme: makeTheme(),
-				setFooter(factory: FooterFactory | undefined) {
-					footerFactory = factory;
-				},
-				setEditorComponent() {},
-			},
-		});
-		const state = createInitialState(emptyGitStatus());
-		state.branch = "feature/very-long";
-		const baseConfig: PolishedTuiConfig = {
-			...defaultConfig,
-			gitBranch: { maxLength: 6 },
-			icons: { ...defaultConfig.icons, git: "" },
-		};
-		const render = (footerFormat: string) => {
-			installFooter(ctx as never, state, () => ({ ...baseConfig, footerFormat }), {
-				setRequestRender() {},
-				scheduleProjectRefresh() {},
-			});
-			const footer = footerFactory?.({ requestRender() {} }, makeTheme(), {
-				onBranchChange: () => () => {},
-				getExtensionStatuses: () => new Map<string, string>(),
-			});
-			return footer?.render(160).join("\n") ?? "";
-		};
-
-		expect(render("")).toContain("on featu…");
-		expect(render("$git_branch|$branch")).toContain("featu…|featu…");
-		expect(render("$git_branch|$branch")).not.toContain("feature/very-long");
-	});
-
-	it("does not leave an extra branch gap when the git icon is empty", () => {
-		let footerFactory: FooterFactory | undefined;
-		const ctx = makeContext({
-			ui: {
-				theme: makeTheme(),
-				setFooter(factory: FooterFactory | undefined) {
-					footerFactory = factory;
-				},
-				setEditorComponent() {},
-			},
-		});
-		const state = createInitialState(emptyGitStatus());
-		state.branch = "main";
-		state.contextLabel = "1%/200k";
-		state.tokenLabel = "↑1 ↓2";
-		state.costLabel = "$0.001";
-		const config: PolishedTuiConfig = {
-			...defaultConfig,
-			icons: { ...defaultConfig.icons, git: "" },
-		};
-
-		installFooter(ctx as never, state, () => config, {
-			setRequestRender() {},
-			scheduleProjectRefresh() {},
-		});
-
-		const footer = footerFactory?.({ requestRender() {} }, makeTheme(), {
-			onBranchChange: () => () => {},
-			getExtensionStatuses: () => new Map<string, string>(),
-		});
-		const rendered = footer?.render(120).join("\n") ?? "";
-
-		expect(rendered).toContain("on main");
-		expect(rendered).not.toContain("on  main");
-	});
-
 	it("keeps custom editor output within the requested render width", () => {
 		const editor = new PolishedEditor(
 			{ requestRender() {}, terminal: { rows: 24, cols: 80 } } as never,
@@ -1522,7 +1214,7 @@ describe("Pi docs compliance", () => {
 		expect(lines.every((line) => visibleWidth(line) <= 1)).toBe(true);
 	});
 
-	it("renders the package version segment when toggled on and hides it when off", () => {
+	it("renders the package version pill only when the bar lists it", () => {
 		let footerFactory: FooterFactory | undefined;
 		const ctx = makeContext({
 			cwd: "/tmp/project",
@@ -1537,22 +1229,12 @@ describe("Pi docs compliance", () => {
 
 		const renderWithPackage = (enabled: boolean) => {
 			const state = createInitialState(emptyGitStatus());
-			state.runtime = {
-				name: "nodejs",
-				symbol: "",
-				style: "bold green",
-				version: "v22",
-			};
 			state.packageVersion = enabled ? { ecosystem: "nodejs", version: "1.2.3" } : undefined;
-			state.contextLabel = "1%/200k";
-			state.tokenLabel = "↑1 ↓2";
-			state.costLabel = "$0.001";
 			const config: PolishedTuiConfig = {
 				...defaultConfig,
-				footerSegments: {
-					...defaultConfig.footerSegments,
-					packageVersion: enabled,
-					runtime: false,
+				pill: {
+					...defaultConfig.pill,
+					segments: enabled ? ["packageVersion"] : ["cwd"],
 				},
 			};
 			installFooter(ctx as never, state, () => config, {
@@ -1566,47 +1248,8 @@ describe("Pi docs compliance", () => {
 			return footer?.render(200).join("\n") ?? "";
 		};
 
-		const withPackage = renderWithPackage(true);
-		const withoutPackage = renderWithPackage(false);
-		expect(withPackage).toContain("1.2.3");
-		// Starship `package` shape: `is <glyph> <version>`.
-		expect(withPackage).toContain("is");
-		expect(withPackage).toContain("\u{f487}");
-		expect(withoutPackage).not.toContain("1.2.3");
-	});
-
-	it("does not rewrite a non-empty footerFormat when packageVersion is on", () => {
-		let footerFactory: FooterFactory | undefined;
-		const ctx = makeContext({
-			cwd: "/tmp/project",
-			ui: {
-				theme: makeTheme(),
-				setFooter(factory: FooterFactory | undefined) {
-					footerFactory = factory;
-				},
-				setEditorComponent() {},
-			},
-		});
-		const state = createInitialState(emptyGitStatus());
-		state.packageVersion = { ecosystem: "nodejs", version: "1.2.3" };
-		state.contextLabel = "1%/200k";
-		state.tokenLabel = "↑1 ↓2";
-		state.costLabel = "$0.001";
-		const config: PolishedTuiConfig = {
-			...defaultConfig,
-			footerSegments: { ...defaultConfig.footerSegments, packageVersion: true },
-			footerFormat: "$cwd $fill $context",
-		};
-		installFooter(ctx as never, state, () => config, {
-			setRequestRender() {},
-			scheduleProjectRefresh() {},
-		});
-		const footer = footerFactory?.({ requestRender() {} }, makeTheme(), {
-			onBranchChange: () => () => {},
-			getExtensionStatuses: () => new Map(),
-		});
-		const rendered = footer?.render(200).join("\n") ?? "";
-		expect(rendered).not.toContain("1.2.3");
+		expect(renderWithPackage(true)).toContain("1.2.3");
+		expect(renderWithPackage(false)).not.toContain("1.2.3");
 	});
 
 	it("git commit segment shows hash on detached HEAD and hides it on a branch", () => {
@@ -1631,9 +1274,8 @@ describe("Pi docs compliance", () => {
 			state.costLabel = "$0";
 			const config: PolishedTuiConfig = {
 				...defaultConfig,
-				footerSegments: { ...defaultConfig.footerSegments, gitCommit: true },
-				gitBranch: { maxLength: 1 },
-				gitCommit: { hashLength: 7, onlyDetached, showTag: true },
+				pill: { ...defaultConfig.pill, segments: ["gitCommit"] },
+				git: { ...defaultConfig.git, commit: { hashLength: 7, onlyDetached, showTag: true } },
 			};
 			installFooter(ctx as never, state, () => config, {
 				setRequestRender() {},
@@ -1646,12 +1288,12 @@ describe("Pi docs compliance", () => {
 			return footer?.render(200).join("\n") ?? "";
 		};
 
-		// Detached → HEAD + green (hash) in branch display.
-		expect(renderFor(true, true)).toContain("HEAD");
-		expect(renderFor(true, true)).toContain(`(${OID.slice(0, 7)})`);
+		// Detached → the short hash, no parentheses: a pill is not a text line.
+		expect(renderFor(true, true)).toContain(OID.slice(0, 7));
+		expect(renderFor(true, true)).not.toContain(`(${OID.slice(0, 7)})`);
 		// On branch with onlyDetached → hidden.
 		expect(renderFor(false, true)).not.toContain(OID.slice(0, 7));
-		// On branch with onlyDetached=false → hash appears standalone.
+		// On branch with onlyDetached=false → the hash shows.
 		expect(renderFor(false, false)).toContain(OID.slice(0, 7));
 	});
 
@@ -1675,7 +1317,7 @@ describe("Pi docs compliance", () => {
 			state.costLabel = "$0";
 			const config: PolishedTuiConfig = {
 				...defaultConfig,
-				footerSegments: { ...defaultConfig.footerSegments, gitMetrics: true },
+				pill: { ...defaultConfig.pill, segments: ["gitMetrics"] },
 			};
 			installFooter(ctx as never, state, () => config, {
 				setRequestRender() {},
@@ -2320,13 +1962,11 @@ describe("Pi docs compliance", () => {
 				getConfig: () => defaultConfig,
 				setColorSources() {},
 				setUiFeatures: () => ({ applied: true }),
-				setFooterSegments() {},
-				setFooterFormat() {},
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
-				setSeparator() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
@@ -2366,13 +2006,11 @@ describe("Pi docs compliance", () => {
 				getConfig: () => defaultConfig,
 				setColorSources() {},
 				setUiFeatures: () => ({ applied: true }),
-				setFooterSegments() {},
-				setFooterFormat() {},
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
-				setSeparator() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
@@ -2415,13 +2053,11 @@ describe("Pi docs compliance", () => {
 					featureChanges.push(patch);
 					return { applied: true };
 				},
-				setFooterSegments() {},
-				setFooterFormat() {},
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
-				setSeparator() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
@@ -2464,13 +2100,11 @@ describe("Pi docs compliance", () => {
 					featureChanges.push(patch);
 					return { applied: true };
 				},
-				setFooterSegments() {},
-				setFooterFormat() {},
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
-				setSeparator() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
@@ -2503,13 +2137,11 @@ describe("Pi docs compliance", () => {
 					featureChanges.push(patch);
 					return { applied: true };
 				},
-				setFooterSegments() {},
-				setFooterFormat() {},
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
-				setSeparator() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
@@ -2550,13 +2182,11 @@ describe("Pi docs compliance", () => {
 					reason:
 						"another extension is currently managing the editor; reload Pi to apply this change",
 				}),
-				setFooterSegments() {},
-				setFooterFormat() {},
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
-				setSeparator() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
@@ -2606,13 +2236,11 @@ describe("Pi docs compliance", () => {
 						doneCallsAtFeatureChange.push(doneCalls);
 						return { applied: true };
 					},
-					setFooterSegments() {},
-					setFooterFormat() {},
 					setIconMode() {},
 					setContextStyle() {},
 					setPathDisplay() {},
+					setPillSegments() {},
 					setGitBranch() {},
-					setSeparator() {},
 					getActiveExtensionStatuses: () => new Map<string, string>(),
 					setExtensionStatusPlacement() {},
 					setExtensionStatusColorMode() {},
@@ -2673,13 +2301,11 @@ describe("Pi docs compliance", () => {
 					attemptedPatches.push(patch);
 					throw new Error("config is corrupt");
 				},
-				setFooterSegments() {},
-				setFooterFormat() {},
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
-				setSeparator() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
@@ -2745,13 +2371,11 @@ describe("Pi docs compliance", () => {
 						featureChanges += 1;
 						return { applied: true };
 					},
-					setFooterSegments() {},
-					setFooterFormat() {},
 					setIconMode() {},
 					setContextStyle() {},
 					setPathDisplay() {},
+					setPillSegments() {},
 					setGitBranch() {},
-					setSeparator() {},
 					getActiveExtensionStatuses: () => new Map<string, string>(),
 					setExtensionStatusPlacement() {},
 					setExtensionStatusColorMode() {},
@@ -2812,13 +2436,11 @@ describe("Pi docs compliance", () => {
 					getConfig: () => config,
 					setColorSources() {},
 					setUiFeatures: () => ({ applied: true }),
-					setFooterSegments() {},
-					setFooterFormat() {},
 					setIconMode() {},
 					setContextStyle() {},
 					setPathDisplay() {},
+					setPillSegments() {},
 					setGitBranch() {},
-					setSeparator() {},
 					getActiveExtensionStatuses: () => new Map<string, string>(),
 					setExtensionStatusPlacement() {},
 					setExtensionStatusColorMode() {},
@@ -2857,7 +2479,6 @@ describe("Pi docs compliance", () => {
 		expect(themeLines.join("\n")).toContain("Coloring");
 		expect(themeLines.join("\n")).toContain("Features");
 		expect(themeLines.join("\n")).toContain("Layout");
-		expect(themeLines.join("\n")).toContain("Built-in segments");
 		expect(themeLines.join("\n")).toContain("Extension segments");
 		expect(themeLines.join("\n")).toContain("Tab/Shift+Tab to switch sections");
 		expect(themeLines.at(-1)).toContain("[borderMuted]────");
@@ -2887,13 +2508,11 @@ describe("Pi docs compliance", () => {
 				getConfig: () => defaultConfig,
 				setColorSources() {},
 				setUiFeatures: () => ({ applied: true }),
-				setFooterSegments() {},
-				setFooterFormat() {},
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
-				setSeparator() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
@@ -2927,95 +2546,13 @@ describe("Pi docs compliance", () => {
 		).resolves.toBeUndefined();
 	});
 
-	it("cycles the separator from the Starline layout settings", async () => {
-		let command: { handler: (args: string, ctx: unknown) => Promise<void> } | undefined;
-		const changes: SeparatorStyle[] = [];
-		const notifications: string[] = [];
-		let dependencyRenderRequests = 0;
-		let tuiRenderRequests = 0;
-
-		registerStarlineSettingsCommand(
-			{
-				registerCommand(_name: string, options: unknown) {
-					command = options as typeof command;
-				},
-			} as never,
-			{
-				sessionLifecycle: inactiveSessionLifecycle,
-				getConfig: () => defaultConfig,
-				setColorSources() {},
-				setUiFeatures: () => ({ applied: true }),
-				setFooterSegments() {},
-				setFooterFormat() {},
-				setIconMode() {},
-				setContextStyle() {},
-				setPathDisplay() {},
-				setGitBranch() {},
-				setSeparator(separator) {
-					changes.push(separator);
-				},
-				getActiveExtensionStatuses: () => new Map<string, string>(),
-				setExtensionStatusPlacement() {},
-				setExtensionStatusColorMode() {},
-				setMouseConfig() {},
-				requestRender() {
-					dependencyRenderRequests += 1;
-				},
-				settingsListTheme: {
-					label: (text) => text,
-					value: (text) => text,
-					description: (text) => text,
-					cursor: "> ",
-					hint: (text) => text,
-				},
-			},
-		);
-
-		await command?.handler("", {
-			hasUI: true,
-			mode: "tui",
-			ui: {
-				theme: makeTheme(),
-				notify(message: string) {
-					notifications.push(message);
-				},
-				async custom(factory: (...args: unknown[]) => unknown) {
-					const component = factory(
-						{
-							requestRender() {
-								tuiRenderRequests += 1;
-							},
-						},
-						makeTheme(),
-						{},
-						() => {},
-					) as { handleInput?: (data: string) => void };
-					component.handleInput?.("\t");
-					component.handleInput?.("\t");
-					component.handleInput?.("\x1b[B");
-					component.handleInput?.(" ");
-					component.handleInput?.(" ");
-					component.handleInput?.(" ");
-					component.handleInput?.(" ");
-				},
-			},
-		});
-
-		expect(changes).toEqual(["dot", "chevron", "none", "pipe"]);
-		expect(notifications).toEqual([
-			"Separator: dot",
-			"Separator: chevron",
-			"Separator: none",
-			"Separator: pipe",
-		]);
-		expect(dependencyRenderRequests).toBe(4);
-		expect(tuiRenderRequests).toBe(6);
-	});
-
 	it("cycles branch length presets and returns custom JSON values to full", async () => {
-		const run = async (maxLength: PolishedTuiConfig["gitBranch"]["maxLength"], presses: number) => {
+		const run = async (
+			maxLength: PolishedTuiConfig["git"]["branch"]["maxLength"],
+			presses: number,
+		) => {
 			let command: { handler: (args: string, ctx: unknown) => Promise<void> } | undefined;
-			const changes: Array<PolishedTuiConfig["gitBranch"]["maxLength"]> = [];
+			const changes: Array<PolishedTuiConfig["git"]["branch"]["maxLength"]> = [];
 			registerStarlineSettingsCommand(
 				{
 					registerCommand(_name: string, options: unknown) {
@@ -3024,18 +2561,19 @@ describe("Pi docs compliance", () => {
 				} as never,
 				{
 					sessionLifecycle: inactiveSessionLifecycle,
-					getConfig: () => ({ ...defaultConfig, gitBranch: { maxLength } }),
+					getConfig: () => ({
+						...defaultConfig,
+						git: { ...defaultConfig.git, branch: { maxLength } },
+					}),
 					setColorSources() {},
 					setUiFeatures: () => ({ applied: true }),
-					setFooterSegments() {},
-					setFooterFormat() {},
 					setIconMode() {},
 					setContextStyle() {},
 					setPathDisplay() {},
+					setPillSegments() {},
 					setGitBranch(patch) {
 						if (patch.maxLength !== undefined) changes.push(patch.maxLength);
 					},
-					setSeparator() {},
 					getActiveExtensionStatuses: () => new Map<string, string>(),
 					setExtensionStatusPlacement() {},
 					setExtensionStatusColorMode() {},
@@ -3062,7 +2600,7 @@ describe("Pi docs compliance", () => {
 						};
 						component.handleInput?.("\t");
 						component.handleInput?.("\t");
-						for (let index = 0; index < 4; index += 1) component.handleInput?.("\x1b[B");
+						for (let index = 0; index < 3; index += 1) component.handleInput?.("\x1b[B");
 						for (let index = 0; index < presses; index += 1) component.handleInput?.(" ");
 					},
 				},
@@ -3094,13 +2632,11 @@ describe("Pi docs compliance", () => {
 					changes.push(patch);
 				},
 				setUiFeatures: () => ({ applied: true }),
-				setFooterSegments() {},
-				setFooterFormat() {},
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
-				setSeparator() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
@@ -3167,13 +2703,11 @@ describe("Pi docs compliance", () => {
 					changes.push(patch);
 				},
 				setUiFeatures: () => ({ applied: true }),
-				setFooterSegments() {},
-				setFooterFormat() {},
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
-				setSeparator() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
@@ -3213,7 +2747,7 @@ describe("Pi docs compliance", () => {
 	});
 
 	function navigateToExtensionSegmentsSection(component: { handleInput?: (data: string) => void }) {
-		// Coloring → Features → Layout → Built-in segments → Extension segments
+		// Coloring → Features → Layout → Pills → Extension segments
 		component.handleInput?.("\t");
 		component.handleInput?.("\t");
 		component.handleInput?.("\t");
@@ -3235,13 +2769,11 @@ describe("Pi docs compliance", () => {
 				getConfig: () => defaultConfig,
 				setColorSources() {},
 				setUiFeatures: () => ({ applied: true }),
-				setFooterSegments() {},
-				setFooterFormat() {},
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
-				setSeparator() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
@@ -3275,7 +2807,7 @@ describe("Pi docs compliance", () => {
 			},
 		});
 
-		expect(rendered).toContain("Current directory");
+		expect(rendered).toContain("Directory");
 		expect(rendered).not.toContain("No active statuses");
 	});
 
@@ -3294,13 +2826,11 @@ describe("Pi docs compliance", () => {
 				getConfig: () => defaultConfig,
 				setColorSources() {},
 				setUiFeatures: () => ({ applied: true }),
-				setFooterSegments() {},
-				setFooterFormat() {},
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
-				setSeparator() {},
 				getActiveExtensionStatuses: () =>
 					new Map<string, string>([
 						["alpha", "A"],
@@ -3358,13 +2888,11 @@ describe("Pi docs compliance", () => {
 				getConfig: () => defaultConfig,
 				setColorSources() {},
 				setUiFeatures: () => ({ applied: true }),
-				setFooterSegments() {},
-				setFooterFormat() {},
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
-				setSeparator() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement(key, placement) {
 					placements.push({ key, placement });
@@ -3422,13 +2950,11 @@ describe("Pi docs compliance", () => {
 				getConfig: () => defaultConfig,
 				setColorSources() {},
 				setUiFeatures: () => ({ applied: true }),
-				setFooterSegments() {},
-				setFooterFormat() {},
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
-				setSeparator() {},
 				getActiveExtensionStatuses: () => new Map<string, string>([["alpha", "ok"]]),
 				setExtensionStatusPlacement(key, placement) {
 					placements.push({ key, placement });
@@ -3496,13 +3022,11 @@ describe("Pi docs compliance", () => {
 					}),
 				setColorSources() {},
 				setUiFeatures: () => ({ applied: true }),
-				setFooterSegments() {},
-				setFooterFormat() {},
 				setIconMode() {},
 				setContextStyle() {},
 				setPathDisplay() {},
+				setPillSegments() {},
 				setGitBranch() {},
-				setSeparator() {},
 				getActiveExtensionStatuses: () => new Map<string, string>([["active", "ok"]]),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
@@ -3538,217 +3062,5 @@ describe("Pi docs compliance", () => {
 		expect(rendered).toContain("active");
 		expect(rendered).toContain("middle");
 		expect(rendered).not.toContain("inactive");
-	});
-	type SessionNameFooterOptions = {
-		name?: string;
-		getSessionName?: () => string | undefined;
-		theme?: Theme;
-		footerFormat?: string;
-		segmentEnabled?: boolean;
-		sessionNameColor?: string;
-		branch?: string;
-		branchEnabled?: boolean;
-	};
-
-	function createSessionNameFooter({
-		name,
-		getSessionName = () => name,
-		theme = makeTheme(),
-		footerFormat = "",
-		segmentEnabled = true,
-		sessionNameColor = "success",
-		branch,
-		branchEnabled = false,
-	}: SessionNameFooterOptions) {
-		let footerFactory: FooterFactory | undefined;
-		const ctx = makeContext({
-			cwd: "/tmp/project",
-			sessionManager: { getBranch: () => [], getSessionName },
-			ui: {
-				theme,
-				setFooter(factory: FooterFactory | undefined) {
-					footerFactory = factory;
-				},
-				setEditorComponent() {},
-			},
-		});
-		const config: PolishedTuiConfig = {
-			...defaultConfig,
-			footerFormat,
-			colors: { ...defaultConfig.colors, sessionName: sessionNameColor },
-			footerSegments: {
-				...defaultConfig.footerSegments,
-				cwd: true,
-				sessionName: segmentEnabled,
-				gitBranch: branchEnabled,
-				gitStatus: false,
-				runtime: false,
-				context: false,
-				tokens: false,
-				cost: false,
-			},
-		};
-		installFooter(ctx as never, createInitialState({ ...emptyGitStatus(), branch }), () => config, {
-			setRequestRender() {},
-			scheduleProjectRefresh() {},
-		});
-		return footerFactory?.({ requestRender() {} }, theme, {
-			onBranchChange: () => () => {},
-			getExtensionStatuses: () => new Map<string, string>(),
-		});
-	}
-
-	function renderSessionNameFooter({
-		width,
-		...options
-	}: SessionNameFooterOptions & { width: number }): string[] {
-		return createSessionNameFooter(options)?.render(width) ?? [];
-	}
-
-	it("renders the default session name as 'in <name>' between cwd and branch", () => {
-		const rendered = renderSessionNameFooter({
-			name: "release prep",
-			width: 500,
-			theme: makeTaggedTheme(),
-			branch: "feat/session-name-footer",
-			branchEnabled: true,
-		}).join("\n");
-		expect(rendered).toContain("project in [success]release prep on");
-		expect(rendered.indexOf("project")).toBeLessThan(rendered.indexOf("release prep"));
-		expect(rendered.indexOf("release prep")).toBeLessThan(
-			rendered.indexOf("feat/session-name-footer"),
-		);
-	});
-
-	it("omits absent names and keeps Unicode names within narrow footer widths", () => {
-		const absent = renderSessionNameFooter({
-			name: undefined,
-			width: 120,
-			theme: makeTaggedTheme(),
-		}).join("\n");
-		expect(absent).not.toContain("undefined");
-		expect(absent).not.toContain("[success]");
-		expect(absent).not.toContain(" in ");
-		const lines = renderSessionNameFooter({ name: "研究 🚀 ".repeat(20), width: 18 });
-		expect(lines.every((line) => visibleWidth(line) <= 18)).toBe(true);
-	});
-
-	it("sanitizes terminal controls while preserving ordinary Unicode session names", () => {
-		const rendered = renderSessionNameFooter({
-			name: "\x1b[31mrelease\x1b[0m\tprep\x07\x1b]0;owned\x07研究 🚀",
-			width: 120,
-			theme: makeTaggedTheme(),
-		}).join("\n");
-		expect(rendered).toContain("release prep研究 🚀");
-		expect(rendered).not.toMatch(/[\x00-\x1f\x7f-\x9f]/);
-		expect(rendered).not.toContain("owned");
-
-		const controlsOnly = renderSessionNameFooter({
-			name: "\x1b[2J\x1b]0;owned\x07\t\x07",
-			width: 120,
-			theme: makeTaggedTheme(),
-		}).join("\n");
-		expect(controlsOnly).not.toContain("[success]");
-		expect(controlsOnly).not.toContain("owned");
-		expect(controlsOnly).not.toContain(" in ");
-	});
-
-	it("respects an explicit disabled setting and skips unused session-name lookups", () => {
-		const getSessionName = vi.fn(() => "hidden");
-		const disabled = renderSessionNameFooter({
-			getSessionName,
-			width: 120,
-			segmentEnabled: false,
-		}).join("\n");
-		expect(disabled).not.toContain("hidden");
-		expect(disabled).not.toContain(" in ");
-		expect(getSessionName).not.toHaveBeenCalled();
-
-		renderSessionNameFooter({
-			getSessionName,
-			width: 120,
-			footerFormat: "$cwd",
-			segmentEnabled: true,
-		});
-		expect(getSessionName).not.toHaveBeenCalled();
-
-		renderSessionNameFooter({
-			getSessionName,
-			width: 120,
-			footerFormat: "${" + "session_name}",
-			segmentEnabled: false,
-		});
-		expect(getSessionName).toHaveBeenCalledOnce();
-	});
-
-	it("renders raw session-name tokens in custom formats without the built-in prefix", () => {
-		const named = renderSessionNameFooter({
-			name: "release prep",
-			width: 120,
-			footerFormat: "$cwd($sep$session_name)",
-			segmentEnabled: false,
-		}).join("\n");
-		expect(named).toContain("release prep");
-		expect(named).not.toContain("in release prep");
-		const braced = renderSessionNameFooter({
-			name: "release prep",
-			width: 120,
-			footerFormat: "$cwd ${" + "session_name}",
-			segmentEnabled: false,
-		}).join("\n");
-		expect(braced).toContain("project release prep");
-		expect(braced).not.toContain("in release prep");
-		const unnamed = renderSessionNameFooter({
-			name: undefined,
-			width: 120,
-			footerFormat: "$cwd$sep$session_name",
-			segmentEnabled: false,
-		}).join("\n");
-		expect(unnamed).toContain("project");
-		expect(unnamed).not.toContain(" | ");
-	});
-
-	it("reads an updated session name on the next footer render", () => {
-		let sessionName = "draft";
-		const footer = createSessionNameFooter({ getSessionName: () => sessionName });
-		expect(footer?.render(120).join("\n")).toContain("draft");
-
-		sessionName = "release prep";
-		const renamed = footer?.render(120).join("\n") ?? "";
-		expect(renamed).toContain("release prep");
-		expect(renamed).not.toContain("draft");
-	});
-
-	it("requests one footer render on session_info_changed", async () => {
-		const handlers = loadExtension();
-		let footerFactory: FooterFactory | undefined;
-		let renderRequests = 0;
-		const ctx = makeContext({
-			ui: {
-				theme: makeTheme(),
-				setFooter(factory: FooterFactory | undefined) {
-					footerFactory = factory;
-				},
-				setEditorComponent() {},
-			},
-		});
-		await emit(handlers, "session_start", ctx);
-		footerFactory?.(
-			{
-				requestRender() {
-					renderRequests += 1;
-				},
-			},
-			makeTheme(),
-			{
-				onBranchChange: () => () => {},
-				getExtensionStatuses: () => new Map(),
-			},
-		);
-		const handler = handlers.get("session_info_changed")?.[0];
-		const before = renderRequests;
-		expect(handler?.({ type: "session_info_changed", name: "release prep" }, ctx)).toBeUndefined();
-		expect(renderRequests).toBe(before + 1);
-		await emit(handlers, "session_shutdown", ctx);
 	});
 });

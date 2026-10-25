@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { defaultConfig, FOOTER_FORMAT_VARIABLES, mergeConfig } from "../extensions/starline/config";
+import { defaultConfig, mergeConfig } from "../extensions/starline/config";
 import { thinkingThemeKey } from "../extensions/starline/footer";
-import { parseFooterFormat } from "../extensions/starline/footer-format";
 
 describe("thinkingThemeKey", () => {
 	it("maps each level to its theme colour key", () => {
@@ -37,35 +36,6 @@ describe("thinkingThemeKey", () => {
 				"thinkingXhigh",
 			]),
 		);
-	});
-});
-
-describe("model and thinking as footer segments", () => {
-	it("are off by default, so the footer is unchanged from upstream", () => {
-		expect(defaultConfig.footerSegments.model).toBe(false);
-		expect(defaultConfig.footerSegments.thinking).toBe(false);
-	});
-
-	it("can be switched on", () => {
-		const config = mergeConfig({ footerSegments: { model: true, thinking: true } });
-		expect(config.footerSegments.model).toBe(true);
-		expect(config.footerSegments.thinking).toBe(true);
-	});
-
-	it("ignores non-boolean values", () => {
-		expect(mergeConfig({ footerSegments: { model: "yes" } }).footerSegments.model).toBe(false);
-	});
-
-	it("are usable as footerFormat variables", () => {
-		expect(FOOTER_FORMAT_VARIABLES).toContain("model");
-		expect(FOOTER_FORMAT_VARIABLES).toContain("thinking");
-	});
-
-	it("parse out of a footerFormat string", () => {
-		const names = parseFooterFormat("$model $thinking $cwd")
-			.filter((token) => token.kind === "var")
-			.map((token) => (token.kind === "var" ? token.name : ""));
-		expect(names).toEqual(["model", "thinking", "cwd"]);
 	});
 });
 

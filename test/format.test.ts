@@ -20,6 +20,7 @@ import {
 	getUsageTotals,
 	invalidateUsageTotalsCache,
 	resolveSessionStartEpoch,
+	statusValueText,
 } from "../extensions/starline/format";
 import {
 	ASCII_DEFAULT_ICONS,
@@ -365,18 +366,10 @@ describe("formatGitMetricsSegment", () => {
 				{ onlyNonzero: true },
 				"terminal",
 				"bold green",
-				"bold red",
 			),
 		).toBe("");
 		expect(
-			formatGitMetricsSegment(
-				makeTheme(),
-				null,
-				{ onlyNonzero: true },
-				"terminal",
-				"bold green",
-				"bold red",
-			),
+			formatGitMetricsSegment(makeTheme(), null, { onlyNonzero: true }, "terminal", "bold green"),
 		).toBe("");
 	});
 
@@ -387,7 +380,6 @@ describe("formatGitMetricsSegment", () => {
 			{ onlyNonzero: false },
 			"terminal",
 			"bold green",
-			"bold red",
 		);
 		expect(out).toContain("+12");
 		expect(out).toContain("−3");
@@ -402,7 +394,6 @@ describe("formatGitMetricsSegment", () => {
 				{ onlyNonzero: true },
 				"terminal",
 				"bold green",
-				"bold red",
 			),
 		).not.toContain("+0");
 		expect(
@@ -412,7 +403,6 @@ describe("formatGitMetricsSegment", () => {
 				{ onlyNonzero: true },
 				"terminal",
 				"bold green",
-				"bold red",
 			),
 		).toContain("−5");
 		// 0 deleted → only show added.
@@ -423,7 +413,6 @@ describe("formatGitMetricsSegment", () => {
 				{ onlyNonzero: true },
 				"terminal",
 				"bold green",
-				"bold red",
 			),
 		).toContain("+7");
 	});
@@ -436,7 +425,6 @@ describe("formatGitMetricsSegment", () => {
 				{ onlyNonzero: true },
 				"terminal",
 				"bold green",
-				"bold red",
 			),
 		).toBe("");
 	});
@@ -715,5 +703,22 @@ describe("compactionFailureNotice", () => {
 		expect(compactionFailureNotice({ reason: "manual", errorMessage: "   " })).toBe(
 			"Compaction failed",
 		);
+	});
+});
+
+describe("statusValueText", () => {
+	it("keeps the number and drops the label", () => {
+		expect(statusValueText("1 proc")).toBe("1");
+		expect(statusValueText("2 agents")).toBe("2");
+		expect(statusValueText("Tavily: 41.1%")).toBe("41.1%");
+	});
+
+	it("keeps grouping separators", () => {
+		expect(statusValueText("DeepSeek: \u00a51,447.55 spent")).toBe("1,447.55");
+	});
+
+	it("leaves text with no number alone", () => {
+		expect(statusValueText("ready")).toBe("ready");
+		expect(statusValueText("")).toBe("");
 	});
 });

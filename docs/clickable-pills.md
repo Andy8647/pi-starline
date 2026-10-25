@@ -303,7 +303,7 @@ Verified against pi-subagents 0.82.0: the same request from a probe extension ge
 Pi draws `Steering: …` rows and a dequeue hint above the editor from
 `InteractiveMode.updatePendingMessagesDisplay`, and no extension API reaches that
 container. `queue-rows.ts` wraps the method through the registry: while the queue
-pill is actually in the bar (`footerStyle: "pill"`, `pill.segments` contains
+pill is actually in the bar (`pill.segments` contains
 `queue`, status line on), it clears the container instead of refilling it. The
 predicate is read on every queue update, so the rows return the moment the pill is
 configured away — no restart, and no key to remember.
@@ -354,9 +354,11 @@ Phase 4 landed as `pill-api.ts`, and a bridged status pill is exercised end to e
   the same cell, and the press itself runs nothing, so a gesture that slides off the
   pill it started on never fires. `test/pill-click.test.ts` pins the press/click
   split.
-- **Which segments are safe to make clickable.** `gitStatus`, `tokens` and `context`
-  are read-outs; a click that does nothing is worse than an inert pill, so they
-  stay inert until there is something to show.
+- **Which segments are safe to make clickable.** `tokens` and `context` are
+  read-outs; a click that does nothing is worse than an inert pill, so they stay
+  inert until there is something to show. The `git` pill lists the changed paths,
+  read-only: no staging, no branch switch, because an agent may be running in the
+  same tree.
 - **The session capture is a patch.** `AgentSession.prompt` and `getContextUsage`
   are public and the wrappers only record `this`, and `updatePendingMessagesDisplay`
   is public too, but a future Pi could move the queue or rename the container. The

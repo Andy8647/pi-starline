@@ -141,4 +141,22 @@ describe("collectExtensionStatusSegments", () => {
 			{ key: "beta", text: "green", placement: "right", colorMode: "themed" },
 		]);
 	});
+
+	it("keeps only the number for statuses configured as value", () => {
+		const config = configWithExtensionStatuses({
+			formats: { tavily: "value", quiet: "value", words: "full" },
+		});
+		const segments = collectExtensionStatusSegments(
+			new Map([
+				["tavily", "Tavily: 41.1%"],
+				["quiet", "ready"],
+				["words", "3 jobs"],
+			]),
+			config,
+		);
+
+		// The default keeps the published text; "value" also leaves a numberless
+		// status alone rather than blanking it to an icon with no meaning.
+		expect(segments.right.map((segment) => segment.text)).toEqual(["ready", "41.1%", "3 jobs"]);
+	});
 });
