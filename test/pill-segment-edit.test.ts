@@ -53,6 +53,9 @@ describe("PILL_SEGMENT_NAMES", () => {
 		expect(PILL_SEGMENT_NAMES).toContain("gitMetrics");
 		expect(PILL_SEGMENT_NAMES).toContain("git");
 		for (const segment of segments) expect(PILL_SEGMENT_NAMES).toContain(segment);
+		// The tokens and cache numbers ride in the context pill now.
+		expect(PILL_SEGMENT_NAMES).not.toContain("tokens");
+		expect(PILL_SEGMENT_NAMES).not.toContain("cacheHit");
 	});
 });
 
@@ -142,7 +145,7 @@ describe("/starline Pills tab", () => {
 		expect(rendered).toMatch(/Model\s+1/);
 		expect(rendered).toMatch(/Thinking\s+2/);
 		expect(rendered).toMatch(/Git\s+6/);
-		expect(rendered).toContain("1/21");
+		expect(rendered).toContain("1/19");
 	});
 
 	it("moves the selected segment when its value is cycled", async () => {

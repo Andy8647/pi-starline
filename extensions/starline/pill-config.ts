@@ -47,8 +47,6 @@ export const PILL_SEGMENT_VARIABLES: Record<string, string> = {
 	gitMetrics: "git_metrics",
 	runtime: "runtime",
 	context: "context",
-	tokens: "tokens",
-	cacheHit: "cache_hit",
 	cost: "cost",
 	sessionDuration: "session_duration",
 	username: "username",
@@ -144,6 +142,8 @@ const LEGACY_SEGMENT_NAMES: Record<string, string> = {
 	gitBranch: "git",
 	gitStatus: "git",
 	gitState: "git",
+	tokens: "context",
+	cacheHit: "context",
 };
 
 function parseSegments(value: unknown): string[] {

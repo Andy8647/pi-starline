@@ -14,6 +14,8 @@
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
+import { activeContextSnapshot } from "./context-live";
+import { formatCount } from "./format";
 import { activeGitStatus } from "./git-live";
 import {
 	cycleThinkingLevel,
@@ -412,6 +414,53 @@ async function showSubagents({ ctx, pill }: PillActionContext): Promise<void> {
 	});
 }
 
+/**
+ * What the context pill says when clicked: the numbers the bar has no room for.
+ *
+ * The pill keeps the percentage; the window, the tokens used, the session's
+ * in/out counts and the cache rate are all here. Same source as the pill, so the
+ * two cannot disagree while a turn streams.
+ */
+export function contextBubbleContent(): PillBubbleContent {
+	const snapshot = activeContextSnapshot();
+	if (!snapshot) {
+		return { title: "Context", body: ["Nothing has been sent yet."], hint: "esc to close" };
+	}
+
+	const body: string[] = [];
+	const percent =
+		snapshot.percent === undefined || !Number.isFinite(snapshot.percent)
+			? undefined
+			: Math.max(0, Math.min(100, Math.round(snapshot.percent)));
+	if (snapshot.contextWindow) {
+		const windowLabel = formatCount(snapshot.contextWindow);
+		const used = percent === undefined ? `window ${windowLabel}` : `${percent}% of ${windowLabel}`;
+		body.push(
+			snapshot.tokens === undefined ? used : `${used} · ${formatCount(snapshot.tokens)} used`,
+		);
+	}
+	if (snapshot.tokenLabel) body.push(`session ${snapshot.tokenLabel}`);
+	if (snapshot.cacheLabel) body.push(`cache ${snapshot.cacheLabel}`);
+
+	const title = percent === undefined ? "Context" : `${percent}% context`;
+	return {
+		title,
+		body: body.length > 0 ? body : ["No usage yet."],
+		hint: "esc to close",
+	};
+}
+
+function showContext({ ctx, pill }: PillActionContext): void {
+	if (!activeContextSnapshot()) {
+		if (ctx.hasUI) ctx.ui.notify("No context usage in this session", "info");
+		return;
+	}
+	// Live: tokens grow while a turn streams, and the footer pushes a new
+	// snapshot every render.
+	const handle = showPillBubble(ctx, contextBubbleContent, pill);
+	whileOpen(handle, () => handle.refresh());
+}
+
 /** How many changed paths the bubble lists before summarising the rest. */
 const MAX_LISTED_CHANGES = 12;
 /** The order the bubble groups changes in: what is staged first, then the rest. */
@@ -500,6 +549,7 @@ function showGitChanges({ ctx, pill }: PillActionContext): void {
  * handled, so nothing is swallowed.
  */
 export const PILL_ACTIONS: Readonly<Partial<Record<string, PillAction>>> = {
+	context: showContext,
 	git: showGitChanges,
 	model: showModels,
 	queue: showQueuedMessages,

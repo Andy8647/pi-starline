@@ -6,7 +6,7 @@ A Starship-inspired statusline, Opencode-style editor chrome, and fullscreen mou
 
 Starline makes Pi's fullscreen mode feel like a finished terminal app:
 
-- **See the state:** a pill footer with directory, git, runtime, model, context, tokens and cost.
+- **See the state:** a pill footer with directory, git, runtime, model, context and cost; click one for the details behind it.
 - **Act on it:** click a pill to switch model or thinking level, see what is queued, or list running subagents.
 - **Type comfortably:** a bordered input box with the model inside the frame, paste collapse, and a `ctrl+g` hint for your `$EDITOR`.
 - **Drive with the mouse:** select and copy anywhere, click to move the caret, wheel to scroll the draft.
@@ -15,7 +15,7 @@ Starline makes Pi's fullscreen mode feel like a finished terminal app:
 
 **Footer**
 
-- Starship-style segments: `dirname`, `on  branch`, git status `[!?↑]`, runtime `via  v5.5.0` (57 runtimes), context, tokens, cost, plus optional session name, `user@host`, time, OS, session duration and project version.
+- Starship-style segments: directory, git (`main [!?↑]`), runtime `via  v5.5.0` (57 runtimes), context (click for tokens and cache), cost, plus optional session name, `user@host`, time, OS, session duration and project version.
 - A colour palette with `$name` references; the bar is built from `pill.segments`, in your order.
 - Other extensions' statuses from `ctx.ui.setStatus()` as pills, on either side, or on the editor row.
 - One git pill: branch and dirty markers together; click it for the changed files (read-only).

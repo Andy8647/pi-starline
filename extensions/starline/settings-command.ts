@@ -121,8 +121,6 @@ const pillSegmentLabels: Record<string, string> = {
 	gitMetrics: "Git line metrics",
 	runtime: "Runtime",
 	context: "Context",
-	tokens: "Tokens",
-	cacheHit: "Cache hit",
 	cost: "Cost",
 	sessionDuration: "Session duration",
 	username: "user@host",

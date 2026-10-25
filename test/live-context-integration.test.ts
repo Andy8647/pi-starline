@@ -12,7 +12,7 @@ vi.mock("../extensions/starline/config", async (importOriginal) => {
 			features: { ...actual.defaultConfig.features, editor: false, statusLine: true },
 			pill: {
 				...actual.defaultConfig.pill,
-				segments: ["cwd", "context", "tokens", "cost"],
+				segments: ["cwd", "context", "cost"],
 			},
 		}),
 	};
@@ -217,12 +217,10 @@ describe("live streaming context event integration", () => {
 		vi.advanceTimersByTime(1);
 		expect(harness.requestRender).toHaveBeenCalledTimes(1);
 		expect(rendered(footer)).toContain("11%/10k");
-		expect(rendered(footer)).toContain("↑5 ↓6");
 		expect(rendered(footer)).toContain("$0.123");
 
 		await emit(handlers, "message_end", harness.ctx, { message: assistant(1_100) });
 		expect(rendered(footer)).toContain("11%/10k");
-		expect(rendered(footer)).toContain("↑5 ↓6");
 		expect(rendered(footer)).toContain("$0.123");
 
 		harness.state.contextUsage = { tokens: 1_200, contextWindow: 10_000, percent: 12 };
@@ -230,7 +228,6 @@ describe("live streaming context event integration", () => {
 		await emit(handlers, "agent_end", harness.ctx);
 		const finalized = rendered(footer);
 		expect(finalized).toContain("12%/10k");
-		expect(finalized).toContain("↑12 ↓14");
 		expect(finalized).toContain("$0.323");
 
 		footer.dispose?.();

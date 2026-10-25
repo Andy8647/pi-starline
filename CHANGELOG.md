@@ -22,6 +22,12 @@ colours, icons, the editor row, clickable pills — works as before.
 
 **Added**
 
+- **One clickable `context` pill.** The percentage is all the bar shows; clicking
+  it opens the window size, the tokens used this turn, the session's `↑in ↓out`
+  totals and the cache hit rate, refreshed while it streams. `tokens` and
+  `cacheHit` in `pill.segments` are rewritten to `context`, so an existing bar
+  keeps the numbers.
+
 - **A clickable `git` pill.** Branch, dirty markers and any operation in progress
   share one pill (`main [!?] REBASING`) instead of three. Clicking it lists what
   changed — up to a dozen paths, ahead/behind and stashes above them — refreshed

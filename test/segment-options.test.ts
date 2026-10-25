@@ -6,7 +6,7 @@ import {
 	buildTokenLabel,
 	formatBareContextPercent,
 } from "../extensions/starline/format";
-import { PILL_SEGMENT_VARIABLES } from "../extensions/starline/pill-config";
+import { normalizePillConfig, PILL_SEGMENT_VARIABLES } from "../extensions/starline/pill-config";
 
 const totals = {
 	input: 12_000,
@@ -176,8 +176,12 @@ describe("cacheHit as a standalone segment", () => {
 		expect(buildCacheHitLabel({ ...totals, latestCacheHitRate: undefined }, "⚡")).toBe("");
 	});
 
-	it("is a pill segment", () => {
-		expect(PILL_SEGMENT_VARIABLES.cacheHit).toBe("cache_hit");
+	it("rides in the context pill instead of a segment of its own", () => {
+		expect(PILL_SEGMENT_VARIABLES.cacheHit).toBeUndefined();
+		expect(normalizePillConfig({ segments: ["cacheHit", "cwd"] }).segments).toEqual([
+			"context",
+			"cwd",
+		]);
 	});
 
 	it("has its own colour, defaulting alongside tokens", () => {

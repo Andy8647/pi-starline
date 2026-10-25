@@ -10,7 +10,7 @@ Every option Starline has.
 | `pill` | object | see [Pill footer](#pill-footer) | Segment order, separator glyph, boldness, and cap style for the pill footer. |
 | `editorMetadataFormat` | string | `"$model  $provider(  $thinking)"` | Template for the left side of the editor metadata row, see [Editor Metadata Format](#editor-metadata-format). |
 | `contextStyle` | string | `"text"` | Whether the context segment shows text, a gauge, or both. |
-| `segmentOptions` | object | see [Segment display options](#segment-display-options) | Formatting details for the context and tokens segments. |
+| `segmentOptions` | object | see [Segment display options](#segment-display-options) | Formatting details for the context pill, the numbers in its bubble, and the subagents pill. |
 | `editorModelLabel` | string | `"id"` | Whether the editor frame shows the model id or its display name. |
 | `editorCursor` | string | `"block"` | Cursor style in the editor, see [Editor cursor](#editor-cursor). |
 | `editorClickCursor` | boolean | `true` | Clicking in the editor text moves the caret there, see [Mouse](#mouse). |
@@ -359,25 +359,24 @@ the publishing extension sent (its own `setStatus` text stays as it was).
 ```
 
 - `context.format` — `full` (default, `6%/200k`) or `percent` (`6%`). Orthogonal to `contextStyle`: the gauge is unaffected.
-- `tokens.cache` — `percent` (default, cache hit rate), `tokens` (raw cache-read count), or `off`.
+- `tokens.cache` — `percent` (default, cache hit rate), `tokens` (raw cache-read count), or `off`. The pill shows the percentage only; this shapes the session line in its bubble.
 - `subagents.format` — `agents` (default, `2 agents`) or `count` (`2`). Use `count` when `icons.subagents` already says what the number counts.
 
-The cache hit rate can also stand on its own rather than riding inside the tokens
-segment. Add `cacheHit` to `pill.segments` and set `tokens.cache` to `off` so it
-is not shown twice:
+### The context pill
 
-```json
-{
-	"pill": { "segments": ["cwd", "context", "tokens", "cacheHit", "cost"] },
-	"segmentOptions": { "tokens": { "cache": "off" } },
-	"icons": { "cacheHit": "" }
-}
-```
+One pill carries all the token accounting, and normally shows only the context
+percentage:
 
-`icons.cacheHit` is the glyph for that segment, and doubles as the inline glyph
-when the rate rides inside `tokens`. The segment renders nothing when there was no
-cache activity, or when the latest turn has no known rate, so it disappears rather
-than claiming a miss.
+| | |
+| --- | --- |
+| Pill | `41%` — or the gauge, per `contextStyle`, and `percent` drops the window size |
+| Bubble | `41% of 200k · 83k used`, the session's `↑250k ↓193k`, and the cache rate |
+
+Clicking it opens that bubble, which follows the numbers while a turn streams.
+`tokens` and `cacheHit` in `pill.segments` are rewritten to `context`, so an
+existing bar keeps the numbers instead of dropping them. The rate disappears
+from the bubble when nothing has been read from cache, or when the latest turn
+has no known rate, rather than claiming a miss.
 
 ## Git
 

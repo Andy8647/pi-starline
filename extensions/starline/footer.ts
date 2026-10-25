@@ -11,6 +11,7 @@ import {
 	getExtensionStatusIcon,
 	type PolishedTuiConfig,
 } from "./config";
+import { setActiveContextSnapshot } from "./context-live";
 import { collectExtensionStatusSegments, sanitizeExtensionStatusText } from "./extension-status";
 import {
 	buildContextDisplayLabel,
@@ -283,11 +284,17 @@ export function installFooter(
 							? config.colors.contextWarning
 							: config.colors.contextNormal;
 				const contextDisplay = withIcon(config.icons.context, contextLabel);
-				const tokensDisplay = withIcon(config.icons.tokens, state.tokenLabel);
 				const costDisplay = withIcon(config.icons.cost, state.costLabel);
-				// The cacheHit icon doubles as the tokens segment's inline cache glyph;
-				// state.cacheHitLabel already carries it, so no withIcon here.
-				const cacheHitDisplay = state.cacheHitLabel;
+				// The one pill shows a percentage; the rest of these numbers are only
+				// on screen while its bubble is open.
+				const contextTabTokens = useLiveContext ? liveContext.tokens : undefined;
+				setActiveContextSnapshot({
+					percent: contextPercent ?? undefined,
+					contextWindow,
+					tokens: contextTabTokens,
+					tokenLabel: state.tokenLabel,
+					cacheLabel: state.cacheHitLabel,
+				});
 				const git = renderGitSegments(state, config, theme, colorSource);
 				const renderVariable = (name: string): string => {
 					switch (name) {
@@ -360,12 +367,6 @@ export function installFooter(
 							);
 						case "context":
 							return renderStyleForSource(theme, colorSource, contextColor, contextDisplay);
-						case "tokens":
-							return renderStyleForSource(theme, colorSource, config.colors.tokens, tokensDisplay);
-						case "cache_hit":
-							return cacheHitDisplay
-								? renderStyleForSource(theme, colorSource, config.colors.cacheHit, cacheHitDisplay)
-								: "";
 						case "cost":
 							return renderStyleForSource(theme, colorSource, config.colors.cost, costDisplay);
 						case "package_version":
@@ -420,10 +421,6 @@ export function installFooter(
 							return state.runtime?.style ?? config.colors.runtimePrefix;
 						case "context":
 							return contextColor;
-						case "tokens":
-							return config.colors.tokens;
-						case "cacheHit":
-							return config.colors.cacheHit;
 						case "cost":
 							return config.colors.cost;
 						case "sessionDuration":

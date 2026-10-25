@@ -29,6 +29,7 @@ import {
 	saveUiFeaturesPatch,
 	type UiFeaturesConfig,
 } from "./config";
+import { setActiveContextSnapshot } from "./context-live";
 import {
 	getStarlineEditorBaseFactory,
 	isStarlineEditorFactory,
@@ -612,6 +613,7 @@ export default function (pi: ExtensionAPI) {
 			uninstallQueueRowHiding();
 			setActiveSubagentFleet(undefined);
 			setActiveGitStatus(undefined);
+			setActiveContextSnapshot(undefined);
 			setModelSwitcher(undefined);
 			uninstallPrototypePatches();
 			setWorkingIndicator(undefined);
