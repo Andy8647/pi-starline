@@ -12,6 +12,33 @@ npm.
 
 ## [Unreleased]
 
+A click outside a bubble now puts it away, the *Pills* tab can place a single
+extension status, and a bar with no git pill stops reading the repository.
+
+**Added**
+
+- **Clicking away closes a bubble.** Escape, the same pill and another pill
+already closed it; every other click left it on screen. A press anywhere outside
+the bubble now closes it, and the press is still delivered, so the caret moves or
+the line gets selected exactly as it would with no bubble open. A press on the
+footer row is left to the bar, where a pill asks for its own bubble to close or
+another pill replaces it. Nothing new is patched for this: the press is read
+where the pointer-shape patch already sees every pointer report.
+
+- **Per-status rows in the *Pills* tab.** Every status an extension published
+this session gets a row of its own (`extensionStatus:<key>`), so a single status
+can be placed on the bar from the menu instead of by editing `starline.json`. The
+*Other extensions* row still carries every status not placed by name, and a
+status listed both ways is drawn once, where the named row put it.
+
+**Changed**
+
+- **No git pill means no git read.** The refresh on its interval used to run
+`git status` and `git stash list` whatever the bar showed. It now reads the
+repository only when `git`, `gitCommit`, `gitTag` or `gitMetrics` is in
+`pill.segments`, and clears the branch the previous refresh drew when the last
+git pill goes away.
+
 ## [0.5.0] - 2026-10-25
 
 Two things happened at once. The footer has one style now: pills. The text
@@ -647,7 +674,8 @@ What this fork adds over upstream:
   selection
 - Paste collapsing, with paste-again-to-expand
 
-[Unreleased]: https://github.com/Andy8647/pi-starline/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/Andy8647/pi-starline/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/Andy8647/pi-starline/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Andy8647/pi-starline/compare/v0.3.9...v0.4.0
 [0.3.9]: https://github.com/Andy8647/pi-starline/compare/v0.3.8...v0.3.9
 [0.3.8]: https://github.com/Andy8647/pi-starline/compare/v0.3.7...v0.3.8
