@@ -1,6 +1,7 @@
 import { AgentSession } from "@earendil-works/pi-coding-agent";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+	cycleThinkingLevel,
 	forgetLiveSession,
 	installLiveSessionCapture,
 	readPendingMessages,
@@ -102,9 +103,97 @@ describe("live session capture", () => {
 		expect(prototype.prompt).toBe(stubbed);
 	});
 
-	it("does nothing when the build has no prompt to wrap", () => {
+	it("does nothing when a method it wraps is missing", () => {
 		prototype.prompt = undefined;
 		expect(() => installLiveSessionCapture()).not.toThrow();
 		expect(readPendingMessages()).toBeUndefined();
+		expect(cycleThinkingLevel()).toBeUndefined();
+	});
+});
+
+describe("thinking cycle", () => {
+	type ThinkingSession = {
+		thinkingLevel: string;
+		getAvailableThinkingLevels: () => string[];
+		setThinkingLevel: ReturnType<typeof vi.fn>;
+	};
+
+	async function capture(session: ThinkingSession): Promise<() => void> {
+		stubPrompt();
+		const dispose = installLiveSessionCapture();
+		await (prototype.prompt as PromptCall).call(session, "hi");
+		return dispose;
+	}
+
+	it("steps forward and reports both ends", async () => {
+		const session: ThinkingSession = {
+			thinkingLevel: "high",
+			getAvailableThinkingLevels: () => ["off", "minimal", "low", "medium", "high", "xhigh"],
+			setThinkingLevel: vi.fn(),
+		};
+		const dispose = await capture(session);
+		try {
+			expect(cycleThinkingLevel()).toEqual({ from: "high", to: "xhigh" });
+			expect(session.setThinkingLevel).toHaveBeenCalledWith("xhigh");
+		} finally {
+			dispose();
+		}
+	});
+
+	it("wraps around without ever landing on off", async () => {
+		const session: ThinkingSession = {
+			thinkingLevel: "xhigh",
+			getAvailableThinkingLevels: () => ["off", "minimal", "low", "medium", "high", "xhigh"],
+			setThinkingLevel: vi.fn(),
+		};
+		const dispose = await capture(session);
+		try {
+			expect(cycleThinkingLevel()).toEqual({ from: "xhigh", to: "minimal" });
+		} finally {
+			dispose();
+		}
+	});
+
+	it("starts at the first level when the current one is not listed", async () => {
+		const session: ThinkingSession = {
+			thinkingLevel: "odd",
+			getAvailableThinkingLevels: () => ["off", "low", "high"],
+			setThinkingLevel: vi.fn(),
+		};
+		const dispose = await capture(session);
+		try {
+			expect(cycleThinkingLevel()).toEqual({ from: "odd", to: "low" });
+		} finally {
+			dispose();
+		}
+	});
+
+	it("stays inert without a session or without the setters", async () => {
+		expect(cycleThinkingLevel()).toBeUndefined();
+
+		const session = {
+			thinkingLevel: "low",
+			getAvailableThinkingLevels: () => ["low"],
+		};
+		const dispose = await capture(session as unknown as ThinkingSession);
+		try {
+			expect(cycleThinkingLevel()).toBeUndefined();
+		} finally {
+			dispose();
+		}
+	});
+
+	it("returns undefined when the only available level is off", async () => {
+		const session: ThinkingSession = {
+			thinkingLevel: "off",
+			getAvailableThinkingLevels: () => ["off"],
+			setThinkingLevel: vi.fn(),
+		};
+		const dispose = await capture(session);
+		try {
+			expect(cycleThinkingLevel()).toBeUndefined();
+		} finally {
+			dispose();
+		}
 	});
 });

@@ -25,9 +25,14 @@ Four actions motivated this, in the order they are worth building:
 | Pill | Click |
 | --- | --- |
 | queue indicator | list what is queued (steering / follow-up) |
+| thinking level | step to the next level the model supports |
 | model | pick a model, reusing Pi's own selector component |
 | git branch | switch branch, after a dirty-worktree check |
 | any extension status | let the extension decide (at minimum: show its full text) |
+
+Thinking was not in the original four: it arrived second because the pill is on
+screen from the first frame, which makes it the honest way to check that a click
+works without staging anything.
 
 ## What Pi already provides
 
@@ -148,6 +153,10 @@ cut into the bottom border) lands over the pill. Without an anchor — the
 tail. Opening a second bubble closes the first, so clicking another pill swaps the
 popover instead of stacking overlays.
 
+The heading is a body row rather than a gap in the top border, which keeps the
+outline unbroken and the four rounded corners readable. Terminals stop at a
+one-cell radius (`╭ ╮ ╰ ╯`), so that is the roundest a cell grid allows.
+
 The panel closes on Escape (and Enter) through its own `handleInput`. Pi owns the
 overlay, but not the meaning of Escape inside it, so the dismiss key is part of the
 component rather than something the overlay stack does for us.
@@ -159,22 +168,36 @@ component rather than something the overlay stack does for us.
 `getFollowUpMessages()`. What interactive mode does not hand out is the session
 instance — the context has the session manager, not the session.
 
-**As built:** `live-session.ts` captures the instance by wrapping
-`AgentSession.prompt` through the same prototype-patch registry the mouse layer
-uses; the first prompt of a session records its receiver. The queue bubble then
-lists the count and up to three messages, followed by `+N more`. When the wrapper
-is not in place (older Pi, or a session that never prompted after Starline loaded)
-the bubble falls back to explaining the wait, and the pill still says `queued`.
+**As built:** `live-session.ts` captures the instance from two methods the footer
+already reaches — `getContextUsage()` on every render, and `prompt()` for a queue
+that predates Starline loading — through the same prototype-patch registry the
+mouse layer uses. The queue bubble then lists the count and up to three messages,
+followed by `+N more`. When neither wrapper is in place (older Pi) the bubble
+falls back to explaining the wait, and the pill still says `queued`.
 
-This is the one place phase 1 gained a patch, and it is meant to be temporary: the
-upstream fix is a `pendingMessages` field on the extension context, after which
-`live-session.ts` can be deleted without touching the bubble.
+The same captured session drives the thinking action: `cycleThinkingLevel()`
+reads `getAvailableThinkingLevels()`, drops `off` so the pill cannot click itself
+off the screen, and steps with `setThinkingLevel()`.
+
+## Hiding Pi's own queue rows
+
+Pi draws `Steering: …` rows and a dequeue hint above the editor from
+`InteractiveMode.updatePendingMessagesDisplay`, and no extension API reaches that
+container. `queue-rows.ts` wraps the method through the registry: while the queue
+pill is actually in the bar (`footerStyle: "pill"`, `pill.segments` contains
+`queue`, status line on), it clears the container instead of refilling it. The
+predicate is read on every queue update, so the rows return the moment the pill is
+configured away — no restart, and no key to remember.
+
+Both wrappers are meant to be temporary. The upstream fix is a `pendingMessages`
+field on the extension context plus a switch for the rows; `live-session.ts` and
+`queue-rows.ts` then go away without touching the bubble.
 
 ## Phasing
 
 | Phase | Content | Effort |
 | --- | --- | --- |
-| 1 ✅ | Footer `handleMouse`, pill span sink, action table, `/starline` action commands, speech-bubble popover, one action (queue status → bubble listing what is queued) | M |
+| 1 ✅ | Footer `handleMouse`, pill span sink, action table, `/starline` action commands, speech-bubble popover, two actions (queue status → bubble listing what is queued; thinking level → step and report it) | M |
 | 2 | Model picker via `ModelSelectorComponent` | M |
 | 3 | Branch switcher (list local branches, confirm on a dirty worktree, `git checkout`) | M |
 | 4 | Extension-status click hook: a status key opts in by publishing structured data | S–M |
@@ -213,11 +236,12 @@ landed as `extensions/starline/pill-actions.ts` (the table and the queue action)
 - **Which segments are safe to make clickable.** `gitStatus`, `tokens` and `context`
   are read-outs; a click that does nothing is worse than an inert pill, so they
   stay inert until there is something to show.
-- **The session capture is a patch.** `AgentSession.prompt` is public and the wrap
-  only records `this`, but a future Pi could move the queue off the session or make
-  `prompt` an instance field. The wrapper is installed through the registry with a
-  guard and the bubble falls back to the boolean text, so the failure mode is a less
-  detailed bubble rather than a broken pill.
+- **The session capture is a patch.** `AgentSession.prompt` and `getContextUsage`
+  are public and the wrappers only record `this`, and `updatePendingMessagesDisplay`
+  is public too, but a future Pi could move the queue or rename the container. The
+  wrappers are installed through the registry with guards and the bubble falls back
+  to the boolean text, so the failure mode is a less detailed bubble rather than a
+  broken pill.
 - **Terminal mouse reporting is per-frame.** A terminal that drops mouse reporting
   (some multiplexers) leaves the pills dead but harmless: no keyboard path is
   removed, so the feature degrades to today's behaviour.

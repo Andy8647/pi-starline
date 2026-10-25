@@ -191,6 +191,7 @@ const directCommandSuggestions = [
 	"mouse disable",
 	"mouse toggle",
 	"queue",
+	"thinking",
 	"format clear",
 	"format $cwd on $git_branch $fill $context",
 	"format $cwd( on $git_branch)($git_status)$fill($context)( | $cost)",

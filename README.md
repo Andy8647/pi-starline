@@ -32,7 +32,11 @@ pieces of one product, not a theme:
 - **Clickable queue pill** — while messages wait for the current turn, the pill bar
   gains a `queued` pill; click it (or run `/starline queue`) and a speech bubble in
   the pill's own colour opens above it, listing how many messages are waiting and
-  their first lines
+  their first lines. Pi's own duplicate `Steering: …` rows above the editor are
+  hidden while the pill is on
+- **Clickable thinking pill** — one click steps to the next thinking level the model
+  supports and reports the step in the same bubble; `/starline thinking` for the
+  keyboard
 - Right side shows context usage, token counts, and cost
 - Built-in footer segments can be shown or hidden individually from `/starline`
 - Fully custom Starship-style layout via a `footerFormat` template string — see [Footer Format Template](https://github.com/Andy8647/pi-starline/blob/main/docs/configuration.md#footer-format-template)

@@ -103,13 +103,12 @@ describe("renderPillBubble", () => {
 		}
 	});
 
-	it("puts the title in the top border and the hint at the bottom", () => {
-		const text = render()
-			.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""))
-			.join("\n");
-		expect(text.split("\n")[0]).toContain("2 messages queued");
-		expect(text).toContain("esc to close");
-		expect(text).toContain("· first");
+	it("keeps the outline unbroken and puts the title inside", () => {
+		const lines = render().map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+		expect(lines[0]).toBe(`╭${"─".repeat(38)}╮`);
+		expect(lines[1]).toContain("2 messages queued");
+		expect(lines.join("\n")).toContain("esc to close");
+		expect(lines.join("\n")).toContain("· first");
 	});
 
 	it("cuts the tail into the bottom border, never into a corner", () => {

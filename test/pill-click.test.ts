@@ -7,7 +7,11 @@ import { installFooter } from "../extensions/starline/footer";
 import { emptyGitStatus } from "../extensions/starline/git";
 import { forgetLiveSession, installLiveSessionCapture } from "../extensions/starline/live-session";
 import { type PillInput, type PillSpan, renderPillBar } from "../extensions/starline/pill";
-import { hasQueuedMessages, pillActionFor } from "../extensions/starline/pill-actions";
+import {
+	hasQueuedMessages,
+	pillActionFor,
+	runPillAction,
+} from "../extensions/starline/pill-actions";
 import { DEFAULT_PILL_CONFIG, type PillConfig } from "../extensions/starline/pill-config";
 import { registerStarlineSettingsCommand } from "../extensions/starline/settings-command";
 import { createInitialState } from "../extensions/starline/state";
@@ -247,9 +251,10 @@ describe("footer pill clicks", () => {
 	});
 });
 
-describe("queue action", () => {
+describe("pill actions", () => {
 	it("only builtin segments have actions; a status with the same key does not", () => {
 		expect(pillActionFor("queue")).toBeTypeOf("function");
+		expect(pillActionFor("thinking")).toBeTypeOf("function");
 		expect(pillActionFor("model")).toBeUndefined();
 		expect(pillActionFor("gitBranch")).toBeUndefined();
 		expect(pillActionFor("extensionStatus:queue")).toBeUndefined();
@@ -344,6 +349,66 @@ describe("queue action", () => {
 		}
 	});
 
+	it("cycles thinking and reports the step", async () => {
+		const prototype = AgentSession.prototype as unknown as { prompt: unknown };
+		const originalPrompt = prototype.prompt;
+		prototype.prompt = vi.fn(async () => {});
+		const dispose = installLiveSessionCapture();
+		try {
+			const session = {
+				thinkingLevel: "high",
+				getAvailableThinkingLevels: () => ["off", "low", "high", "xhigh"],
+				setThinkingLevel: vi.fn(),
+			};
+			await (prototype.prompt as (this: unknown, text: string) => Promise<void>).call(
+				session,
+				"hi",
+			);
+
+			const custom = vi.fn().mockResolvedValue(undefined);
+			const action = pillActionFor("thinking");
+			runPillAction(action as never, { hasUI: true, ui: { custom } } as never, {
+				centerColumn: 20,
+				terminalWidth: 80,
+				background: "\x1b[48;5;3m",
+				foreground: "",
+			});
+
+			const [factory, options] = custom.mock.calls[0] ?? [];
+			const width =
+				(options as { overlayOptions?: { width?: number } }).overlayOptions?.width ?? 40;
+			const bubble = (factory as BubbleFactory)({}, theme, {}, vi.fn());
+			const text = bubble.render(width).map(plain).join("\n");
+
+			expect(text).toContain("high → xhigh");
+			expect(session.setThinkingLevel).toHaveBeenCalledWith("xhigh");
+		} finally {
+			dispose();
+			prototype.prompt = originalPrompt;
+			forgetLiveSession();
+		}
+	});
+
+	it("reports the current level when the session cannot cycle it", () => {
+		const custom = vi.fn().mockResolvedValue(undefined);
+		const action = pillActionFor("thinking");
+		runPillAction(
+			action as never,
+			{ hasUI: true, thinkingLevel: "medium", ui: { custom } } as never,
+			{
+				centerColumn: 20,
+				terminalWidth: 80,
+				background: "\x1b[48;5;3m",
+				foreground: "",
+			},
+		);
+
+		const [factory, options] = custom.mock.calls[0] ?? [];
+		const width = (options as { overlayOptions?: { width?: number } }).overlayOptions?.width ?? 40;
+		const bubble = (factory as BubbleFactory)({}, theme, {}, vi.fn());
+		expect(bubble.render(width).map(plain).join("\n")).toContain("Current level: medium");
+	});
+
 	it("is reachable from the keyboard as /starline queue", async () => {
 		let handler: ((args: string, ctx: unknown) => Promise<void>) | undefined;
 		registerStarlineSettingsCommand(
@@ -355,7 +420,7 @@ describe("queue action", () => {
 			{ getConfig: () => defaultConfig, requestRender() {} } as never,
 		);
 
-		const custom = vi.fn();
+		const custom = vi.fn().mockResolvedValue(undefined);
 		const notify = vi.fn();
 		const ctx = {
 			hasUI: true,

@@ -14,7 +14,7 @@
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
-import { readPendingMessages } from "./live-session";
+import { cycleThinkingLevel, readPendingMessages } from "./live-session";
 import { type PillAnchor, type PillBubbleContent, showPillBubble } from "./pill-bubble";
 import { PILL_SEGMENT_VARIABLES } from "./pill-config";
 
@@ -108,11 +108,46 @@ function showQueuedMessages({ ctx, pill }: PillActionContext): void {
 }
 
 /**
+ * Step the thinking level and say where it landed.
+ *
+ * The pill is the read-out, so the bubble only has to report the step; the footer
+ * re-renders from `thinking_level_select` and shows the new level in place.
+ */
+function showThinkingLevel({ ctx, pill }: PillActionContext): void {
+	const cycled = cycleThinkingLevel();
+	if (!cycled) {
+		const current = ctx.thinkingLevel ?? "";
+		showPillBubble(
+			ctx,
+			{
+				title: "Thinking",
+				body: current
+					? [`Current level: ${current}.`, "This session cannot change it from here."]
+					: ["This model has no thinking level to cycle."],
+				hint: "esc to close",
+			},
+			pill,
+		);
+		return;
+	}
+	showPillBubble(
+		ctx,
+		{
+			title: "Thinking",
+			body: [`${cycled.from} → ${cycled.to}`],
+			hint: "esc to close",
+		},
+		pill,
+	);
+}
+
+/**
  * Segment key → action. Segments with no entry are labels: a click on one is not
  * handled, so nothing is swallowed.
  */
 export const PILL_ACTIONS: Readonly<Partial<Record<string, PillAction>>> = {
 	queue: showQueuedMessages,
+	thinking: showThinkingLevel,
 };
 
 /**

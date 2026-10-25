@@ -107,8 +107,8 @@ export function pillBubblePlacement(
 }
 
 /**
- * Render the bubble: rounded box in the pill's colours, body wrapped to fit, and
- * a `▽` cut into the bottom border where the tail points.
+ * Render the bubble: a rounded box in the pill's colours, the body wrapped to
+ * fit, and a `▽` cut into the bottom border where the tail points.
  */
 export function renderPillBubble(input: {
 	content: PillBubbleContent;
@@ -131,15 +131,10 @@ export function renderPillBubble(input: {
 	const row = (text: string) =>
 		paint(`│ ${text}${" ".repeat(Math.max(0, innerWidth - visibleWidth(text)))} │`);
 
-	const lines: string[] = [];
-	const heading = input.content.title;
-	if (heading) {
-		const label = `${BOLD} ${heading} ${ATTR_OFF}`;
-		const rule = Math.max(0, width - 3 - visibleWidth(label));
-		lines.push(paint(`╭─${label}${"─".repeat(rule)}╮`));
-	} else {
-		lines.push(paint(`╭${"─".repeat(Math.max(0, width - 2))}╮`));
-	}
+	const lines: string[] = [paint(`╭${"─".repeat(Math.max(0, width - 2))}╮`)];
+	// The heading is a body row, not a gap in the top border: an unbroken outline
+	// is what makes the four rounded corners read as a shape rather than a panel.
+	if (input.content.title) lines.push(row(`${BOLD}${input.content.title}${ATTR_OFF}`));
 
 	for (const paragraph of input.content.body) {
 		for (const line of wrapTextWithAnsi(paragraph, innerWidth)) lines.push(row(line));

@@ -59,6 +59,7 @@ import {
 	startProjectRefreshInterval,
 } from "./project-refresh";
 import { applyProjectRefreshToState } from "./project-state";
+import { installNativeQueueRowHiding } from "./queue-rows";
 import { readRuntimeInfo } from "./runtime";
 import { installSelectorBorderStyle } from "./selector-border";
 import { SessionLifecycle } from "./session-lifecycle";
@@ -107,6 +108,7 @@ export default function (pi: ExtensionAPI) {
 	let disposePasteCollapse: (() => void) | undefined;
 	let disposeMouse: (() => void) | undefined;
 	let cleanupSessionCapture: (() => void) | undefined;
+	let cleanupQueueRows: (() => void) | undefined;
 
 	const refresh = () => {
 		if (sessionLifecycle.isCurrent()) requestFooterRender?.();
@@ -269,6 +271,27 @@ export default function (pi: ExtensionAPI) {
 		cleanupSessionCapture?.();
 		cleanupSessionCapture = undefined;
 		forgetLiveSession();
+	};
+
+	/**
+	 * Pi's own `Steering:` rows above the editor are the same information the queue
+	 * pill carries, so they are hidden exactly while the pill is on screen. The
+	 * predicate is read on every queue update, so `/starline` changes apply without
+	 * a restart.
+	 */
+	const queuePillCarriesTheQueue = () =>
+		currentConfig.features.statusLine &&
+		currentConfig.footerStyle === "pill" &&
+		currentConfig.pill.segments.includes("queue");
+
+	const installQueueRowHiding = () => {
+		cleanupQueueRows?.();
+		cleanupQueueRows = installNativeQueueRowHiding(queuePillCarriesTheQueue);
+	};
+
+	const uninstallQueueRowHiding = () => {
+		cleanupQueueRows?.();
+		cleanupQueueRows = undefined;
 	};
 
 	/**
@@ -526,6 +549,7 @@ export default function (pi: ExtensionAPI) {
 		syncFooterState(ctx);
 		stopProjectRefresh();
 		installSessionCapture();
+		installQueueRowHiding();
 		applyConfiguredUi(ctx);
 		installMousePatches();
 		refresh();
@@ -548,6 +572,7 @@ export default function (pi: ExtensionAPI) {
 		try {
 			uninstallMouse();
 			uninstallSessionCapture();
+			uninstallQueueRowHiding();
 			uninstallPrototypePatches();
 			setWorkingIndicator(undefined);
 			stopSessionTimer();
