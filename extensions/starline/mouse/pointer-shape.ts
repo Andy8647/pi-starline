@@ -18,9 +18,15 @@
  * component's `handleMouse` returns, with the renderer writing OSC 22 itself.
  * When Pi ships that, the callers return `{ pointer: "pointer" }` instead and this
  * file goes away.
+ *
+ * The same patch is the process's only view of every pointer report, so it also
+ * publishes each one to `pointer-events` before dispatching. The pill bubble's
+ * outside-click dismissal is the second reader; see that module for why it does
+ * not get a patch of its own.
  */
 
 import { installPrototypePatch } from "../prototype-patch-registry";
+import { type PointerEventRaw, type PointerReceiver, publishPointerEvent } from "./pointer-events";
 
 /** CSS cursor names; `default` is the terminal's own arrow. */
 export type PointerShape = "default" | "pointer" | "text";
@@ -73,6 +79,11 @@ function resetPointer(): void {
  * through before Pi dispatches it. Returns undefined on a build without it — that
  * is a Pi without component mouse events, so there is nothing clickable to point
  * at either.
+ *
+ * Every report is published to `pointer-events` first, before the shape logic and
+ * before Pi dispatches: the pill bubble's outside-click dismissal is a second
+ * reader of the same method, and one patch per method is the registry's rule.
+ * Nothing about the pointer shape depends on that.
  */
 export function installPointerShape(prototype: object): (() => void) | undefined {
 	const target = prototype as Record<string, unknown>;
@@ -86,6 +97,10 @@ export function installPointerShape(prototype: object): (() => void) | undefined
 			"handleMouseEvent",
 			"mouse-pointer-shape",
 			({ predecessor, receiver, args }) => {
+				const raw = args[0] as PointerEventRaw | undefined;
+				if (raw && Number.isFinite(raw.x) && Number.isFinite(raw.y)) {
+					publishPointerEvent(raw, receiver as PointerReceiver);
+				}
 				if (!isHover(args[0] as MouseEventRaw | undefined)) {
 					return Reflect.apply(predecessor, receiver, args);
 				}
