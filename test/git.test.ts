@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -255,8 +255,14 @@ describe("git probes never write to the repository", () => {
 		run("add", "file.txt");
 		run("commit", "--quiet", "-m", "initial");
 		// A changed file is what makes git want to refresh the index on the next
-		// status: without the opt-out, `status` rewrites it.
-		writeFileSync(join(root, "file.txt"), "one\ntwo\n");
+		// status: without the opt-out, `status` rewrites it. The mtime is pushed a
+		// little into the future, because git treats a file whose timestamp equals
+		// the index's as "racy" and may skip the refresh — which made the control
+		// test below fail now and then on fast disks.
+		const edited = join(root, "file.txt");
+		writeFileSync(edited, "one\ntwo\n");
+		const future = new Date(Date.now() + 2000);
+		utimesSync(edited, future, future);
 		return root;
 	}
 
