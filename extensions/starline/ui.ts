@@ -31,16 +31,6 @@ import {
 
 const SPLIT_POLISHED_FRAME: unique symbol = Symbol.for("pi-starline.polished-frame");
 
-/**
- * The key this package used before it was renamed from pi-zentui. Read, never
- * written as the primary key: if both packages are loaded in the same
- * session, a base editor built by either one must still resolve the
- * splitter, or the wrapper double-renders the inner frame instead of
- * unwrapping it. See the alias assignments after each class below, which
- * expose the splitter under this key too so the reverse direction resolves.
- */
-const LEGACY_SPLIT_POLISHED_FRAME: unique symbol = Symbol.for("pi-zentui.polished-frame");
-
 type PolishedFrameSplit = {
 	editorLines: string[];
 	trailingLines: string[];
@@ -73,7 +63,6 @@ type WrappedEditor = EditorComponent &
 		setPaddingX?: (padding: number) => void;
 		setAutocompleteMaxVisible?: (maxVisible: number) => void;
 		[SPLIT_POLISHED_FRAME]?: (lines: string[]) => PolishedFrameSplit | undefined;
-		[LEGACY_SPLIT_POLISHED_FRAME]?: (lines: string[]) => PolishedFrameSplit | undefined;
 	};
 
 type EditorMeta = {
@@ -636,10 +625,6 @@ export class PolishedEditor extends CustomEditor {
 		return splitPolishedFrame(lines, this.getConfig(), this.uiTheme);
 	}
 }
-// Also resolvable under the pre-rename key, so a pi-zentui wrapper reading a
-// pi-starline-built base still finds the splitter.
-(PolishedEditor.prototype as unknown as Record<PropertyKey, unknown>)[LEGACY_SPLIT_POLISHED_FRAME] =
-	PolishedEditor.prototype[SPLIT_POLISHED_FRAME];
 
 export class WrappedPolishedEditor implements EditorComponent {
 	/**
@@ -758,9 +743,7 @@ export class WrappedPolishedEditor implements EditorComponent {
 			// from them and redrawn by Starline's own borders.
 			scrollTop: readScrollCount(rendered[0], "↑"),
 			scrollBottom: readScrollCount(rendered.at(-1), "↓"),
-			splitBaseFrame: (
-				this.base[SPLIT_POLISHED_FRAME] ?? this.base[LEGACY_SPLIT_POLISHED_FRAME]
-			)?.bind(this.base),
+			splitBaseFrame: this.base[SPLIT_POLISHED_FRAME]?.bind(this.base),
 		});
 	}
 
@@ -832,8 +815,3 @@ export class WrappedPolishedEditor implements EditorComponent {
 		return this.base.getAutocompleteMaxVisible?.();
 	}
 }
-// Also resolvable under the pre-rename key, so a pi-zentui wrapper reading a
-// pi-starline-built base still finds the splitter.
-(WrappedPolishedEditor.prototype as unknown as Record<PropertyKey, unknown>)[
-	LEGACY_SPLIT_POLISHED_FRAME
-] = WrappedPolishedEditor.prototype[SPLIT_POLISHED_FRAME];

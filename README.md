@@ -51,8 +51,6 @@ pi install npm:pi-starline
 pi install git:github.com/Andy8647/pi-starline
 ```
 
-Coming from pi-zentui? `mv ~/.pi/agent/zentui.json ~/.pi/agent/starline.json`, then rename any `colorMode: "zentui"` to `colorMode: "themed"`.
-
 What changed in each version: **[Changelog](https://github.com/Andy8647/pi-starline/blob/main/CHANGELOG.md)**.
 
 ## Configure
@@ -88,7 +86,7 @@ npm run pi:dev       # run Pi with this checkout and no other extensions
 
 ## Credits
 
-Forked from [pi-zentui](https://github.com/lmilojevicc/pi-zentui) by Luka, whose work is the foundation of this project; it has since grown a pill footer, a colour palette, clickable pills and mouse control of its own. Inspired by [Starship](https://starship.rs/) and [Opencode](https://github.com/opencode-ai/opencode).
+Started as a fork of [pi-zentui](https://github.com/lmilojevicc/pi-zentui) by Luka. Inspired by [Starship](https://starship.rs/) and [Opencode](https://github.com/opencode-ai/opencode).
 
 ## License
 

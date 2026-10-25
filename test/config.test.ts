@@ -1138,6 +1138,6 @@ describe("config identity after the starline rename", () => {
 	it("accepts themed and original, and rejects the old brand name", () => {
 		expect(isExtensionStatusColorMode("themed")).toBe(true);
 		expect(isExtensionStatusColorMode("original")).toBe(true);
-		expect(isExtensionStatusColorMode("zentui")).toBe(false);
+		expect(isExtensionStatusColorMode("neon")).toBe(false);
 	});
 });

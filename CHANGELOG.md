@@ -38,6 +38,11 @@ colours, icons, the editor row, clickable pills — works as before.
   `git.counts`. A pill that was listed but toggled off here now shows, which is
   the behaviour the docs claimed all along.
 
+- **Side-by-side compatibility with pi-zentui.** The editor-factory marker, the
+  prototype patch registry and the polished-frame splitter no longer answer to
+  the pre-rename keys. Running both packages in one session now wraps the editor
+  twice, so remove one of them.
+
 - **`gitBranch`, `gitHostIcon`, `gitCommit`, `gitMetrics`.** The four flat keys
   are now one `git` block: `git.branch.maxLength`, `git.hostIcon`,
   `git.commit.{hashLength,onlyDetached,showTag}`, `git.metrics.{onlyNonzero,ignoreSubmodules}`,
