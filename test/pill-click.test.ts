@@ -11,6 +11,7 @@ import { type PillInput, type PillSpan, renderPillBar } from "../extensions/star
 import {
 	hasQueuedMessages,
 	pillActionFor,
+	queuedSegmentText,
 	runPillAction,
 } from "../extensions/starline/pill-actions";
 import { DEFAULT_PILL_CONFIG, type PillConfig } from "../extensions/starline/pill-config";
@@ -180,6 +181,9 @@ type BubbleFactory = (
 	done: (result: void) => void,
 ) => { render(width: number): string[]; handleInput(data: string): void };
 
+/** The queue pill's default Nerd Font icon (fa-inbox). */
+const QUEUE_ICON = "\uf01c";
+
 /** Column of `needle` in a rendered footer line; SGR sequences have no width. */
 function columnOf(line: string, needle: string): number {
 	const index = plain(line).indexOf(needle);
@@ -315,10 +319,40 @@ describe("pill actions", () => {
 		).toBe(false);
 	});
 
+	it("shows the icon and the count, and keeps a word when either is missing", async () => {
+		const queued = { hasPendingMessages: () => true } as never;
+		expect(queuedSegmentText({ hasPendingMessages: () => false } as never, QUEUE_ICON)).toBe("");
+		// No live session: the count is unknown, so the pill says what it can.
+		expect(queuedSegmentText(queued, QUEUE_ICON)).toBe(`${QUEUE_ICON} queued`);
+		expect(queuedSegmentText(queued)).toBe("queued");
+
+		const prototype = AgentSession.prototype as unknown as { prompt: unknown };
+		const originalPrompt = prototype.prompt;
+		prototype.prompt = vi.fn(async () => {});
+		const dispose = installLiveSessionCapture();
+		try {
+			const session = {
+				getSteeringMessages: () => ["a", "b"],
+				getFollowUpMessages: () => ["c"],
+			};
+			await (prototype.prompt as (this: unknown, text: string) => Promise<void>).call(
+				session,
+				"hi",
+			);
+			expect(queuedSegmentText(queued, QUEUE_ICON)).toBe(`${QUEUE_ICON} 3`);
+			// No icon (ascii): a bare digit would be a mystery, so the word stays.
+			expect(queuedSegmentText(queued)).toBe("3 queued");
+		} finally {
+			dispose();
+			prototype.prompt = originalPrompt;
+			forgetLiveSession();
+		}
+	});
+
 	it("points the bubble at the pill it was opened from", () => {
 		const { footer, custom } = makeFooter({ queued: true });
 		const line = footer.render(80)[0] ?? "";
-		const x = columnOf(line, "queued");
+		const x = columnOf(line, QUEUE_ICON);
 		footer.handleMouse?.({ type: "click", x, y: 0, width: 80 });
 
 		const [factory, options] = custom.mock.calls[0] ?? [];
@@ -327,7 +361,7 @@ describe("pill actions", () => {
 		// One row up, so the bubble's last line sits right on top of the pill.
 		expect(overlay?.offsetY).toBe(-1);
 		expect(overlay?.anchor).toBe("bottom-left");
-		// Lined up with the pill's first coloured cell: the pad before the text.
+		// Lined up with the pill's first coloured cell: the pad before the icon.
 		expect(overlay?.offsetX).toBe(x - 1);
 	});
 
@@ -391,7 +425,10 @@ describe("pill actions", () => {
 
 			const { footer, custom } = makeFooter({ queued: true });
 			const line = footer.render(80)[0] ?? "";
-			footer.handleMouse?.({ type: "click", x: columnOf(line, "queued"), y: 0, width: 80 });
+			// With the session readable the pill carries the count, not the word.
+			expect(plain(line)).toContain(`${QUEUE_ICON} 2`);
+			expect(plain(line)).not.toContain("queued");
+			footer.handleMouse?.({ type: "click", x: columnOf(line, QUEUE_ICON), y: 0, width: 80 });
 
 			const [factory, options] = custom.mock.calls[0] ?? [];
 			const width =

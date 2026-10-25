@@ -62,11 +62,17 @@ export function hasQueuedMessages(ctx: ExtensionContext): boolean {
 }
 
 /**
- * The queue pill's text: a word, never a number — the pill is the signal, the
- * bubble is where the detail goes.
+ * The queue pill's text: the icon and how many messages wait (`<icon> 3`). The
+ * count needs the live session; without it the pill still says `queued`. With no
+ * icon (ascii mode) the number keeps its word, `3 queued`, so a bare digit never
+ * stands in the bar unexplained.
  */
-export function queuedSegmentText(ctx: ExtensionContext): string {
-	return hasQueuedMessages(ctx) ? "queued" : "";
+export function queuedSegmentText(ctx: ExtensionContext, icon = ""): string {
+	if (!hasQueuedMessages(ctx)) return "";
+	const pending = readPendingMessages();
+	const count = pending ? pending.steering.length + pending.followUp.length : 0;
+	if (count > 0) return icon ? `${icon} ${count}` : `${count} queued`;
+	return icon ? `${icon} queued` : "queued";
 }
 
 /**

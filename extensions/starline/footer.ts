@@ -511,7 +511,7 @@ export function installFooter(
 								theme,
 								colorSource,
 								config.colors.queue,
-								queuedSegmentText(ctx),
+								queuedSegmentText(ctx, config.icons.queue),
 							);
 						case "subagents":
 							return renderStyleForSource(

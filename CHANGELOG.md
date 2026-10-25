@@ -16,12 +16,12 @@ npm.
 
 - **The queue now shows up in the footer, and clicking it shows what is queued.** In
   the pill footer a new `queue` segment appears while messages are waiting for the
-  current turn to end — a pill reading `queued`, gone again as soon as the queue
-  drains, so it costs nothing the rest of the time. Clicking it, or running
+  current turn to end — an inbox icon and the count (`3`), gone again as soon as
+  the queue drains, so it costs nothing the rest of the time. Clicking it, or running
   `/starline queue`, opens a bubble that grows up out of the pill, in the pill's own
   colour, with the count in the heading (`2 messages queued`) and the first lines of
-  each message in the body. The pill keeps
-  saying a word rather than a number, because it is one segment wide.
+  each message in the body. When Pi does not let the count be read, the pill says
+  `queued` instead; with icons off it reads `3 queued`. The icon is `icons.queue`.
 
   Pi's own `Steering: …` rows and the dequeue hint above the editor are hidden while
   the queue pill is in the bar, so the queue is shown once instead of twice. Remove
@@ -29,7 +29,7 @@ npm.
 
   `queue` is part of the default pill bar. If you maintain your own
   `pill.segments`, add `"queue"` to it; `colors.queue` (default `bold yellow`)
-  colours the pill and the bubble, and `$queue` renders the same word in a text
+  colours the pill and the bubble, and `$queue` renders the same text in a text
   `footerFormat`.
 
 - **The thinking pill picks the level.** Clicking it opens a list of the thinking
@@ -51,9 +51,9 @@ npm.
   sitting directly on the footer row, so the colour runs from the bubble into the
   pill. No rounded corners or tail: in a terminal those are glyph fakes that leave
   seams at the cell edges. Clicking a second pill swaps the bubble instead of
-  stacking overlays, and a body line that declares a callback is underlined and
-  runs it when clicked. The next actions (model picker, branch switcher) get the
-  popover for free. Design and phases are in
+  stacking overlays, clicking the same pill again closes its bubble, and a body
+  line that declares a callback is underlined and runs it when clicked. The model
+  picker and the subagents list use the same popover. Design and phases are in
   [docs/clickable-pills.md](https://github.com/Andy8647/pi-starline/blob/main/docs/clickable-pills.md).
 
 - **The model pill switches models.** Clicking it lists the session's scoped models
@@ -63,7 +63,8 @@ npm.
   steps to the next one, like ctrl+p.
 
 - **A pill for running subagents.** With `pi-subagents` installed, a `subagents`
-  pill appears while subagents are running and counts them (`2 agents`). Click it, or
+  pill appears while subagents are running and counts them (`2 agents`), behind the
+  same users icon pi-tidy draws for subagent tool rows (`icons.subagents`). Click it, or
   run `/starline subagents`, for one line per run: agent, model, how long it has
   been running and its tokens so far. It reads pi-subagents' public in-process RPC
   and refreshes when a run starts or ends, never on a timer; without the package it
