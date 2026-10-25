@@ -42,18 +42,17 @@ import {
 	invalidateUsageTotalsCache,
 	resolveSessionStartEpoch,
 } from "./format";
-import { emptyGitStatus, readGitHost, readGitStatus } from "./git";
+import { emptyGitStatus } from "./git";
 import { setActiveGitStatus } from "./git-live";
-import { gitProbeOptions } from "./git-probe";
 import { LiveContextController } from "./live-context";
 import { forgetLiveSession, installLiveSessionCapture } from "./live-session";
 import { installMouse } from "./mouse";
 import { setActiveEditor } from "./mouse/editor-mouse";
-import { readPackageVersionResult } from "./package-version";
 import { installPasteCollapse } from "./paste-collapse";
 import { setModelSwitcher } from "./pill-actions";
 import { publishPillApi } from "./pill-api";
 import { setPillBubbleAnimation } from "./pill-bubble";
+import { probeProject } from "./project-probe";
 import {
 	createProjectRefreshScheduler,
 	type ScheduleProjectRefreshOptions,
@@ -62,7 +61,6 @@ import {
 } from "./project-refresh";
 import { applyProjectRefreshToState } from "./project-state";
 import { installNativeQueueRowHiding } from "./queue-rows";
-import { readRuntimeInfo } from "./runtime";
 import { installSelectorBorderStyle } from "./selector-border";
 import { SessionLifecycle } from "./session-lifecycle";
 import { registerStarlineSettingsCommand } from "./settings-command";
@@ -164,29 +162,15 @@ export default function (pi: ExtensionAPI) {
 	type ProjectRefreshTarget = { cwd: string; generation: number };
 	const refreshProjectState = async ({ cwd, generation }: ProjectRefreshTarget) => {
 		if (!sessionLifecycle.isCurrent(generation)) return;
-		const probe = gitProbeOptions(currentConfig.pill.segments, {
-			showTag: currentConfig.git.commit.showTag,
-			hostIcon: currentConfig.git.hostIcon,
-		});
-		const wantPackage = currentConfig.pill.segments.includes("packageVersion");
-		const [git, runtime, packageVersion, gitHost] = await Promise.all([
-			readGitStatus(cwd, {
-				readExactTag: probe.readExactTag,
-				readMetrics: probe.readMetrics,
-				ignoreSubmodules: currentConfig.git.metrics.ignoreSubmodules,
-			}),
-			readRuntimeInfo(cwd),
-			wantPackage ? readPackageVersionResult(cwd) : Promise.resolve(undefined),
-			probe.readHost ? readGitHost(cwd) : Promise.resolve(undefined),
-		]);
+		// A bar with no git pill reads no git: `probeProject` answers an empty
+		// status rather than starting `git status` and `git stash list` every
+		// interval.
+		const probe = await probeProject(cwd, currentConfig);
 		if (!sessionLifecycle.isCurrent(generation)) return;
 		lastProjectCwd = applyProjectRefreshToState(state, {
 			cwd,
 			previousCwd: lastProjectCwd,
-			git,
-			gitHost,
-			runtime,
-			packageVersion,
+			...probe,
 		});
 	};
 
