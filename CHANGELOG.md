@@ -10,7 +10,7 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
-## [Unreleased]
+## [0.5.1] - 2026-10-25
 
 A click outside a bubble now puts it away, the *Pills* tab can place a single
 extension status, and a bar with no git pill stops reading the repository.
@@ -676,7 +676,8 @@ What this fork adds over upstream:
   selection
 - Paste collapsing, with paste-again-to-expand
 
-[Unreleased]: https://github.com/Andy8647/pi-starline/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/Andy8647/pi-starline/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/Andy8647/pi-starline/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/Andy8647/pi-starline/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Andy8647/pi-starline/compare/v0.3.9...v0.4.0
 [0.3.9]: https://github.com/Andy8647/pi-starline/compare/v0.3.8...v0.3.9
