@@ -187,7 +187,16 @@ export function installFooter(
 
 				const hit = spans.find((span) => event.x >= span.startColumn && event.x < span.endColumn);
 				const action = hit === undefined ? undefined : pillActionFor(hit.key);
-				if (!hit || !action) return undefined;
+				if (!hit || !action) {
+					// Nothing here to click: padding at either end, a gap, or a pill that is
+					// only a read-out. For an open bubble this row is then just "outside" like
+					// the rest of the screen, and the outside-click dismissal cannot decide
+					// that alone — it stays off this row so a press on a pill keeps its
+					// toggle. Press, not click: a press that claims nothing is never followed
+					// by a synthesized click, and this must not turn into a swallow.
+					if (event.type === "press") closePillBubble();
+					return undefined;
+				}
 
 				// Moving over a pill that does something turns the pointer into a hand.
 				// Pi has no leave event; mouse/pointer-shape.ts puts it back once a move

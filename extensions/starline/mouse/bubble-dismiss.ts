@@ -15,10 +15,12 @@
  * Nothing here consumes the event: the click goes on to move the caret, select a
  * line, or whatever else it was going to do.
  *
- * The footer row is left alone on purpose. A press there is a pill asking for its
- * own bubble to close, or another pill replacing it, and both of those are the
- * footer's to answer — closing on the press as well would make the same pill's
- * second click close and immediately reopen.
+ * The footer row is handled by the footer itself, which knows which cells are
+ * pills: a press there either belongs to a clickable pill (its own toggle or
+ * replacement) or lands on padding, a gap or an inert read-out, and that last
+ * case closes the bubble too. So the geometry check below stays off that row —
+ * closing on the press here as well would make the same pill's second click
+ * close and immediately reopen.
  */
 
 import { activePillBubbleGeometry, closePillBubble, type PillBubbleGeometry } from "../pill-bubble";
@@ -37,7 +39,8 @@ const FOOTER_LAST_ROW = 1;
  *
  * The rectangle is resolved against the terminal as it is now, not as it was when
  * the bubble opened, so a window that grew keeps the bubble on its footer. A
- * press on the footer row never counts — that row is the bar's.
+ * press on the footer row never counts here: the footer decides that row cell by
+ * cell, because it is the one place that knows where its pills are.
  */
 export function isOutsideBubble(
 	event: PointerEventRaw,
@@ -55,7 +58,8 @@ export function isOutsideBubble(
 	const left = geometry.leftColumn;
 	const right = left + geometry.width;
 
-	// The bar itself: its pills toggle and replace their own bubbles.
+	// The bar itself: its pills toggle and replace their own bubbles, and the rest
+	// of the row is the footer's to dismiss from (see `handleMouse` there).
 	if (event.y === terminalRows - FOOTER_LAST_ROW) return false;
 
 	return event.y < topRow || event.y > bottomRow || event.x < left || event.x >= right;

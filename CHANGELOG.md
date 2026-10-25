@@ -20,10 +20,12 @@ extension status, and a bar with no git pill stops reading the repository.
 - **Clicking away closes a bubble.** Escape, the same pill and another pill
 already closed it; every other click left it on screen. A press anywhere outside
 the bubble now closes it, and the press is still delivered, so the caret moves or
-the line gets selected exactly as it would with no bubble open. A press on the
-footer row is left to the bar, where a pill asks for its own bubble to close or
-another pill replaces it. Nothing new is patched for this: the press is read
-where the pointer-shape patch already sees every pointer report.
+the line gets selected exactly as it would with no bubble open. The footer row
+follows the same rule cell by cell: a clickable pill keeps its own meaning (the
+same pill closes, another replaces), while the bar's padding, a gap or a
+read-out pill closes the bubble like anywhere else. Nothing new is patched for
+this: the press is read where the pointer-shape patch already sees every pointer
+report.
 
 - **Per-status rows in the *Pills* tab.** Every status an extension published
 this session gets a row of its own (`extensionStatus:<key>`), so a single status

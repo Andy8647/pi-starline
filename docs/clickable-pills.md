@@ -166,10 +166,12 @@ press is still delivered: it moves the caret in the editor, drops a selection in
 the transcript, or does whatever it would have done with no bubble open. The
 rectangle it is matched against is the one the bubble drew (`PillBubbleGeometry`,
 recorded on every render), resolved against the terminal's current height, so a
-window that grew keeps the bubble on its footer. The footer row is exempt on
-purpose: a press there is a pill asking for its own bubble to close or another
-pill replacing it, and closing on the press as well would make the same pill's
-second click close and immediately reopen. The press is read where every pointer
+window that grew keeps the bubble on its footer. The footer row is decided by the
+footer itself, cell by cell: a press on a clickable pill keeps its own meaning
+(the same pill closes the bubble, another pill replaces it), and a press on the
+bar's padding, a gap between pills, or a pill that is only a read-out closes it
+like the rest of the screen. Closing there from the geometry check as well would
+make the same pill's second click close and immediately reopen. The press is read where every pointer
 report arrives, at the `handleMouseEvent` patch that already drives the hand
 pointer, through `mouse/pointer-events.ts`: the bubble does not take a second
 patch on the same method. It follows `mouse.enabled`, the same switch as the hand
