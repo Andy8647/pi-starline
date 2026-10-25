@@ -1,5 +1,6 @@
+import type { TuiMouseEvent } from "@earendil-works/pi-tui";
 import { describe, expect, it } from "vitest";
-import { type FrameMouseEvent, translateEditorMouse } from "../extensions/starline/ui";
+import { translateEditorMouse } from "../extensions/starline/ui";
 
 /**
  * Pi 1.4 positions the caret on click itself, counting rows from its own frame:
@@ -8,13 +9,18 @@ import { type FrameMouseEvent, translateEditorMouse } from "../extensions/starli
  * a column off. These pin the arithmetic that puts it back.
  */
 
-const click = (x: number, y: number, width = 40): FrameMouseEvent => ({
+const click = (x: number, y: number, width = 40): TuiMouseEvent => ({
 	type: "click",
 	button: "left",
 	x,
 	y,
+	screenX: x,
+	screenY: y,
 	width,
 	height: 12,
+	shift: false,
+	alt: false,
+	ctrl: false,
 });
 
 const geometry = { railWidth: 2, padTop: 0, editorLineCount: 3 };

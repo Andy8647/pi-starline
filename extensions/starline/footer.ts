@@ -1,5 +1,10 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import {
+	type TuiMouseEvent,
+	type TuiMouseEventResult,
+	truncateToWidth,
+	visibleWidth,
+} from "@earendil-works/pi-tui";
 import {
 	type ColorSpec,
 	FOOTER_FORMAT_ALIASES,
@@ -49,21 +54,12 @@ const separatorText: Record<SeparatorStyle, string> = {
 };
 
 /**
- * Pi's component mouse event, described locally.
- *
- * `handleMouse` only exists from pi-tui 1.4, which is newer than the type surface
- * this package builds against, so the real type cannot be imported. Only the
- * fields the footer uses are named; the rest pass through untouched.
+ * Pi's component mouse event and result. Pi calls `handleMouse` only from pi-tui
+ * 1.4; on an older Pi the method is simply never called.
  */
-export type FooterMouseEvent = {
-	type?: string;
-	x: number;
-	y: number;
-	width?: number;
-	[key: string]: unknown;
-};
+export type FooterMouseEvent = TuiMouseEvent;
 
-export type FooterMouseResult = { handled?: boolean };
+export type FooterMouseResult = TuiMouseEventResult;
 
 /**
  * The footer Pi mounts. `handleMouse` is optional and undeclared by the old

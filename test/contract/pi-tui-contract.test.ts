@@ -4,6 +4,7 @@
  * red here — loudly, at build time — instead of a feature silently vanishing at
  * runtime on a user's machine.
  */
+import { AgentSession, InteractiveMode } from "@earendil-works/pi-coding-agent";
 import { Editor, TuiAltScreen } from "@earendil-works/pi-tui";
 import { describe, expect, it } from "vitest";
 
@@ -22,6 +23,10 @@ const PATCHED_METHODS = [
 	"routeWheel",
 	"handleSelectionMouseEvent",
 	"copyActiveSelectionToClipboard",
+	// The hover pointer watches where each move lands (mouse/pointer-shape.ts).
+	"handleMouseEvent",
+	// Cursor-marker dedupe during selection (mouse/cursor-marker.ts).
+	"applySelection",
 ];
 
 // Read, not patched — the selection itself stays Pi's, and `hasOverlay` is
@@ -76,5 +81,41 @@ describe("Editor contract", () => {
 
 	it("declares no #private fields", () => {
 		expect(Editor.toString()).not.toMatch(/this\.#/);
+	});
+});
+
+function expectReplaceable(target: object, owner: string, name: string): void {
+	const descriptor = descriptorInChain(target, name);
+	expect(descriptor, `${owner}.prototype.${name} is gone`).toBeDefined();
+	expect(typeof descriptor?.value).toBe("function");
+	expect(descriptor?.writable).toBe(true);
+	expect(descriptor?.configurable).toBe(true);
+}
+
+/**
+ * The coding-agent side the pills reach into. Wrapped: `prompt` and
+ * `getContextUsage` record the live session (live-session.ts), and
+ * `updatePendingMessagesDisplay` is what hides Pi's queue rows (queue-rows.ts).
+ * Read: what the queue and thinking pills call on that session.
+ */
+describe("coding-agent contract", () => {
+	it.each(["prompt", "getContextUsage"])(
+		"AgentSession exposes %s as a replaceable method",
+		(name) => {
+			expectReplaceable(AgentSession.prototype, "AgentSession", name);
+		},
+	);
+
+	it.each([
+		"getSteeringMessages",
+		"getFollowUpMessages",
+		"getAvailableThinkingLevels",
+		"setThinkingLevel",
+	])("AgentSession exposes %s for the pills", (name) => {
+		expect(typeof descriptorInChain(AgentSession.prototype, name)?.value).toBe("function");
+	});
+
+	it("InteractiveMode exposes updatePendingMessagesDisplay as a replaceable method", () => {
+		expectReplaceable(InteractiveMode.prototype, "InteractiveMode", "updatePendingMessagesDisplay");
 	});
 });
