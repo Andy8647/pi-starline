@@ -219,12 +219,9 @@ export type PolishedTuiConfig = {
 		cwd: ColorSpec;
 		sessionName: ColorSpec;
 		gitBranch: ColorSpec;
-		gitStatus: ColorSpec;
 		contextNormal: ColorSpec;
 		contextWarning: ColorSpec;
 		contextError: ColorSpec;
-		tokens: ColorSpec;
-		cacheHit: ColorSpec;
 		cost: ColorSpec;
 		runtimePrefix: ColorSpec;
 		extensionStatus: ColorSpec;
@@ -232,7 +229,6 @@ export type PolishedTuiConfig = {
 		packageVersion: ColorSpec;
 		gitCommit: ColorSpec;
 		gitMetricsAdded: ColorSpec;
-		gitMetricsDeleted: ColorSpec;
 		username: ColorSpec;
 		time: ColorSpec;
 		os: ColorSpec;
@@ -296,12 +292,9 @@ export const defaultConfig: PolishedTuiConfig = {
 		cwd: "bold cyan",
 		sessionName: "bold green",
 		gitBranch: "bold purple",
-		gitStatus: "bold red",
 		contextNormal: "bright-black",
 		contextWarning: "bold yellow",
 		contextError: "bold red",
-		tokens: "bright-black",
-		cacheHit: "bright-black",
 		cost: "bold green",
 		runtimePrefix: "",
 		extensionStatus: "bright-black",
@@ -309,7 +302,6 @@ export const defaultConfig: PolishedTuiConfig = {
 		packageVersion: "208",
 		gitCommit: "bold green",
 		gitMetricsAdded: "bold green",
-		gitMetricsDeleted: "bold red",
 		username: "bold yellow",
 		time: "bold yellow",
 		os: "bold white",
@@ -540,12 +532,9 @@ function normalizeColors(record: Record<string, unknown>): Partial<PolishedTuiCo
 		cwd: colorValue(record, "cwd") ?? colorValue(record, "cwdText"),
 		sessionName: colorValue(record, "sessionName"),
 		gitBranch: colorValue(record, "gitBranch") ?? colorValue(record, "git"),
-		gitStatus: colorValue(record, "gitStatus"),
 		contextNormal: colorValue(record, "contextNormal"),
 		contextWarning: colorValue(record, "contextWarning"),
 		contextError: colorValue(record, "contextError"),
-		tokens: colorValue(record, "tokens"),
-		cacheHit: colorValue(record, "cacheHit"),
 		cost: colorValue(record, "cost"),
 		runtimePrefix: colorValue(record, "runtimePrefix"),
 		extensionStatus: colorValue(record, "extensionStatus"),
@@ -553,7 +542,6 @@ function normalizeColors(record: Record<string, unknown>): Partial<PolishedTuiCo
 		packageVersion: colorValue(record, "packageVersion"),
 		gitCommit: colorValue(record, "gitCommit"),
 		gitMetricsAdded: colorValue(record, "gitMetricsAdded"),
-		gitMetricsDeleted: colorValue(record, "gitMetricsDeleted"),
 		username: colorValue(record, "username"),
 		time: colorValue(record, "time"),
 		os: colorValue(record, "os"),

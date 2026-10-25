@@ -141,7 +141,6 @@ Default config values — copy this and change any value you want:
 		"cwd": "bold cyan",
 		"sessionName": "bold green",
 		"gitBranch": "bold purple",
-		"gitStatus": "bold red",
 		"contextNormal": "bright-black",
 		"contextWarning": "bold yellow",
 		"contextError": "bold red",
@@ -154,7 +153,6 @@ Default config values — copy this and change any value you want:
 		"packageVersion": "208",
 		"gitCommit": "bold green",
 		"gitMetricsAdded": "bold green",
-		"gitMetricsDeleted": "bold red",
 		"username": "bold yellow",
 		"time": "bold yellow",
 		"os": "bold white"

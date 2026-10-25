@@ -65,6 +65,13 @@ colours, icons, the editor row, clickable pills — works as before.
   the pre-rename keys. Running both packages in one session now wraps the editor
   twice, so remove one of them.
 
+- **Four colour keys that no longer reach the screen.** `colors.tokens`,
+  `colors.cacheHit`, `colors.gitStatus` and `colors.gitMetricsDeleted` only ever
+  coloured text inside a pill that was its own segment. Those pills are gone, and
+  a pill paints its whole label in one contrast colour, so the entries did
+  nothing. Nothing else moves: a pill's colour comes from `colors.*` as before,
+  it is just used as the background.
+
 - **`gitBranch`, `gitHostIcon`, `gitCommit`, `gitMetrics`.** The four flat keys
   are now one `git` block: `git.branch.maxLength`, `git.hostIcon`,
   `git.commit.{hashLength,onlyDetached,showTag}`, `git.metrics.{onlyNonzero,ignoreSubmodules}`,

@@ -56,10 +56,8 @@ describe("mergeConfig", () => {
 		expect(config.colors.packageVersion).toBe("208");
 		expect(config.colors.gitCommit).toBe("bold green");
 		expect(config.colors.gitMetricsAdded).toBe("bold green");
-		expect(config.colors.gitMetricsDeleted).toBe("bold red");
 		expect(config.colors.sessionName).toBe("bold green");
 		expect(config.colors.contextNormal).toBe("bright-black");
-		expect(config.colors.tokens).toBe("bright-black");
 		expect(config.colors.extensionStatus).toBe("bright-black");
 		expect(config.colors.editorAccent).toBeUndefined();
 		expect(config.colors.editorPrompt).toBeUndefined();
@@ -459,9 +457,6 @@ describe("mergeConfig", () => {
 		expect(mergeConfig({ colors: { gitMetricsAdded: "green" } }).colors.gitMetricsAdded).toBe(
 			"green",
 		);
-		expect(mergeConfig({ colors: { gitMetricsDeleted: "red" } }).colors.gitMetricsDeleted).toBe(
-			"red",
-		);
 		expect(mergeConfig({ colors: { queue: "bold purple" } }).colors.queue).toBe("bold purple");
 		expect(mergeConfig({ colors: { git: "syntaxKeyword" } }).colors.gitBranch).toBe(
 			"syntaxKeyword",
@@ -587,7 +582,7 @@ describe("mergeConfig", () => {
 			},
 			colors: {
 				cwd: 123,
-				gitStatus: "not-a-color",
+				contextNormal: "not-a-color",
 				separator: "dimmed",
 				editorAccent: "neon",
 				editorPrompt: "accent",
@@ -606,7 +601,7 @@ describe("mergeConfig", () => {
 		expect(config.icons.cacheHit).toBe("CH");
 		expect(config.icons.editorPrompt).toBe(">");
 		expect(config.colors.cwd).toBe(defaultConfig.colors.cwd);
-		expect(config.colors.gitStatus).toBe(defaultConfig.colors.gitStatus);
+		expect(config.colors.contextNormal).toBe(defaultConfig.colors.contextNormal);
 		expect(config.colors.editorAccent).toBeUndefined();
 		expect(config.colors.editorPrompt).toBe("accent");
 		expect(config.colors.editorBorder).toBeUndefined();

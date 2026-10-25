@@ -183,9 +183,4 @@ describe("cacheHit as a standalone segment", () => {
 			"cwd",
 		]);
 	});
-
-	it("has its own colour, defaulting alongside tokens", () => {
-		expect(defaultConfig.colors.cacheHit).toBe("bright-black");
-		expect(mergeConfig({ colors: { cacheHit: "#f9e2af" } }).colors.cacheHit).toBe("#f9e2af");
-	});
 });

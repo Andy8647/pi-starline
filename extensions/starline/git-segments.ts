@@ -131,11 +131,11 @@ export function renderGitSegments(
 		if (state.behind > 0) return counts ? `${icons.behind}${state.behind}` : icons.behind;
 		return "";
 	})();
-	const status =
-		dirty || aheadBehind ? paint(config.colors.gitStatus, `[${dirty}${aheadBehind}]`) : "";
+	// Plain text: the pill paints its whole label in one contrast colour, so
+	// colouring pieces here would only be stripped again.
+	const status = dirty || aheadBehind ? `[${dirty}${aheadBehind}]` : "";
 
-	const stateLabel = state.gitStateLabel ?? "";
-	const operation = stateLabel ? paint(config.colors.gitStatus, stateLabel) : "";
+	const operation = state.gitStateLabel ?? "";
 
 	const commit = formatGitCommitSegment(
 		theme,
@@ -152,7 +152,6 @@ export function renderGitSegments(
 		git.metrics,
 		colorSource,
 		config.colors.gitMetricsAdded,
-		config.colors.gitMetricsDeleted,
 	);
 
 	const branch = branchText ? (icon ? `${icon} ${branchText}` : branchText) : "";

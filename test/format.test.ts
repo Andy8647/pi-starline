@@ -366,18 +366,10 @@ describe("formatGitMetricsSegment", () => {
 				{ onlyNonzero: true },
 				"terminal",
 				"bold green",
-				"bold red",
 			),
 		).toBe("");
 		expect(
-			formatGitMetricsSegment(
-				makeTheme(),
-				null,
-				{ onlyNonzero: true },
-				"terminal",
-				"bold green",
-				"bold red",
-			),
+			formatGitMetricsSegment(makeTheme(), null, { onlyNonzero: true }, "terminal", "bold green"),
 		).toBe("");
 	});
 
@@ -388,7 +380,6 @@ describe("formatGitMetricsSegment", () => {
 			{ onlyNonzero: false },
 			"terminal",
 			"bold green",
-			"bold red",
 		);
 		expect(out).toContain("+12");
 		expect(out).toContain("−3");
@@ -403,7 +394,6 @@ describe("formatGitMetricsSegment", () => {
 				{ onlyNonzero: true },
 				"terminal",
 				"bold green",
-				"bold red",
 			),
 		).not.toContain("+0");
 		expect(
@@ -413,7 +403,6 @@ describe("formatGitMetricsSegment", () => {
 				{ onlyNonzero: true },
 				"terminal",
 				"bold green",
-				"bold red",
 			),
 		).toContain("−5");
 		// 0 deleted → only show added.
@@ -424,7 +413,6 @@ describe("formatGitMetricsSegment", () => {
 				{ onlyNonzero: true },
 				"terminal",
 				"bold green",
-				"bold red",
 			),
 		).toContain("+7");
 	});
@@ -437,7 +425,6 @@ describe("formatGitMetricsSegment", () => {
 				{ onlyNonzero: true },
 				"terminal",
 				"bold green",
-				"bold red",
 			),
 		).toBe("");
 	});
