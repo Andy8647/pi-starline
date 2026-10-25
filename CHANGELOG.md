@@ -12,15 +12,21 @@ npm.
 
 ## [Unreleased]
 
-## [0.5.0] - 2026-10-26
+## [0.5.0] - 2026-10-25
 
-The footer has one style now: pills. The text footer is gone, and with it the
-three settings that only existed to describe it (`footerStyle`, `footerFormat`,
-`separator`) and the per-segment toggle table (`footerSegments`). `pill.segments`
-is the only list that decides what appears and in what order. Everything else —
-colours, icons, the editor row, clickable pills — works as before.
+Two things happened at once. The footer has one style now: pills. The text
+footer is gone, and with it the three settings that only existed to describe it
+(`footerStyle`, `footerFormat`, `separator`) and the per-segment toggle table
+(`footerSegments`); `pill.segments` is the only list that decides what appears
+and in what order. And the bar got shorter: the three git pills are one and the
+three token pills are one, each with its numbers behind a click.
 
 **Added**
+
+- **Compact pill text.** `extensionStatuses.formats` keeps a status to its number
+  (`Tavily: 41.1%` becomes `41.1%`, a status with no number keeps its words), and
+  `segmentOptions.subagents.format: "count"` drops the noun from the subagents
+  pill. Both default to what shipped.
 
 - **One clickable `context` pill.** The percentage is all the bar shows; clicking
   it opens the window size, the tokens used this turn, the session's `↑in ↓out`
@@ -36,10 +42,10 @@ colours, icons, the editor row, clickable pills — works as before.
   `gitStatus` and `gitState` in `pill.segments` are rewritten to `git`, so an
   existing bar keeps its git pill.
 
-- **A *Pills* tab in \`/starline\`.** One row per segment; the value is its position
-  in the bar, \`off\` hides it, and Space cycles through them. Picking a number
+- **A *Pills* tab in `/starline`.** One row per segment; the value is its position
+  in the bar, `off` hides it, and Space cycles through them. Picking a number
   inserts the segment there and shifts the rest along. The same list is still
-  \`pill.segments\` in \`starline.json\`, so editing the file and the tab are the
+  `pill.segments` in `starline.json`, so editing the file and the tab are the
   same thing.
 
 **Removed**
