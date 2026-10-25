@@ -20,6 +20,7 @@ import {
 	getUsageTotals,
 	invalidateUsageTotalsCache,
 	resolveSessionStartEpoch,
+	statusValueText,
 } from "../extensions/starline/format";
 import {
 	ASCII_DEFAULT_ICONS,
@@ -715,5 +716,22 @@ describe("compactionFailureNotice", () => {
 		expect(compactionFailureNotice({ reason: "manual", errorMessage: "   " })).toBe(
 			"Compaction failed",
 		);
+	});
+});
+
+describe("statusValueText", () => {
+	it("keeps the number and drops the label", () => {
+		expect(statusValueText("1 proc")).toBe("1");
+		expect(statusValueText("2 agents")).toBe("2");
+		expect(statusValueText("Tavily: 41.1%")).toBe("41.1%");
+	});
+
+	it("keeps grouping separators", () => {
+		expect(statusValueText("DeepSeek: \u00a51,447.55 spent")).toBe("1,447.55");
+	});
+
+	it("leaves text with no number alone", () => {
+		expect(statusValueText("ready")).toBe("ready");
+		expect(statusValueText("")).toBe("");
 	});
 });

@@ -22,6 +22,7 @@ describe("segmentOptions parsing", () => {
 		expect(defaultConfig.segmentOptions).toEqual({
 			context: { format: "full" },
 			tokens: { cache: "percent" },
+			subagents: { format: "agents" },
 		});
 		expect(mergeConfig({}).segmentOptions).toEqual(defaultConfig.segmentOptions);
 	});
@@ -29,12 +30,21 @@ describe("segmentOptions parsing", () => {
 	it("accepts the documented values", () => {
 		expect(
 			mergeConfig({ segmentOptions: { context: { format: "percent" } } }).segmentOptions,
-		).toEqual({ context: { format: "percent" }, tokens: { cache: "percent" } });
+		).toEqual({
+			context: { format: "percent" },
+			tokens: { cache: "percent" },
+			subagents: { format: "agents" },
+		});
 		for (const cache of ["percent", "tokens", "off"] as const) {
 			expect(
 				mergeConfig({ segmentOptions: { tokens: { cache } } }).segmentOptions.tokens.cache,
 			).toBe(cache);
 		}
+		// The subagents pill can drop its noun, leaving the icon and the count.
+		expect(
+			mergeConfig({ segmentOptions: { subagents: { format: "count" } } }).segmentOptions.subagents
+				.format,
+		).toBe("count");
 	});
 
 	it("falls back to the default on anything unrecognised", () => {
@@ -45,6 +55,10 @@ describe("segmentOptions parsing", () => {
 		expect(
 			mergeConfig({ segmentOptions: { tokens: { cache: 7 } } }).segmentOptions.tokens.cache,
 		).toBe("percent");
+		expect(
+			mergeConfig({ segmentOptions: { subagents: { format: "number" } } }).segmentOptions.subagents
+				.format,
+		).toBe("agents");
 		expect(mergeConfig({ segmentOptions: "yes" }).segmentOptions).toEqual(
 			defaultConfig.segmentOptions,
 		);

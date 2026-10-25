@@ -321,10 +321,25 @@ Give each status its own icon with `extensionStatuses.icons`, keyed by status ke
 			"provider-balance": "bg:$yellow",
 			"pi-automode": "bg:$lavender",
 			"mcp-status": "bg:$sky"
+		},
+		"formats": {
+			"mcp-status": "value"
 		}
 	}
 }
 ```
+
+`extensionStatuses.formats` keeps a status to its number, so an icon plus that
+number reads as one compact pill instead of `MCP: 3 servers`:
+
+| Format | `Tavily: 41.1%` | `1 proc` | `ready` |
+| --- | --- | --- | --- |
+| `full` (default) | `Tavily: 41.1%` | `1 proc` | `ready` |
+| `value` | `41.1%` | `1` | `ready` |
+
+A status with no number keeps its text under `value`: blanking `ready` would leave
+an icon that says nothing. The format changes only what the bar draws, not what
+the publishing extension sent (its own `setStatus` text stays as it was).
 
 ## Segment display options
 
@@ -332,13 +347,15 @@ Give each status its own icon with `extensionStatuses.icons`, keyed by status ke
 {
 	"segmentOptions": {
 		"context": { "format": "full" },
-		"tokens": { "cache": "percent" }
+		"tokens": { "cache": "percent" },
+		"subagents": { "format": "agents" }
 	}
 }
 ```
 
 - `context.format` — `full` (default, `6%/200k`) or `percent` (`6%`). Orthogonal to `contextStyle`: the gauge is unaffected.
 - `tokens.cache` — `percent` (default, cache hit rate), `tokens` (raw cache-read count), or `off`.
+- `subagents.format` — `agents` (default, `2 agents`) or `count` (`2`). Use `count` when `icons.subagents` already says what the number counts.
 
 The cache hit rate can also stand on its own rather than riding inside the tokens
 segment. Add `cacheHit` to `pill.segments` and set `tokens.cache` to `off` so it

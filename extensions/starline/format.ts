@@ -564,3 +564,17 @@ export function formatOsLabel(
 ): string {
 	return resolveOsIcon(configuredIcon, mode, platform);
 }
+
+/**
+ * The number a status is about, for statuses configured as `formats: value`:
+ * `Tavily: 41.1%` → `41.1%`, `1 proc` → `1`, `¥1,447.55 spent` → `1,447.55`.
+ *
+ * Text with no number is returned unchanged: a status that is a word ("ready",
+ * "offline") is still the whole of what it has to say, and blanking it would
+ * leave an icon that means nothing.
+ */
+export function statusValueText(text: string): string {
+	const match = text.match(/-?\d[\d,.]*%?/);
+	if (!match) return text;
+	return match[0].replace(/\s+/g, "");
+}

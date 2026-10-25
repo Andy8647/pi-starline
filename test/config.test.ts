@@ -87,6 +87,7 @@ describe("mergeConfig", () => {
 			colorModes: {},
 			colors: {},
 			icons: {},
+			formats: {},
 		});
 	});
 
@@ -506,6 +507,7 @@ describe("mergeConfig", () => {
 			},
 			colors: {},
 			icons: {},
+			formats: {},
 		});
 	});
 
@@ -534,6 +536,7 @@ describe("mergeConfig", () => {
 			colorModes: { alpha: "original" },
 			colors: {},
 			icons: {},
+			formats: {},
 		});
 		expect(mergeConfig({ extensionStatuses: { placements: "none" } }).extensionStatuses).toEqual({
 			defaultPlacement: "right",
@@ -541,6 +544,7 @@ describe("mergeConfig", () => {
 			colorModes: {},
 			colors: {},
 			icons: {},
+			formats: {},
 		});
 	});
 
@@ -909,6 +913,7 @@ describe("mergeConfig", () => {
 				colorModes: { alpha: "themed", beta: "original" },
 				colors: {},
 				icons: {},
+				formats: {},
 			});
 			expect(raw.unknown).toBe(true);
 			expect(raw.colors.futureKey).toBe("future");
@@ -960,6 +965,7 @@ describe("mergeConfig", () => {
 				colorModes: {},
 				colors: {},
 				icons: {},
+				formats: {},
 			});
 			expect(raw.unknown).toBe(true);
 			expect(raw.colors.futureKey).toBe("future");

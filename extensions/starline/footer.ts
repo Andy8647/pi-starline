@@ -307,7 +307,10 @@ export function installFooter(
 								theme,
 								colorSource,
 								config.colors.subagents,
-								withIcon(config.icons.subagents, subagentsSegmentText()),
+								withIcon(
+									config.icons.subagents,
+									subagentsSegmentText(config.segmentOptions.subagents.format),
+								),
 							);
 						case "cwd":
 							return cwdLabel;

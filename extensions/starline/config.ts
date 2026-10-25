@@ -37,10 +37,13 @@ export type ContextStyle = "text" | "gauge" | "text+gauge";
 export type ContextFormat = "full" | "percent";
 /** What the tokens segment shows for cache activity. */
 export type TokensCacheFormat = "percent" | "tokens" | "off";
+/** What the subagents segment spells out: `2 agents`, or just the count. */
+export type SubagentsFormat = "agents" | "count";
 
 export type SegmentOptionsConfig = {
 	context: { format: ContextFormat };
 	tokens: { cache: TokensCacheFormat };
+	subagents: { format: SubagentsFormat };
 };
 export type ModelLabelSource = "id" | "name";
 
@@ -138,6 +141,11 @@ export function migrateFixedEditorKeys(raw: Record<string, unknown>): {
  */
 export type ExtensionStatusPlacement = "off" | "left" | "middle" | "right" | "editor";
 export type ExtensionStatusColorMode = "themed" | "original";
+/**
+ * How much of a status is drawn: its text as published, or just its number.
+ * "value" is for statuses whose words are redundant once the pill has an icon.
+ */
+export type ExtensionStatusFormat = "full" | "value";
 
 /**
  * Starship `git_commit`-style options.
@@ -168,6 +176,12 @@ export type ExtensionStatusesConfig = {
 	colors: Record<string, ColorSpec>;
 	/** Per-status icon, keyed by status key. Prefixed to the status text. */
 	icons: Record<string, string>;
+	/**
+	 * Per-status text shape, keyed by status key. `"value"` keeps only the number
+	 * (`Tavily: 41.1%` → `41.1%`), so an icon plus that number reads as one pill;
+	 * a status with no number keeps its text. Defaults to the published text.
+	 */
+	formats: Record<string, ExtensionStatusFormat>;
 };
 
 const DEFAULT_PROJECT_REFRESH_INTERVAL_MS = 30_000;
@@ -251,7 +265,11 @@ export const defaultConfig: PolishedTuiConfig = {
 	pill: DEFAULT_PILL_CONFIG,
 	editorMetadataFormat: DEFAULT_EDITOR_METADATA_FORMAT,
 	contextStyle: "text",
-	segmentOptions: { context: { format: "full" }, tokens: { cache: "percent" } },
+	segmentOptions: {
+		context: { format: "full" },
+		tokens: { cache: "percent" },
+		subagents: { format: "agents" },
+	},
 	editorModelLabel: "id",
 	editorCursor: "block",
 	editorClickCursor: true,
@@ -312,6 +330,7 @@ export const defaultConfig: PolishedTuiConfig = {
 		icons: {},
 		placements: {},
 		colorModes: {},
+		formats: {},
 	},
 	mouse: {
 		enabled: true,
@@ -588,12 +607,14 @@ function normalizeSegmentOptions(value: unknown): SegmentOptionsConfig {
 	const record = isRecord(value) ? value : {};
 	const context = isRecord(record.context) ? record.context : {};
 	const tokens = isRecord(record.tokens) ? record.tokens : {};
+	const subagents = isRecord(record.subagents) ? record.subagents : {};
 	const cache = tokens.cache;
 	return {
 		context: { format: context.format === "percent" ? "percent" : "full" },
 		tokens: {
 			cache: cache === "tokens" || cache === "off" || cache === "percent" ? cache : "percent",
 		},
+		subagents: { format: subagents.format === "count" ? "count" : "agents" },
 	};
 }
 
@@ -687,12 +708,22 @@ function normalizeExtensionStatuses(
 			)
 		: {};
 
+	const formats = isRecord(record.formats)
+		? Object.fromEntries(
+				Object.entries(record.formats).filter(
+					(entry): entry is [string, ExtensionStatusFormat] =>
+						entry[1] === "full" || entry[1] === "value",
+				),
+			)
+		: {};
+
 	return {
 		defaultPlacement,
 		placements,
 		colorModes,
 		colors,
 		icons,
+		formats,
 	};
 }
 
@@ -881,6 +912,7 @@ export function mergeConfig(parsed: unknown): PolishedTuiConfig {
 			colorModes: { ...extensionStatuses.colorModes },
 			colors: { ...extensionStatuses.colors },
 			icons: { ...extensionStatuses.icons },
+			formats: { ...extensionStatuses.formats },
 		},
 		mouse,
 	};
@@ -906,6 +938,14 @@ export function getExtensionStatusIcon(config: PolishedTuiConfig, key: string): 
 	// Icons are a Nerd Font affordance; ascii mode drops them, as elsewhere.
 	if (config.icons.mode === "ascii") return "";
 	return config.extensionStatuses.icons[key] ?? "";
+}
+
+/** Text shape for one status. Unset means the text the extension published. */
+export function getExtensionStatusFormat(
+	config: PolishedTuiConfig,
+	key: string,
+): ExtensionStatusFormat {
+	return config.extensionStatuses.formats[key] ?? "full";
 }
 
 export function getExtensionStatusColorMode(
