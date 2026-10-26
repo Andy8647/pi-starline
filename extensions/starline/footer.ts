@@ -157,6 +157,16 @@ export function installFooter(
 			}
 		};
 
+		/**
+		 * The pill whose action already ran on this mouse-down.
+		 *
+		 * `click` is not a terminal event: Pi-tui synthesizes one on release for every
+		 * press that did not move, and dispatches it to the same component. Running the
+		 * action on the press is what takes the button-hold out of the bubble's latency,
+		 * so that synthesized click has to be swallowed rather than toggling it back.
+		 */
+		let pressActed: { key: string; x: number } | null = null;
+
 		const component: FooterComponent = {
 			dispose: () => {
 				unsubscribeBranch();
@@ -206,26 +216,61 @@ export function installFooter(
 					return { handled: true };
 				}
 
-				// Pi synthesizes a `click` only for a press a component handled, so the press
-				// is claimed here and the action runs on the click that follows it. A press
-				// that turns into a drag never produces one, which is what keeps a stray
-				// gesture from opening a bubble.
+				const anchor = () => ({
+					key: hit.key,
+					startColumn: hit.bodyStartColumn,
+					endColumn: hit.bodyEndColumn,
+					centerColumn: Math.floor((hit.startColumn + hit.endColumn - 1) / 2),
+					terminalWidth: width,
+					background: hit.bg,
+					foreground: hit.fg,
+				});
+
+				/**
+				 * The action runs on the press, not on Pi's synthesized click.
+				 *
+				 * Waiting for the click means the bubble opens after the button is released,
+				 * which is where the delay came from: a click is press + release + synth, and
+				 * that hop is pure added latency for a target one row tall. The press is also
+				 * what a drag starts from, so a drag cancels what the press opened.
+				 */
+				if (event.type === "press") {
+					// Pressing the pill again puts its bubble away, like a menu-bar item.
+					if (isPillBubbleOpenFor(hit.key)) {
+						closePillBubble();
+						pressActed = null;
+						return { handled: true };
+					}
+					runPillAction(action, ctx, anchor());
+					pressActed = { key: hit.key, x: event.x };
+					return { handled: true };
+				}
+
+				// A press that moves was a selection or a stray gesture: undo it rather than
+				// leaving a bubble the user never asked for. Two columns is past any jitter.
+				if (event.type === "drag") {
+					if (pressActed && Math.abs(event.x - pressActed.x) > 2) {
+						closePillBubble();
+						pressActed = null;
+					}
+					return { handled: true };
+				}
+
 				if (event.type === "click") {
-					// Clicking the pill again puts its bubble away, like a menu-bar item.
+					const acted = pressActed;
+					pressActed = null;
+					// The press already ran this; running it again would toggle the bubble shut.
+					if (acted?.key === hit.key) return { handled: true };
+					// No press preceded this click, which terminals do not send today, but a
+					// synthetic click from elsewhere would still mean what it always meant.
 					if (isPillBubbleOpenFor(hit.key)) {
 						closePillBubble();
 						return { handled: true };
 					}
-					runPillAction(action, ctx, {
-						key: hit.key,
-						startColumn: hit.bodyStartColumn,
-						endColumn: hit.bodyEndColumn,
-						centerColumn: Math.floor((hit.startColumn + hit.endColumn - 1) / 2),
-						terminalWidth: width,
-						background: hit.bg,
-						foreground: hit.fg,
-					});
+					runPillAction(action, ctx, anchor());
+					return { handled: true };
 				}
+
 				return { handled: true };
 			},
 			render(width: number): string[] {

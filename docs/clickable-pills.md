@@ -89,11 +89,16 @@ Pi's container rebases `y` into it, so `handleMouse(event)` receives exactly the
 coordinates the pill spans are measured in. An event that lands on no pill returns
 `undefined`, so a click on empty footer space falls through and swallows nothing.
 
-**As built:** the handler also claims `press`. Pi synthesizes a `click` only when a
-component accepted the `press` first, so an action cannot run on `click` alone. The
-press runs nothing; the action fires on the click, which Pi produces only when press
-and release landed on the same cell. A gesture that turns into a drag never becomes
-a click, which is the cheap half of the accidental-click risk below.
+**As built:** the handler also claims `press`, and the action runs *on that press*.
+Waiting for Pi's synthesized `click` would put the whole button-hold in front of the
+bubble: a click is press + release + synth, and for a target one row tall that hop
+is pure added latency. Because Pi synthesizes a click for every press that did not
+move and delivers it to the same component, the handler remembers which pill it just
+acted on and swallows that one click, so a single press cannot toggle the bubble it
+opened. A press that turns into a drag can still have opened something, so the drag
+closes it again; the threshold is two columns, which is past any jitter and short of
+any selection a user meant to start. `test/pill-click.test.ts` pins all three
+branches: press acts, the following click is swallowed, a drag undoes.
 
 Rejected: `MouseRegion`. It is the right tool when a handler wants to wrap
 *someone else's* component; here the footer and the handler are the same object,
@@ -367,10 +372,11 @@ Phase 4 landed as `pill-api.ts`, and a bridged status pill is exercised end to e
   for its visible cells; a pill clipped away entirely is not in the map at all.
 - **Accidental clicks while selecting.** The footer sits below the editor, so a
   drag that starts in the transcript and ends on the footer is a selection, not a
-  click. **As built:** Pi synthesizes a click only when press and release land on
-  the same cell, and the press itself runs nothing, so a gesture that slides off the
-  pill it started on never fires. `test/pill-click.test.ts` pins the press/click
-  split.
+  click. **As built:** the press runs the action, so a gesture that *starts* on a
+  pill opens it before it becomes anything else — the drag branch closes it again
+  once the pointer has moved more than two columns, and a gesture that slides onto
+  the footer and releases there never fires at all, since no press landed on the
+  pill. `test/pill-click.test.ts` pins the press/click/drag split.
 - **Which segments are safe to make clickable.** `tokens` and `context` are
   read-outs; a click that does nothing is worse than an inert pill, so they stay
   inert until there is something to show. The `git` pill lists the changed paths,
