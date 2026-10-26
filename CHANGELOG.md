@@ -10,6 +10,22 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [0.6.1] - 2026-10-26
+
+A second press on the same pill puts its bubble away and leaves it away.
+
+**Fixed**
+
+- **The same pill closes its own bubble again.** Pi sends a synthesized click
+after every press that did not move. Pressing an open pill's own pill closed the
+bubble, but that click was no longer taken for part of the press that closed it,
+so it ran the action again and the bubble came straight back. The press now claims
+its click whichever way it went, opening or closing, which is what the design note
+already said it did.
+
+No API change: the pill and bubble shapes are untouched, so extensions that bridge
+a pill keep working as they are.
+
 ## [0.6.0] - 2026-10-26
 
 A pill opens on the press, so a bubble no longer waits for the button to come

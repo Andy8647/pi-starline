@@ -471,6 +471,19 @@ describe("pill actions", () => {
 		expect(isPillBubbleOpenFor("queue")).toBe(false);
 	});
 
+	it("keeps it shut through the click Pi synthesizes after that press", () => {
+		const { footer, custom } = makeFooter({ queued: true });
+		const width = 80;
+		const { x } = openQueueBubble(footer, custom);
+
+		footer.handleMouse?.({ type: "press", x, y: 0, width });
+		// The release synthesizes a click for the same press. Acting on it would run
+		// the action again and reopen the bubble the press just put away.
+		expect(footer.handleMouse?.({ type: "click", x, y: 0, width })).toEqual({ handled: true });
+		expect(isPillBubbleOpenFor("queue")).toBe(false);
+		expect(custom).toHaveBeenCalledTimes(1);
+	});
+
 	it("falls back to explaining the wait when the session is not readable", () => {
 		const { footer, custom } = makeFooter({ queued: true });
 		const line = footer.render(80)[0] ?? "";

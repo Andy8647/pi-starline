@@ -158,7 +158,8 @@ export function installFooter(
 		};
 
 		/**
-		 * The pill whose action already ran on this mouse-down.
+		 * The pill this mouse-down already dealt with: it opened that pill's bubble, or
+		 * closed it because it was the one open.
 		 *
 		 * `click` is not a terminal event: Pi-tui synthesizes one on release for every
 		 * press that did not move, and dispatches it to the same component. Running the
@@ -238,7 +239,10 @@ export function installFooter(
 					// Pressing the pill again puts its bubble away, like a menu-bar item.
 					if (isPillBubbleOpenFor(hit.key)) {
 						closePillBubble();
-						pressActed = null;
+						// The release still synthesizes a click for this press. Claim it, so that
+						// click is swallowed instead of running the action and reopening what
+						// this press just closed.
+						pressActed = { key: hit.key, x: event.x };
 						return { handled: true };
 					}
 					runPillAction(action, ctx, anchor());
