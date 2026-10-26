@@ -10,6 +10,33 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [0.6.0] - 2026-10-26
+
+A pill opens on the press, so a bubble no longer waits for the button to come
+back up.
+
+**Added**
+
+- **Pills act on mouse-down.** A click is press + release + a synthesized click,
+  and Pi only delivers that click after the button is released — which put the
+  whole button-hold in front of every bubble. The press now runs the action.
+- **A drag still cancels.** Because the press acts, a press that turns into a
+  gesture has already opened something; the drag branch closes it once the pointer
+  has moved more than two columns, which is past any jitter and short of any
+  selection a user meant to start. A gesture that slides *onto* the footer and
+  releases there still never fires, since no press landed on the pill.
+
+**Changed**
+
+- Pi synthesizes a click after every press that did not move, so the handler now
+  remembers which pill it acted on and swallows exactly that click. Without it a
+  single press would open a bubble and immediately toggle it shut.
+- `docs/clickable-pills.md` says what the code does now: press acts, click is
+  swallowed, drag undoes.
+
+No API change: `register` and the bubble shapes are untouched, so extensions that
+bridge a pill keep working as they are.
+
 ## [0.5.1] - 2026-10-25
 
 A click outside a bubble now puts it away, the *Pills* tab can place a single

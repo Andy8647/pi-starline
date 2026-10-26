@@ -20,3 +20,6 @@ docs/superpowers/
 # Subagent-driven development scratch
 .superpowers/
 scripts/
+
+# Scratch scripts, not product
+.local/

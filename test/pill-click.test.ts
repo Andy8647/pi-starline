@@ -198,22 +198,64 @@ function columnOf(line: string, needle: string): number {
 describe("footer pill clicks", () => {
 	const width = 80;
 
-	it("runs the segment's action on a click", () => {
+	it("runs the segment's action on the press, before the button is released", () => {
+		const { footer, custom } = makeFooter({ queued: true });
+		const line = footer.render(width)[0] ?? "";
+		const x = columnOf(line, "queued");
+
+		// The action runs on mouse-down: waiting for Pi's synthesized click would put
+		// the whole button-hold in front of the bubble.
+		expect(footer.handleMouse?.({ type: "press", x, y: 0, width })).toEqual({ handled: true });
+		expect(custom).toHaveBeenCalledTimes(1);
+	});
+
+	it("swallows the click Pi synthesizes after a press it already acted on", () => {
+		const { footer, custom } = makeFooter({ queued: true });
+		const line = footer.render(width)[0] ?? "";
+		const x = columnOf(line, "queued");
+
+		footer.handleMouse?.({ type: "press", x, y: 0, width });
+		expect(footer.handleMouse?.({ type: "click", x, y: 0, width })).toEqual({ handled: true });
+		expect(custom).toHaveBeenCalledTimes(1);
+	});
+
+	it("closes what the press opened when the press turns into a drag", () => {
+		const { footer, custom } = makeFooter({ queued: true });
+		const line = footer.render(width)[0] ?? "";
+		const x = columnOf(line, "queued");
+		const done = vi.fn();
+
+		footer.handleMouse?.({ type: "press", x, y: 0, width });
+		const [factory] = custom.mock.calls[0] ?? [];
+		(factory as BubbleFactory)({}, theme, {}, done);
+		expect(isPillBubbleOpenFor("queue")).toBe(true);
+
+		// A drag means a selection or a stray gesture, not a click on the pill.
+		footer.handleMouse?.({ type: "drag", x: x + 4, y: 0, width });
+		expect(isPillBubbleOpenFor("queue")).toBe(false);
+		expect(done).toHaveBeenCalledTimes(1);
+	});
+
+	it("keeps the bubble through a one-column jitter drag", () => {
+		const { footer, custom } = makeFooter({ queued: true });
+		const line = footer.render(width)[0] ?? "";
+		const x = columnOf(line, "queued");
+
+		footer.handleMouse?.({ type: "press", x, y: 0, width });
+		const [factory] = custom.mock.calls[0] ?? [];
+		(factory as BubbleFactory)({}, theme, {}, vi.fn());
+		footer.handleMouse?.({ type: "drag", x: x + 1, y: 0, width });
+
+		expect(isPillBubbleOpenFor("queue")).toBe(true);
+	});
+
+	it("runs a click that had no press of its own", () => {
 		const { footer, custom } = makeFooter({ queued: true });
 		const line = footer.render(width)[0] ?? "";
 		const x = columnOf(line, "queued");
 
 		expect(footer.handleMouse?.({ type: "click", x, y: 0, width })).toEqual({ handled: true });
 		expect(custom).toHaveBeenCalledTimes(1);
-	});
-
-	it("claims the press but does not act on it, so a drag is not a click", () => {
-		const { footer, custom } = makeFooter({ queued: true });
-		const line = footer.render(width)[0] ?? "";
-		const x = columnOf(line, "queued");
-
-		expect(footer.handleMouse?.({ type: "press", x, y: 0, width })).toEqual({ handled: true });
-		expect(custom).not.toHaveBeenCalled();
 	});
 
 	it("leaves a segment without an action unhandled", () => {
@@ -357,24 +399,28 @@ describe("pill actions", () => {
 		expect(overlay?.offsetX).toBe(x - 1 - 3);
 	});
 
-	it("closes the pill's own bubble on a second click, and opens it on a third", () => {
-		const width = 80;
+	it("toggles the pill's own bubble from the press, so a second press closes it", () => {
 		const { footer, custom } = makeFooter({ queued: true });
+		const width = 80;
 		const line = footer.render(width)[0] ?? "";
 		const x = columnOf(line, "queued");
 		const done = vi.fn();
 
-		footer.handleMouse?.({ type: "click", x, y: 0, width });
+		footer.handleMouse?.({ type: "press", x, y: 0, width });
 		expect(custom).toHaveBeenCalledTimes(1);
 		// Mounting the overlay is what makes it the open bubble.
 		const [factory] = custom.mock.calls[0] ?? [];
 		(factory as BubbleFactory)({}, theme, {}, done);
 
+		// The click the terminal synthesizes for the same press must not reopen it.
 		expect(footer.handleMouse?.({ type: "click", x, y: 0, width })).toEqual({ handled: true });
+		expect(done).toHaveBeenCalledTimes(0);
+
+		expect(footer.handleMouse?.({ type: "press", x, y: 0, width })).toEqual({ handled: true });
 		expect(done).toHaveBeenCalledTimes(1);
 		expect(custom).toHaveBeenCalledTimes(1);
 
-		footer.handleMouse?.({ type: "click", x, y: 0, width });
+		footer.handleMouse?.({ type: "press", x, y: 0, width });
 		expect(custom).toHaveBeenCalledTimes(2);
 	});
 
@@ -415,15 +461,14 @@ describe("pill actions", () => {
 		expect(isPillBubbleOpenFor("queue")).toBe(false);
 	});
 
-	it("leaves it open for a press on a pill, whose click decides", () => {
+	it("closes it from a press on the same pill whose bubble is open", () => {
 		const { footer, custom } = makeFooter({ queued: true });
 		const width = 80;
 		const { x } = openQueueBubble(footer, custom);
 
-		// The press is claimed so Pi synthesizes a click; closing here as well would
-		// make that click reopen the bubble it just dismissed.
+		// Press, not click: the toggle happens on mouse-down like everything else here.
 		expect(footer.handleMouse?.({ type: "press", x, y: 0, width })).toEqual({ handled: true });
-		expect(isPillBubbleOpenFor("queue")).toBe(true);
+		expect(isPillBubbleOpenFor("queue")).toBe(false);
 	});
 
 	it("falls back to explaining the wait when the session is not readable", () => {
