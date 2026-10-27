@@ -16,6 +16,7 @@ import { collectExtensionStatusSegments, sanitizeExtensionStatusText } from "./e
 import {
 	buildContextDisplayLabel,
 	buildSessionDurationLabel,
+	buildTpsLabel,
 	contextColorTier,
 	formatCwdLabel,
 	formatOsLabel,
@@ -98,6 +99,8 @@ export function installFooter(
 		scheduleProjectRefresh: (ctx: ExtensionContext) => void;
 		setExtensionStatusesGetter?: (fn: (() => ReadonlyMap<string, string>) | undefined) => void;
 		getLiveContext?: () => LiveContextOverride | undefined;
+		/** Decode throughput of the latest assistant message, or undefined before one landed. */
+		getLiveTps?: () => number | undefined;
 		getThinkingLevel?: () => string | undefined;
 	},
 ): void {
@@ -343,6 +346,8 @@ export function installFooter(
 							: config.colors.contextNormal;
 				const contextDisplay = withIcon(config.icons.context, contextLabel);
 				const costDisplay = withIcon(config.icons.cost, state.costLabel);
+				const tpsLabel = buildTpsLabel(hooks.getLiveTps?.());
+				const tpsDisplay = tpsLabel ? withIcon(config.icons.tps, tpsLabel) : "";
 				// The one pill shows a percentage; the rest of these numbers are only
 				// on screen while its bubble is open.
 				const contextTabTokens = useLiveContext ? liveContext.tokens : undefined;
@@ -427,6 +432,8 @@ export function installFooter(
 							return renderStyleForSource(theme, colorSource, contextColor, contextDisplay);
 						case "cost":
 							return renderStyleForSource(theme, colorSource, config.colors.cost, costDisplay);
+						case "tps":
+							return renderStyleForSource(theme, colorSource, config.colors.tps, tpsDisplay);
 						case "package_version":
 							return state.packageVersion?.version
 								? renderStyleForSource(
@@ -481,6 +488,8 @@ export function installFooter(
 							return contextColor;
 						case "cost":
 							return config.colors.cost;
+						case "tps":
+							return config.colors.tps;
 						case "sessionDuration":
 							return config.colors.sessionDuration;
 						case "username":

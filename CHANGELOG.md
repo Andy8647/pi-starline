@@ -10,6 +10,35 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [0.7.0] - 2026-10-27
+
+Decode speed on the bar, and a segment that could not be turned back off.
+
+**Added**
+
+- **A `tps` segment.** Decode throughput of the latest assistant message, as
+  `42 t/s`, `context`'s right-hand neighbour by default. The window opens on that
+  message's first streamed delta and closes when it ends, so queueing,
+  time-to-first-token and every tool call in the turn stay outside it: the number
+  says how fast the model writes, not how long the turn took. Providers report
+  usage only in their final streamed chunk, so while a message streams the value
+  is an estimate from the text that has arrived (CJK about a token a glyph, Latin
+  about four characters); `message_end` replaces it with the real count. Rates
+  under 10 keep one decimal so slow models do not all read `1 t/s`. Messages that
+  arrive in one chunk are skipped rather than turned into a fabricated rate.
+  Configure with `colors.tps` (default `bright-black`), `icons.tps` (default
+  empty), and `pill.segments`.
+
+**Fixed**
+
+- **A segment at the end of the bar can be turned off again.** Every row in the
+  `/starline` Pills tab offered one position past the end of the bar, which is
+  what a hidden segment needs to be appended. A segment already sitting at the
+  end got that value too, so choosing it put the segment back where it was: the
+  row cycled between the last position and a number that rendered as that same
+  position, and `off` could never be reached. The extra position is now offered
+  only to segments that are not on the bar.
+
 ## [0.6.1] - 2026-10-26
 
 A second press on the same pill puts its bubble away and leaves it away.

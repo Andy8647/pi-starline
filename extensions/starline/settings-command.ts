@@ -162,11 +162,17 @@ function pillSegmentLabel(name: string): string {
 /**
  * Values a row cycles through: `off`, then every position the bar can hold.
  *
- * One past the current length is offered so a hidden segment can be appended;
- * for a segment already in the bar, that value is its "move to the end".
+ * A segment that is not on the bar gets one extra value so it can be appended to
+ * the end. A segment that is already on the bar must not get it: appending it
+ * would put it back where it already is, so the cycle would bounce between the
+ * last position and a number that renders as that same position, and `off` would
+ * become unreachable — which is exactly how a segment at the end of the bar got
+ * stuck.
  */
-function pillSegmentValues(shown: number): string[] {
-	const positions = Array.from({ length: shown + 1 }, (_, index) => String(index + 1));
+function pillSegmentValues(shown: number, onBar: boolean): string[] {
+	const positions = Array.from({ length: onBar ? shown : shown + 1 }, (_, index) =>
+		String(index + 1),
+	);
 	return ["off", ...positions];
 }
 
@@ -459,14 +465,15 @@ function buildItems(
 
 	if (section === "pills") {
 		const segments = config.pill.segments;
-		const values = pillSegmentValues(segments.length);
 		const row = (name: string, label: string): SettingItem => {
 			const position = pillSegmentPosition(segments, name);
+			const onBar = position > 0;
+			const values = pillSegmentValues(segments.length, onBar);
 			return {
 				id: pillSegmentSettingId(name),
 				label,
-				description: `Position in the bar (1 is leftmost). Space cycles off → 1…${segments.length + 1}.`,
-				currentValue: position > 0 ? String(position) : "off",
+				description: `Position in the bar (1 is leftmost). Space cycles off → 1…${values.length - 1}.`,
+				currentValue: onBar ? String(position) : "off",
 				values,
 			};
 		};

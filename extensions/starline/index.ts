@@ -46,6 +46,7 @@ import { emptyGitStatus } from "./git";
 import { setActiveGitStatus } from "./git-live";
 import { LiveContextController } from "./live-context";
 import { forgetLiveSession, installLiveSessionCapture } from "./live-session";
+import { LiveTpsController } from "./live-tps";
 import { installMouse } from "./mouse";
 import { setActiveEditor } from "./mouse/editor-mouse";
 import { installPasteCollapse } from "./paste-collapse";
@@ -134,6 +135,7 @@ export default function (pi: ExtensionAPI) {
 		if (sessionLifecycle.isCurrent()) requestFooterRender?.();
 	};
 	const liveContext = new LiveContextController(sessionLifecycle, refresh);
+	const liveTps = new LiveTpsController();
 	const getActiveTheme = () => activeTheme;
 	const getCurrentConfig = () => currentConfig;
 	/**
@@ -515,6 +517,7 @@ export default function (pi: ExtensionAPI) {
 				getActiveExtensionStatuses = fn ?? (() => new Map());
 			},
 			getLiveContext: () => liveContext.get(),
+			getLiveTps: () => liveTps.value(),
 			getThinkingLevel,
 		});
 		footerInstalled = true;
@@ -638,6 +641,7 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_start", async (_event, ctx) => {
 		sessionLifecycle.start();
 		liveContext.clear();
+		liveTps.clear();
 		// A resumed session keeps its original header, and reporting the moment this
 		// process attached to it would make the elapsed-time segment read 0s forever.
 		state.sessionStartEpoch = resolveSessionStartEpoch(readSessionHeader(ctx));
@@ -703,6 +707,7 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("session_shutdown", async (_event, ctx) => {
 		liveContext.clear();
+		liveTps.clear();
 		cleanupUi(ctx);
 	});
 
@@ -713,6 +718,8 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("agent_start", (event, ctx) => {
 		liveContext.clear();
+		// The window resets per run; the value it already measured stays on the pill.
+		liveTps.beginTurn();
 		syncInteractiveState(event, ctx);
 	});
 	pi.on("agent_end", (event, ctx) => {
@@ -727,6 +734,7 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_info_changed", syncInteractiveState);
 	pi.on("message_update", (event) => {
 		liveContext.update(event.message);
+		if (liveTps.observe(event.assistantMessageEvent)) refresh();
 	});
 	pi.on("message_end", (event, ctx) => {
 		// Pi notifies extensions before persisting a successful message, so retain its live
@@ -736,6 +744,10 @@ export default function (pi: ExtensionAPI) {
 			(event.message.stopReason === "error" || event.message.stopReason === "aborted")
 		) {
 			liveContext.clear();
+		} else if (event.message.role === "assistant") {
+			// The stream's `done` event never reaches an extension, so the output count
+			// has to be closed here, where the finished message arrives with its usage.
+			liveTps.complete(event.message.usage?.output ?? 0);
 		}
 		syncInteractiveAndProjectStateWithUsage(event, ctx);
 	});
