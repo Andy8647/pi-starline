@@ -34,7 +34,8 @@ import { closePillBubble, isPillBubbleOpenFor, type PillAnchor } from "./pill-bu
 import type { FooterState } from "./state";
 import { renderStyleForSource } from "./style";
 import { subagentsSegmentText } from "./subagent-fleet";
-import { modelPillIcon, readWorkingFrame } from "./working-indicator";
+import type { TurnTiming } from "./turn-clock";
+import { modelPillLabel } from "./working-indicator";
 
 /**
  * Pi's component mouse event and result. Pi dispatches to `handleMouse` from
@@ -101,6 +102,8 @@ export function installFooter(
 		getLiveContext?: () => LiveContextOverride | undefined;
 		/** Decode throughput of the latest assistant message, or undefined before one landed. */
 		getLiveTps?: () => number | undefined;
+		/** The current run's elapsed time, and the last run's total. */
+		getTurnTiming?: () => TurnTiming;
 		getThinkingLevel?: () => string | undefined;
 	},
 ): void {
@@ -300,11 +303,12 @@ export function installFooter(
 							colorSource,
 							config.colors.model,
 							// While the agent works the spinner takes the icon's slot at the same
-							// display width, so the pill never resizes.
-							withIcon(
-								modelPillIcon(config.icons.model, readWorkingFrame(iconMode === "ascii")),
-								state.modelLabel,
-							),
+							// display width, so the pill never resizes, and the run's elapsed time
+							// joins the name behind it.
+							modelPillLabel(config.icons.model, state.modelLabel, {
+								ascii: iconMode === "ascii",
+								timing: hooks.getTurnTiming?.(),
+							}),
 						)
 					: "";
 				// "off" reads as no thinking at all, matching the editor metadata line.

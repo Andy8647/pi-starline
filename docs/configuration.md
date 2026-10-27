@@ -304,7 +304,7 @@ the `Other extensions` row (`extensionStatus`) keeps carrying all the rest.
 Notes:
 
 - **The `queue` pill is clickable.** It exists only while messages are waiting for the current turn to end, so it costs no space the rest of the time. Clicking it, or running `/starline queue`, opens a bubble on the pill that says how many messages are queued and shows their first lines. The pill shows an inbox icon and the count (`icons.queue`); when Pi does not let the count be read it says `queued` instead, and with icons off it reads `3 queued`. Clicking the pill again closes the bubble. While the queue pill is enabled, Pi's own `Steering: …` rows above the editor are hidden, so the queue is shown once rather than twice; remove `queue` from `pill.segments` (or switch the status line off) and Pi's rows come back. `colors.queue` (default `bold yellow`) colours the pill and the bubble
-- **The `model` pill is clickable.** A click lists the session's scoped models — the ones ctrl+p cycles, from `enabledModels` or `--models` — with the current one marked; click another to switch. A scoped model that pins a thinking level (`provider/model:high`) brings it along, as ctrl+p does. Without a scope it lists up to eight available models and points at `/model` for the rest. `/starline model` steps to the next one from the keyboard.
+- **The `model` pill is clickable.** A click lists the session's scoped models — the ones ctrl+p cycles, from `enabledModels` or `--models` — with the current one marked; click another to switch. A scoped model that pins a thinking level (`provider/model:high`) brings it along, as ctrl+p does. Without a scope it lists up to eight available models and points at `/model` for the rest. `/starline model` steps to the next one from the keyboard. While the agent works its icon slot becomes a spinner and the run's elapsed time joins the name; see [The model pill](#the-model-pill).
 - **The `subagents` pill is clickable.** With [`pi-subagents`](https://github.com/nicobailon/pi-subagents) installed, it appears while subagents are running and says how many (`2 agents`); it disappears when they finish, and without pi-subagents it never appears. Clicking it, or running `/starline subagents`, opens the bubble with one line per run: agent (and step label), model, time running and tokens so far. `/subagents-fleet` still opens pi-subagents' own inspector for steering and stopping. The numbers come from pi-subagents' public in-process RPC, refreshed when a run starts or ends rather than on a timer. If the pill replaces pi-subagents' FleetView and async widget for you, turn those off in `~/.pi/agent/extensions/subagent/config.json` with `"fleetView": false` and `"asyncWidget": false`. `colors.subagents` (default `bold green`) colours the pill and the bubble
 - **The `thinking` pill is clickable.** A click opens the same bubble with every thinking level the model supports, the current one marked; click another level to switch. Opening it changes nothing. `off` is not offered, so the pill stays on screen. `/starline thinking` steps to the next level from the keyboard and reports the step (`medium → high`).
 - **Colours need no extra configuration.** A segment's existing `colors.*` entry becomes the pill background. Text colour is picked automatically for legibility unless you set `fg:` yourself.
@@ -378,6 +378,23 @@ Clicking it opens that bubble, which follows the numbers while a turn streams.
 existing bar keeps the numbers instead of dropping them. The rate disappears
 from the bubble when nothing has been read from cache, or when the latest turn
 has no known rate, rather than claiming a miss.
+
+### The model pill
+
+The model pill also carries the working indicator: while the agent runs, the
+spinner takes the icon's slot at the icon's own display width, so the pill never
+resizes, and the run's elapsed time sits after the model name (`⣾ claude 12s`).
+Seconds under a minute, `2m 13s` under an hour, then `1h 5m`.
+
+When the run ends the number stays and the slot goes back to the model's own
+icon, so the last turn's total is still there to compare against (` claude 12s`).
+A spinning glyph means the number is live; the model icon means it is the total
+the last run reached. The next turn clears it and starts counting again.
+
+Nothing here is a timer: the spinner already makes Pi redraw the footer while a
+run is going, and no redraw happens when it is not. Retry, compaction and branch
+summary are not plain spinners and keep Pi's own row above the editor, since
+those need to spell a sentence and carry an interrupt hint.
 
 ### The tps pill
 

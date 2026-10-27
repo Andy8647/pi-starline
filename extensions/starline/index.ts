@@ -73,6 +73,7 @@ import {
 	SUBAGENT_TOOL_NAME,
 	setActiveSubagentFleet,
 } from "./subagent-fleet";
+import { TurnClock } from "./turn-clock";
 import { PolishedEditor, WrappedPolishedEditor } from "./ui";
 import { installUserMessageStyle } from "./user-message";
 import { setWorkingIndicator } from "./working-indicator";
@@ -136,6 +137,7 @@ export default function (pi: ExtensionAPI) {
 	};
 	const liveContext = new LiveContextController(sessionLifecycle, refresh);
 	const liveTps = new LiveTpsController();
+	const turnClock = new TurnClock();
 	const getActiveTheme = () => activeTheme;
 	const getCurrentConfig = () => currentConfig;
 	/**
@@ -518,6 +520,7 @@ export default function (pi: ExtensionAPI) {
 			},
 			getLiveContext: () => liveContext.get(),
 			getLiveTps: () => liveTps.value(),
+			getTurnTiming: () => turnClock.timing(),
 			getThinkingLevel,
 		});
 		footerInstalled = true;
@@ -642,6 +645,7 @@ export default function (pi: ExtensionAPI) {
 		sessionLifecycle.start();
 		liveContext.clear();
 		liveTps.clear();
+		turnClock.clear();
 		// A resumed session keeps its original header, and reporting the moment this
 		// process attached to it would make the elapsed-time segment read 0s forever.
 		state.sessionStartEpoch = resolveSessionStartEpoch(readSessionHeader(ctx));
@@ -708,6 +712,7 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_shutdown", async (_event, ctx) => {
 		liveContext.clear();
 		liveTps.clear();
+		turnClock.clear();
 		cleanupUi(ctx);
 	});
 
@@ -720,10 +725,12 @@ export default function (pi: ExtensionAPI) {
 		liveContext.clear();
 		// The window resets per run; the value it already measured stays on the pill.
 		liveTps.beginTurn();
+		turnClock.begin();
 		syncInteractiveState(event, ctx);
 	});
 	pi.on("agent_end", (event, ctx) => {
 		liveContext.clear();
+		turnClock.end();
 		syncInteractiveAndProjectState(event, ctx);
 	});
 	pi.on("model_select", (event, ctx) => {

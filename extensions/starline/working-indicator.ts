@@ -5,7 +5,9 @@
  * unless the editor opts in with `embedWorkingStatus`; opting in makes the
  * placement the editor's problem. Starline takes that deal so the plain
  * `working` spinner can ride in the model pill: same glyph slot, same display
- * width, no extra row and no pill bar reflow.
+ * width, no extra row and no pill bar reflow. The plain spinner also carries the
+ * run's elapsed time in the pill, which is the one thing the spinner alone does
+ * not say — and keeps the total there once the run is over.
  *
  * Everything that is not a plain spinner (retry, compaction, branch summary)
  * spells a sentence and carries an interrupt hint, which a pill cannot hold, so
@@ -18,6 +20,8 @@
 import { stripVTControlCharacters } from "node:util";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import type { PolishedTuiConfig } from "./config";
+import { buildElapsedLabel } from "./format";
+import type { TurnTiming } from "./turn-clock";
 
 /**
  * Structural twin of Pi's `StatusIndicator`, which the package does not export.
@@ -51,6 +55,16 @@ export function footerRendersModel(config: PolishedTuiConfig): boolean {
 /** A plain spinner, as opposed to a status that has to spell something out. */
 function isSpinnerOnly(indicator: WorkingIndicator): boolean {
 	return indicator.kind === undefined || indicator.kind === "working";
+}
+
+/**
+ * Whether the pill should read as working, which is a wider question than
+ * whether it has a frame: `setWorkingIndicator({ frames: [] })` keeps the run
+ * going with the animation hidden, and the elapsed time is still true then.
+ */
+function isPlainSpinnerWorking(): boolean {
+	const indicator = currentIndicator;
+	return indicator !== undefined && isSpinnerOnly(indicator);
 }
 
 /**
@@ -143,4 +157,33 @@ export function modelPillIcon(icon: string, frame: string | undefined): string {
 	const frameWidth = visibleWidth(frame);
 	if (frameWidth === 0) return icon;
 	return `${frame}${" ".repeat(Math.max(0, visibleWidth(icon) - frameWidth))}`;
+}
+
+/**
+ * The model pill's whole label: icon slot, model name, and the run's elapsed
+ * time — ticking while the agent works, frozen at the total once the run ends.
+ *
+ * The time sits after the name rather than before it because the spinner has
+ * already taken the icon's slot: `⣾ claude 12s` reads as one sentence, while a
+ * number between the spinner and the name reads as a second icon.
+ *
+ * Two reasons to keep it in the one pill rather than a segment of its own: a
+ * segment that appears and disappears would slide the rest of the bar sideways
+ * at the start and end of every turn, and "working" and "for how long" are the
+ * same question. Whether the number is still counting is what the icon slot
+ * says — a spinner there means live, the model's own icon means this is the last
+ * run's total.
+ */
+export function modelPillLabel(
+	icon: string,
+	label: string,
+	options: { ascii?: boolean; timing?: TurnTiming } = {},
+): string {
+	if (!label) return "";
+	const iconSlot = modelPillIcon(icon, readWorkingFrame(options.ascii === true));
+	const working = isPlainSpinnerWorking();
+	const timing = options.timing ?? {};
+	const elapsedMs = working ? timing.running : timing.last;
+	const text = elapsedMs === undefined ? label : `${label} ${buildElapsedLabel(elapsedMs)}`;
+	return iconSlot ? `${iconSlot} ${text}` : text;
 }
