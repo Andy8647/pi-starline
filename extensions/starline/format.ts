@@ -299,6 +299,22 @@ export function buildCostLabel(totals: UsageTotals): string {
 	return `$${totals.cost.toFixed(3)}`;
 }
 
+/**
+ * Throughput label for the `tps` pill.
+ *
+ * One decimal under 10 keeps slow models from all reading `1 t/s`, and an
+ * integer above it because the second digit is noise at that point and the pill
+ * would jitter in width. Undefined or non-positive input draws nothing: the
+ * segment has no content until a message has actually been measured.
+ */
+export function buildTpsLabel(tokensPerSecond: number | undefined): string {
+	if (tokensPerSecond === undefined || !Number.isFinite(tokensPerSecond)) return "";
+	if (tokensPerSecond <= 0) return "";
+	const rounded =
+		tokensPerSecond < 10 ? tokensPerSecond.toFixed(1) : Math.round(tokensPerSecond).toString();
+	return `${rounded} t/s`;
+}
+
 export function buildSessionDurationLabel(startEpoch: number): string {
 	const totalSeconds = Math.max(0, Math.floor((Date.now() - startEpoch) / 1000));
 	const hours = Math.floor(totalSeconds / 3600);

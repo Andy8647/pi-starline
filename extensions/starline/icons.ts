@@ -38,6 +38,8 @@ export type IconGlyphs = {
 	context: string;
 	cost: string;
 	tokens: string;
+	/** Decode throughput, shown only after a message has been measured. */
+	tps: string;
 	/** The queued-messages pill, shown in front of the count. */
 	queue: string;
 	/** The running-subagents pill. Same glyph pi-tidy uses for subagent tool rows. */
@@ -77,6 +79,7 @@ export const ICON_GLYPH_KEYS = [
 	"context",
 	"cost",
 	"tokens",
+	"tps",
 	"queue",
 	"subagents",
 	"gitHostGithub",
@@ -120,6 +123,7 @@ export const NERD_DEFAULT_ICONS: IconGlyphs = {
 	context: "",
 	cost: "",
 	tokens: "",
+	tps: "",
 	// fa-inbox: messages waiting their turn.
 	queue: "\uf01c",
 	// fa-users, the glyph pi-tidy draws for a subagent tool row.
@@ -156,6 +160,7 @@ export const ASCII_DEFAULT_ICONS: IconGlyphs = {
 	context: "",
 	cost: "",
 	tokens: "",
+	tps: "",
 	queue: "",
 	subagents: "",
 	// gitHostIcon is a Nerd Font feature; it disables itself in ascii mode.

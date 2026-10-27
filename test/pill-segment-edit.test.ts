@@ -148,7 +148,7 @@ describe("/starline Pills tab", () => {
 		expect(rendered).toMatch(/Model\s+1/);
 		expect(rendered).toMatch(/Thinking\s+2/);
 		expect(rendered).toMatch(/Git\s+6/);
-		expect(rendered).toContain("1/19");
+		expect(rendered).toContain(`1/${PILL_SEGMENT_NAMES.length}`);
 	});
 
 	it("moves the selected segment when its value is cycled", async () => {
@@ -171,8 +171,8 @@ describe("/starline Pills tab", () => {
 		const harness = settingsHarness(defaultConfig, new Map([["alpha", "41.1%"]]));
 		const component = await harness.open(3);
 
-		// Nineteen built-in rows, then one per status.
-		expect(component.render(120).join("\n")).toContain("1/20");
+		// One row per built-in segment, then one per status.
+		expect(component.render(120).join("\n")).toContain(`1/${PILL_SEGMENT_NAMES.length + 1}`);
 
 		// The last row is the status, labelled with its key and off the bar.
 		for (let index = 0; index < PILL_SEGMENT_NAMES.length; index += 1) {
@@ -180,6 +180,26 @@ describe("/starline Pills tab", () => {
 		}
 		const rendered = component.render(120).join("\n");
 		expect(rendered).toMatch(/alpha\s+off/);
+	});
+
+	it("can turn off a segment that already sits at the end of the bar", async () => {
+		// A segment on the bar has no "one past the end" value: appending it would
+		// put it back where it already is, and the cycle would never reach `off`.
+		const config: PolishedTuiConfig = {
+			...defaultConfig,
+			pill: { ...defaultConfig.pill, segments: ["model", "time"] },
+		};
+		const harness = settingsHarness(config);
+		const component = await harness.open(3);
+
+		// Walk to the time row, whose segment is the last thing on the bar.
+		for (let index = 0; index < PILL_SEGMENT_NAMES.indexOf("time"); index += 1) {
+			component.handleInput("\x1b[B");
+		}
+		component.handleInput(" ");
+
+		expect(harness.notifications.at(-1)).toBe("Time: off");
+		expect(harness.picked()).toEqual(["model"]);
 	});
 
 	it("puts one status on the bar where it is placed, leaving the catch-all alone", async () => {

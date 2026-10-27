@@ -129,6 +129,7 @@ Default config values — copy this and change any value you want:
 		"context": "",
 		"cost": "",
 		"tokens": "",
+		"tps": "",
 		"queue": "\uf01c",
 		"subagents": "\uf0c0",
 		"gitHostGithub": "",
@@ -147,6 +148,7 @@ Default config values — copy this and change any value you want:
 		"tokens": "bright-black",
 		"cacheHit": "bright-black",
 		"cost": "bold green",
+		"tps": "bright-black",
 		"runtimePrefix": "",
 		"extensionStatus": "bright-black",
 		"sessionDuration": "yellow",
@@ -376,6 +378,28 @@ Clicking it opens that bubble, which follows the numbers while a turn streams.
 existing bar keeps the numbers instead of dropping them. The rate disappears
 from the bubble when nothing has been read from cache, or when the latest turn
 has no known rate, rather than claiming a miss.
+
+### The tps pill
+
+Decode throughput of the **latest** assistant message (`42 t/s`). The window
+opens on that message's first streamed delta and closes when it ends, so
+queueing, time-to-first-token and every tool call in the turn fall outside it:
+the number says how fast the model writes, not how long the turn took. Rates
+under 10 keep one decimal (`4.3 t/s`) so slow models do not all read `1 t/s`.
+
+The pill is blank until a message has been measured. While a message streams
+the number is an estimate from the text that has arrived so far (CJK about one
+token per glyph, Latin about four characters per token), refreshed at most twice
+a second. Providers report usage only in their final chunk, so the real count
+does not exist until the message ends, and that is when the estimate is replaced
+with it: expect the number to settle by a few tens of percent at the end of a
+message. The window is the whole message so far rather than a sliding one, so a
+stall does not make the rate collapse.
+
+Messages that arrive in a single chunk (no stream to measure) are skipped instead
+of reporting a fabricated rate. With several messages in one turn the pill
+follows the most recent one, so it settles on the last thing the model wrote. Not
+clickable: there is nothing behind it beyond the number.
 
 ## Git
 
