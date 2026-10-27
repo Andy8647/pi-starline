@@ -315,14 +315,25 @@ export function buildTpsLabel(tokensPerSecond: number | undefined): string {
 	return `${rounded} t/s`;
 }
 
-export function buildSessionDurationLabel(startEpoch: number): string {
-	const totalSeconds = Math.max(0, Math.floor((Date.now() - startEpoch) / 1000));
+/**
+ * Elapsed time at pill width: `45s`, `2m 13s`, `1h 5m`.
+ *
+ * Two units at most. The pill is a glance, not a stopwatch, and dropping the
+ * fine unit once the coarser one carries the meaning keeps the bar from growing
+ * a column every second. Negative input clamps to `0s`.
+ */
+export function buildElapsedLabel(elapsedMs: number): string {
+	const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
 	const hours = Math.floor(totalSeconds / 3600);
 	const minutes = Math.floor((totalSeconds % 3600) / 60);
 	const seconds = totalSeconds % 60;
 	if (hours > 0) return `${hours}h ${minutes}m`;
 	if (minutes > 0) return `${minutes}m ${seconds}s`;
 	return `${seconds}s`;
+}
+
+export function buildSessionDurationLabel(startEpoch: number): string {
+	return buildElapsedLabel(Date.now() - startEpoch);
 }
 
 /**

@@ -10,6 +10,32 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [0.8.0] - 2026-10-28
+
+The model pill counts the turn, and keeps the number when the turn is over.
+
+**Added**
+
+- **How long the current turn has been running.** The spinner that already takes
+  the pill's icon slot now has the run's elapsed time beside the model name:
+  `⣾ claude 12s`, `2m 13s`, `1h 5m`. Seconds under a minute, then two units at
+  most, so the bar does not grow a column every second. The clock starts on
+  `agent_start`, which means tool calls count too — a tool that has been silent
+  for two minutes is exactly when the number is worth having. Nothing is
+  polled: the working spinner already redraws the footer while a run is going.
+
+**Changed**
+
+- **The number stays after the run ends.** It used to have no reason to; now the
+  slot goes back to the model's own icon and the elapsed time freezes at the
+  total the turn reached (` claude 12s`). A spinning glyph means the value is
+  live, the model icon means it is history. The next turn clears it and counts
+  from zero, and a new or resumed session starts with nothing to show.
+
+No configuration is needed: it rides in the `model` pill and follows
+`features.statusLine`. Retry, compaction and branch summary are unchanged —
+those are not plain spinners and still use Pi's own row above the editor.
+
 ## [0.7.0] - 2026-10-27
 
 Decode speed on the bar, and a segment that could not be turned back off.
