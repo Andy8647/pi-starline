@@ -10,6 +10,29 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [0.8.1] - 2026-10-28
+
+Typing no longer takes the session down when another package wraps the editor,
+and a reload leaves one paste-collapse layer instead of two.
+
+**Fixed**
+
+- **A session that died on the first keystroke.** With a package that hands Pi a
+  Proxy over the editor (`pi-better-background-tasks` does, to take over the
+  arrow keys), Starline captured that Proxy's wrapper instead of the handler
+  underneath, then shadowed the property the wrapper dispatches through. The
+  two called each other with nothing beneath, and the first character typed
+  overflowed the stack and exited Pi. The handlers are now captured where they
+  live, so the other package's wrapper still sees every keystroke first and only
+  the capture moved. Nothing changes when no Proxy is involved.
+- **Reloading stacked the same wrapper every time.** The cleanup that removes
+  Starline's wrapper asked for it through the Proxy too, never recognised it,
+  and left it installed; each `/reload` added another layer for the rest of the
+  session. It now looks where it put it, so the handler the editor had before is
+  the one it has afterwards.
+
+No configuration change.
+
 ## [0.8.0] - 2026-10-28
 
 The model pill counts the turn, and keeps the number when the turn is over.
