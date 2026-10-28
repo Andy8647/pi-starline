@@ -324,17 +324,24 @@ export function installPasteCollapse(
 	};
 	const ownHint = activeHint;
 
+	/** Read back where the shadows were put. `[[Get]]` is the wrong question to ask
+	 *  an editor that came wrapped in another extension's Proxy: its get trap
+	 *  answers `handleInput` with a wrapper of its own, so the comparison below
+	 *  never recognises our shadow and the disposer leaves it installed. */
+	const ownValue = (prop: "handleInput" | "handlePaste"): unknown =>
+		Object.getOwnPropertyDescriptor(editor, prop)?.value;
+
 	return () => {
 		armed = null;
 		if (activeHint === ownHint) activeHint = null;
-		if (inputShadow && (editor as { handleInput?: unknown }).handleInput === inputShadow) {
+		if (inputShadow && ownValue("handleInput") === inputShadow) {
 			if (previousOwnInput) {
 				Object.defineProperty(editor, "handleInput", previousOwnInput);
 			} else {
 				delete (editor as { handleInput?: unknown }).handleInput;
 			}
 		}
-		if ((editor as { handlePaste?: unknown }).handlePaste !== shadow) return;
+		if (ownValue("handlePaste") !== shadow) return;
 		if (previousOwn) {
 			Object.defineProperty(editor, "handlePaste", previousOwn);
 			return;
