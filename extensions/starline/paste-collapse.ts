@@ -64,6 +64,39 @@ export function supportsPasteCollapse(value: unknown): boolean {
 }
 
 /**
+ * Find an editor method through [[GetOwnProperty]] instead of [[Get]].
+ *
+ * What we are handed is not always the editor. Another extension may pass us its
+ * own Proxy over it — `pi-better-background-tasks` answers `handleInput` with a
+ * wrapper its get trap builds on the spot, and forwards writes to the editor
+ * behind. Capturing through [[Get]] then captures *that* wrapper, and the
+ * `defineProperty` below shadows the very property the wrapper dispatches
+ * through, so the two call each other with nothing underneath: one keystroke and
+ * the stack is gone. Descriptor reads go to the target, so this finds the real
+ * handler whoever's Proxy is standing in front of it.
+ */
+function resolveHandler<Signature extends (...args: never[]) => unknown>(
+	editor: object,
+	prop: string,
+): Signature | undefined {
+	// An instance handler first: whoever put it there is upstream of us, and Pi
+	// itself keeps its handlers on the prototype, where the walk below finds them.
+	const own = Object.getOwnPropertyDescriptor(editor, prop);
+	if (own && "value" in own && typeof own.value === "function") return own.value as Signature;
+	for (
+		let proto: object | null = Object.getPrototypeOf(editor);
+		proto !== null;
+		proto = Object.getPrototypeOf(proto)
+	) {
+		const desc = Object.getOwnPropertyDescriptor(proto, prop);
+		if (desc && "value" in desc && typeof desc.value === "function") {
+			return desc.value as Signature;
+		}
+	}
+	return undefined;
+}
+
+/**
  * Reproduce Pi's pre-collapse cleaning: decode the CSI-u control re-encoding
  * some terminals apply inside a bracketed paste, normalise line endings and
  * tabs, then drop non-printables except newlines.
@@ -174,7 +207,7 @@ export function installPasteCollapse(
 	const editor = asPasteInternals(value);
 	if (!editor) return undefined;
 
-	const base = editor.handlePaste;
+	const base = resolveHandler<(text: string) => void>(editor, "handlePaste");
 	if (typeof base !== "function") return undefined;
 
 	// Pi keeps handlePaste on the prototype, where deleting our shadow reveals it
@@ -260,17 +293,16 @@ export function installPasteCollapse(
 
 	// Anything that is not a paste puts the offer away. Pi feeds a bracketed paste
 	// in over several calls with isInPaste set, so only the tail of one counts.
-	const baseInput = editor.handleInput;
+	const baseInput = resolveHandler<(data: string) => unknown>(editor, "handleInput");
 	const previousOwnInput = Object.getOwnPropertyDescriptor(editor, "handleInput");
-	const inputShadow =
-		typeof baseInput === "function"
-			? function (this: unknown, data: string): unknown {
-					sawPaste = false;
-					const result = baseInput.call(editor, data);
-					if (!sawPaste && editor.isInPaste !== true) armed = null;
-					return result;
-				}
-			: null;
+	const inputShadow = baseInput
+		? function (this: unknown, data: string): unknown {
+				sawPaste = false;
+				const result = baseInput.call(editor, data);
+				if (!sawPaste && editor.isInPaste !== true) armed = null;
+				return result;
+			}
+		: null;
 	if (inputShadow) {
 		Object.defineProperty(editor, "handleInput", {
 			configurable: true,
