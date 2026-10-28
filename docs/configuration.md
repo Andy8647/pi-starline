@@ -4,28 +4,28 @@ Every option Starline has.
 
 ## All options
 
-| Key | Type | Default | What it does |
-| --- | --- | --- | --- |
-| `projectRefreshIntervalMs` | number | `30000` | How often git and runtime state are re-read. Minimum 5000. |
-| `pill` | object | see [Pill footer](#pill-footer) | Segment order, separator glyph, boldness, and cap style for the pill footer. |
-| `editorMetadataFormat` | string | `"$model  $provider(  $thinking)"` | Template for the left side of the editor metadata row, see [Editor Metadata Format](#editor-metadata-format). |
-| `contextStyle` | string | `"text"` | Whether the context segment shows text, a gauge, or both. |
-| `segmentOptions` | object | see [Segment display options](#segment-display-options) | Formatting details for the context pill, the numbers in its bubble, and the subagents pill. |
-| `editorModelLabel` | string | `"id"` | Whether the editor frame shows the model id or its display name. |
-| `editorCursor` | string | `"block"` | Cursor style in the editor, see [Editor cursor](#editor-cursor). |
-| `editorClickCursor` | boolean | `true` | Clicking in the editor text moves the caret there, see [Mouse](#mouse). |
-| `pasteCollapseLines` | number | `11` | Line count at which a paste collapses into a marker, see [Paste collapse threshold](#paste-collapse-threshold). |
-| `editorPaddingY` | number | `1` | Blank rows inside the editor box, see [Box height](#box-height). |
-| `userMessagePaddingY` | number | `1` | Blank rows inside the previous-message box, see [Box height](#box-height). |
-| `contextThresholds` | object | `{ "warning": 70, "error": 90 }` | Percentages that select the context segment's normal/warning/error colours. |
-| `pathDisplay` | object | `{ "mode": "basename", "depth": 0 }` | Whether the cwd segment shows the basename or a full path, and how many trailing directories to keep. |
-| `git` | object | see [Git](#git) | Branch length, forge logo, commit and line-metric options. |
-| `icons` | object | see the JSON block below | Per-icon glyph overrides and the icon mode (`auto`, `nerd`, `ascii`). |
-| `colors` | object | see [Colors](#colors) | Style string for every themeable segment and editor element. |
-| `colorSources` | object | `{ "starship": "theme", "editor": "theme", "userMessages": "theme" }` | Whether each area's colours come from the Pi theme or the terminal palette. |
-| `features` | object | `{ "editor": true, "statusLine": true, "copyFriendly": false }` | Toggles the custom editor, the custom footer, and copy-friendly mode. |
-| `extensionStatuses` | object | see [Pill footer](#pill-footer) | Placement, colour, and icon for third-party extension statuses. |
-| `mouse` | object | see [Mouse features](#mouse-features) | Wheel routing, click-to-expand tool boxes, path-aware word selection, and Starline's own copy behaviour. |
+| Key                        | Type    | Default                                                               | What it does                                                                                                    |
+| -------------------------- | ------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `projectRefreshIntervalMs` | number  | `30000`                                                               | How often git and runtime state are re-read. Minimum 5000.                                                      |
+| `pill`                     | object  | see [Pill footer](#pill-footer)                                       | Segment order, separator glyph, boldness, and cap style for the pill footer.                                    |
+| `editorMetadataFormat`     | string  | `"$model  $provider(  $thinking)"`                                    | Template for the left side of the editor metadata row, see [Editor Metadata Format](#editor-metadata-format).   |
+| `contextStyle`             | string  | `"text"`                                                              | Whether the context segment shows text, a gauge, or both.                                                       |
+| `segmentOptions`           | object  | see [Segment display options](#segment-display-options)               | Formatting details for the context pill, the numbers in its bubble, and the subagents pill.                     |
+| `editorModelLabel`         | string  | `"id"`                                                                | Whether the editor frame shows the model id or its display name.                                                |
+| `editorCursor`             | string  | `"block"`                                                             | Cursor style in the editor, see [Editor cursor](#editor-cursor).                                                |
+| `editorClickCursor`        | boolean | `true`                                                                | Clicking in the editor text moves the caret there, see [Mouse](#mouse).                                         |
+| `pasteCollapseLines`       | number  | `11`                                                                  | Line count at which a paste collapses into a marker, see [Paste collapse threshold](#paste-collapse-threshold). |
+| `editorPaddingY`           | number  | `1`                                                                   | Blank rows inside the editor box, see [Box height](#box-height).                                                |
+| `userMessagePaddingY`      | number  | `1`                                                                   | Blank rows inside the previous-message box, see [Box height](#box-height).                                      |
+| `contextThresholds`        | object  | `{ "warning": 70, "error": 90 }`                                      | Percentages that select the context segment's normal/warning/error colours.                                     |
+| `pathDisplay`              | object  | `{ "mode": "basename", "depth": 0 }`                                  | Whether the cwd segment shows the basename or a full path, and how many trailing directories to keep.           |
+| `git`                      | object  | see [Git](#git)                                                       | Branch length, forge logo, commit and line-metric options.                                                      |
+| `icons`                    | object  | see the JSON block below                                              | Per-icon glyph overrides and the icon mode (`auto`, `nerd`, `ascii`).                                           |
+| `colors`                   | object  | see [Colors](#colors)                                                 | Style string for every themeable segment and editor element.                                                    |
+| `colorSources`             | object  | `{ "starship": "theme", "editor": "theme", "userMessages": "theme" }` | Whether each area's colours come from the Pi theme or the terminal palette.                                     |
+| `features`                 | object  | `{ "editor": true, "statusLine": true, "copyFriendly": false }`       | Toggles the custom editor, the custom footer, and copy-friendly mode.                                           |
+| `extensionStatuses`        | object  | see [Pill footer](#pill-footer)                                       | Placement, colour, and icon for third-party extension statuses.                                                 |
+| `mouse`                    | object  | see [Mouse features](#mouse-features)                                 | Wheel routing, click-to-expand tool boxes, path-aware word selection, and Starline's own copy behaviour.        |
 
 User config lives at `~/.pi/agent/starline.json`. The file is optional: missing or invalid known values fall back to Starline defaults, unknown keys are ignored at runtime, and `/starline` can patch color-source settings, UI feature toggles, and active third-party status placements.
 
@@ -51,15 +51,7 @@ Default config values — copy this and change any value you want:
 {
 	"projectRefreshIntervalMs": 30000,
 	"pill": {
-		"segments": [
-			"model",
-			"thinking",
-			"cwd",
-			"git",
-			"context",
-			"cost",
-			"extensionStatus"
-		],
+		"segments": ["model", "thinking", "cwd", "git", "context", "cost", "extensionStatus"],
 		"separator": "powerline",
 		"bold": true,
 		"caps": "round"
@@ -213,12 +205,12 @@ Tip: when using copy-friendly mode, setting Pi's `editorPaddingX` to `1` in `~/.
 
 Every `colors.*` value is a space-separated style string. Four kinds of colour are accepted, and they have a defined precedence.
 
-| Written as | Example | Resolves to |
-| --- | --- | --- |
-| Theme colour key | `"accent"`, `"syntaxKeyword"` | Whatever your Pi theme maps that key to |
-| Terminal colour name | `"bold cyan"` | The theme key the name maps to, or the raw terminal colour when `colorSources` is `terminal` |
-| 256-colour index | `"208"` | That palette entry |
-| Hex literal | `"#cba6f7"` | Exactly that colour |
+| Written as           | Example                       | Resolves to                                                                                  |
+| -------------------- | ----------------------------- | -------------------------------------------------------------------------------------------- |
+| Theme colour key     | `"accent"`, `"syntaxKeyword"` | Whatever your Pi theme maps that key to                                                      |
+| Terminal colour name | `"bold cyan"`                 | The theme key the name maps to, or the raw terminal colour when `colorSources` is `terminal` |
+| 256-colour index     | `"208"`                       | That palette entry                                                                           |
+| Hex literal          | `"#cba6f7"`                   | Exactly that colour                                                                          |
 
 **A hex literal or 256 index always wins over the theme, regardless of `colorSources`.** That is what lets you override one segment without leaving theme-driven colours everywhere else. Attributes `bold`, `italic`, `underline` and `dim` can be combined with any of them.
 
@@ -285,13 +277,13 @@ The footer is a bar of coloured pills joined by seamless powerline arrows. `pill
 }
 ```
 
-| Key | Values | Meaning |
-| --- | --- | --- |
-| `segments` | segment names (`cwd`, `git`, `context`, `cost`, …), plus `queue`, `subagents`, `extensionStatus`, `extensionStatus:<key>` | Order, left to right |
-| `separator` | `powerline` (default), `powerline-thin`, `none` | Glyph between pills |
-| `bold` | `true` (default), `false` | Bold segment text |
-| `caps` | `round` (default), `right`, `none` | How the bar's ends are closed |
-| `bubbleAnimation` | `true` (default), `false` | Unfold a clicked pill's bubble upward from the pill (60 ms) instead of showing it at once. Applies from the next session or `/reload`. |
+| Key               | Values                                                                                                                    | Meaning                                                                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `segments`        | segment names (`cwd`, `git`, `context`, `cost`, …), plus `queue`, `subagents`, `extensionStatus`, `extensionStatus:<key>` | Order, left to right                                                                                                                   |
+| `separator`       | `powerline` (default), `powerline-thin`, `none`                                                                           | Glyph between pills                                                                                                                    |
+| `bold`            | `true` (default), `false`                                                                                                 | Bold segment text                                                                                                                      |
+| `caps`            | `round` (default), `right`, `none`                                                                                        | How the bar's ends are closed                                                                                                          |
+| `bubbleAnimation` | `true` (default), `false`                                                                                                 | Unfold a clicked pill's bubble upward from the pill (60 ms) instead of showing it at once. Applies from the next session or `/reload`. |
 
 Order and visibility of the bar live in `pill.segments`. The **Pills** tab in
 `/starline` edits the same list: one row per segment, and its value is the
@@ -338,10 +330,10 @@ Give each status its own icon with `extensionStatuses.icons`, keyed by status ke
 `extensionStatuses.formats` keeps a status to its number, so an icon plus that
 number reads as one compact pill instead of `MCP: 3 servers`:
 
-| Format | `Tavily: 41.1%` | `1 proc` | `ready` |
-| --- | --- | --- | --- |
+| Format           | `Tavily: 41.1%` | `1 proc` | `ready` |
+| ---------------- | --------------- | -------- | ------- |
 | `full` (default) | `Tavily: 41.1%` | `1 proc` | `ready` |
-| `value` | `41.1%` | `1` | `ready` |
+| `value`          | `41.1%`         | `1`      | `ready` |
 
 A status with no number keeps its text under `value`: blanking `ready` would leave
 an icon that says nothing. The format changes only what the bar draws, not what
@@ -368,10 +360,10 @@ the publishing extension sent (its own `setStatus` text stays as it was).
 One pill carries all the token accounting, and normally shows only the context
 percentage:
 
-| | |
-| --- | --- |
-| Pill | `41%` — or the gauge, per `contextStyle`, and `percent` drops the window size |
-| Bubble | `41% of 200k · 83k used`, the session's `↑250k ↓193k`, and the cache rate |
+|        |                                                                               |
+| ------ | ----------------------------------------------------------------------------- |
+| Pill   | `41%` — or the gauge, per `contextStyle`, and `percent` drops the window size |
+| Bubble | `41% of 200k · 83k used`, the session's `↑250k ↓193k`, and the cache rate     |
 
 Clicking it opens that bubble, which follows the numbers while a turn streams.
 `tokens` and `cacheHit` in `pill.segments` are rewritten to `context`, so an
@@ -432,16 +424,16 @@ clickable: there is nothing behind it beyond the number.
 }
 ```
 
-| Key | Default | What it does |
-| --- | --- | --- |
-| `counts` | `false` | Show numbers beside the ahead/behind and stash glyphs (`!3`) instead of the glyph alone (`!`). |
-| `hostIcon` | `false` | Replace the branch icon with the `origin` remote's forge logo: GitHub, GitLab, Bitbucket, or a generic git mark for anything else, including self-hosted instances recognised by subdomain (`gitlab.acme.com`). Repos with no `origin` keep the plain branch icon. The remote is read once and cached for ten minutes, and only read when this is on. Disabled in `icons.mode: "ascii"`. |
-| `branch.maxLength` | `"full"` | Caps the visible width of the branch name. `full` keeps the whole name; a positive integer truncates to that width including the trailing `…`. The **Layout** tab cycles `full`, `10`, `20`, `30`, `40`, `50`. |
-| `commit.hashLength` | `7` | Short-hash width for the `gitCommit` pill, clamped to `4`–`40`. |
-| `commit.onlyDetached` | `true` | Show the hash mainly on a detached HEAD, where the branch name is gone. |
-| `commit.showTag` | `true` | Append the exact-match tag (`git describe --tags --exact-match HEAD`). The lookup only runs while a tag can be shown. |
-| `metrics.onlyNonzero` | `true` | Omit each zero side of `+added −deleted` independently, and hide the pill entirely at `0/0`. |
-| `metrics.ignoreSubmodules` | `false` | Pass `--ignore-submodules=all` to the numstat diff. |
+| Key                        | Default  | What it does                                                                                                                                                                                                                                                                                                                                                                             |
+| -------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `counts`                   | `false`  | Show numbers beside the ahead/behind and stash glyphs (`!3`) instead of the glyph alone (`!`).                                                                                                                                                                                                                                                                                           |
+| `hostIcon`                 | `false`  | Replace the branch icon with the `origin` remote's forge logo: GitHub, GitLab, Bitbucket, or a generic git mark for anything else, including self-hosted instances recognised by subdomain (`gitlab.acme.com`). Repos with no `origin` keep the plain branch icon. The remote is read once and cached for ten minutes, and only read when this is on. Disabled in `icons.mode: "ascii"`. |
+| `branch.maxLength`         | `"full"` | Caps the visible width of the branch name. `full` keeps the whole name; a positive integer truncates to that width including the trailing `…`. The **Layout** tab cycles `full`, `10`, `20`, `30`, `40`, `50`.                                                                                                                                                                           |
+| `commit.hashLength`        | `7`      | Short-hash width for the `gitCommit` pill, clamped to `4`–`40`.                                                                                                                                                                                                                                                                                                                          |
+| `commit.onlyDetached`      | `true`   | Show the hash mainly on a detached HEAD, where the branch name is gone.                                                                                                                                                                                                                                                                                                                  |
+| `commit.showTag`           | `true`   | Append the exact-match tag (`git describe --tags --exact-match HEAD`). The lookup only runs while a tag can be shown.                                                                                                                                                                                                                                                                    |
+| `metrics.onlyNonzero`      | `true`   | Omit each zero side of `+added −deleted` independently, and hide the pill entirely at `0/0`.                                                                                                                                                                                                                                                                                             |
+| `metrics.ignoreSubmodules` | `false`  | Pass `--ignore-submodules=all` to the numstat diff.                                                                                                                                                                                                                                                                                                                                      |
 
 The numstat diff is the Starship “total dirty” view: staged and unstaged combined. It piggybacks on the git refresh with a hard 2 s timeout; a metrics-only failure degrades silently without discarding fresh branch/status data. On very large monorepos the diff may lag or be omitted on timeout.
 
@@ -516,7 +508,7 @@ guessing would be silently pasting the wrong thing.
 - `enabled` — master switch for every mouse feature below. On by default.
 - `wheelRouting` — routes the mouse wheel to scroll the transcript instead of leaving it to the terminal.
 - `copyNotice` — shows a "Copied to clipboard" flash for a copy **Starline** performs, such as a clean copy. Pi confirms its own copy-on-release with its own flash regardless of this setting.
-Single-box click-to-toggle is **Pi's own** since 0.86.0 — a click anywhere in a tool box's result region toggles just that box (the renderer only synthesizes a click when press and release land on the same cell, so drag-selection is unaffected), and thinking blocks, branch/compaction summaries and skill invocations toggle the same way. Starline's hint-row patch and its `clickToExpandTools` key are retired; a `mouse.clickToExpandTools` key in an old config is ignored at runtime.
+  Single-box click-to-toggle is **Pi's own** since 0.86.0 — a click anywhere in a tool box's result region toggles just that box (the renderer only synthesizes a click when press and release land on the same cell, so drag-selection is unaffected), and thinking blocks, branch/compaction summaries and skill invocations toggle the same way. Starline's hint-row patch and its `clickToExpandTools` key are retired; a `mouse.clickToExpandTools` key in an old config is ignored at runtime.
 
 ## Editor cursor
 
@@ -546,14 +538,14 @@ Set `editorMetadataFormat` in `~/.pi/agent/starline.json` to customize the left 
 
 The syntax follows the same conventions as `editorMetadataFormat`: `$variable` and `${variable}` references, literal text and spaces, and conditional groups `( ... )` that disappear when all variables inside are empty. Unknown variables and `$fill` render empty; `$fill` never creates an editor layout zone because the right side remains reserved for structural Vim status.
 
-| Token           | Renders                                                                                       |
-| --------------- | --------------------------------------------------------------------------------------------- |
-| `$model`        | label selected by `editorModelLabel` (`id`, or name with ID fallback)                        |
-| `$model_id`     | active Pi model ID                                                                            |
-| `$model_name`   | active Pi model display name; empty when no name is set                                       |
-| `$provider`     | provider label using Starline's existing formatting                                             |
-| `$thinking`     | current thinking level; empty when thinking is `off`                                          |
-| `$session_name` | current Pi session name; empty when unnamed                                                    |
+| Token           | Renders                                                               |
+| --------------- | --------------------------------------------------------------------- |
+| `$model`        | label selected by `editorModelLabel` (`id`, or name with ID fallback) |
+| `$model_id`     | active Pi model ID                                                    |
+| `$model_name`   | active Pi model display name; empty when no name is set               |
+| `$provider`     | provider label using Starline's existing formatting                   |
+| `$thinking`     | current thinking level; empty when thinking is `off`                  |
+| `$session_name` | current Pi session name; empty when unnamed                           |
 
 Model variables use `editorModel`, provider uses `editorProvider`, and thinking uses the matching `editorThinking*` style. Literal text and `$session_name` use the neutral editor border theme style. The template controls spacing. ANSI/VT sequences, control characters, and line-breaking whitespace are sanitized before rendering without collapsing ordinary spaces.
 
