@@ -24,12 +24,12 @@ Make the footer interactive without making it fragile:
 
 Four actions motivated this, in the order they are worth building:
 
-| Pill | Click |
-| --- | --- |
-| queue indicator | list what is queued (steering / follow-up) |
-| thinking level | step to the next level the model supports |
-| model | pick a model, reusing Pi's own selector component |
-| git branch | switch branch, after a dirty-worktree check |
+| Pill                 | Click                                                     |
+| -------------------- | --------------------------------------------------------- |
+| queue indicator      | list what is queued (steering / follow-up)                |
+| thinking level       | step to the next level the model supports                 |
+| model                | pick a model, reusing Pi's own selector component         |
+| git branch           | switch branch, after a dirty-worktree check               |
 | any extension status | let the extension decide (at minimum: show its full text) |
 
 Thinking was not in the original four: it arrived second because the pill is on
@@ -46,7 +46,7 @@ works without staging anything.
   **As built:** every entry of a `vstack`/`hstack` gets a box, with or without a
   layout node (`layoutComponent` in `layout.js`); a component that declares no
   `[LAYOUT_NODE]()` simply gets a box with no children of its own. What
-  `dispatchMouseToLayout` skips is the narrower case of a component that *does*
+  `dispatchMouseToLayout` skips is the narrower case of a component that _does_
   declare a node and still uses `Container.prototype.handleMouse`, because there
   the box is the whole container rather than one leaf. Pi's footer slot is a plain
   `Container`, so it is a box, it is dispatched to, and its `handleMouse` forwards
@@ -89,7 +89,7 @@ Pi's container rebases `y` into it, so `handleMouse(event)` receives exactly the
 coordinates the pill spans are measured in. An event that lands on no pill returns
 `undefined`, so a click on empty footer space falls through and swallows nothing.
 
-**As built:** the handler also claims `press`, and the action runs *on that press*.
+**As built:** the handler also claims `press`, and the action runs _on that press_.
 Waiting for Pi's synthesized `click` would put the whole button-hold in front of the
 bubble: a click is press + release + synth, and for a target one row tall that hop
 is pure added latency. Because Pi synthesizes a click for every press that did not
@@ -101,7 +101,7 @@ any selection a user meant to start. `test/pill-click.test.ts` pins all three
 branches: press acts, the following click is swallowed, a drag undoes.
 
 Rejected: `MouseRegion`. It is the right tool when a handler wants to wrap
-*someone else's* component; here the footer and the handler are the same object,
+_someone else's_ component; here the footer and the handler are the same object,
 and the extra layer would only separate the hit map from the render that produced
 it.
 
@@ -228,7 +228,7 @@ Ghostty and kitty honour it, other terminals ignore it). Pi already delivers eve
 pointer movement to the component under it as a `move` (any-motion tracking; under
 tmux, zellij and screen it only reports with a button held, so there is no hover).
 
-The missing half is *leaving*: Pi has no leave event, and the move after the last
+The missing half is _leaving_: Pi has no leave event, and the move after the last
 one over a pill goes to whatever is under the pointer now. So the shape is not the
 footer's to manage. `mouse/pointer-shape.ts` wraps `TuiAltScreen.handleMouseEvent`;
 during a `move` a component calls `requestPointerShape("pointer")`, and after the
@@ -336,13 +336,13 @@ field on the extension context plus a switch for the rows; `live-session.ts` and
 
 ## Phasing
 
-| Phase | Content | Effort |
-| --- | --- | --- |
-| 1 ✅ | Footer `handleMouse`, pill span sink, action table, `/starline` action commands, speech-bubble popover, two actions (queue status → bubble listing what is queued; thinking level → pick from the list, or step from the command) | M |
-| 2 ✅ | Model picker: the session's scoped models in the bubble, switched with `pi.setModel` | S |
-| 3 | Branch switcher (list local branches, confirm on a dirty worktree, `git checkout`) | M |
-| 4 ✅ | Extension-status click hook: a status key opts in by publishing structured data — shipped as the published pill API, which also covers `pi-subagents` and any other extension | S–M |
-| 5 ✅ | `subagents` pill: count of running subagents, bubble listing them, read from pi-subagents' public RPC | S |
+| Phase | Content                                                                                                                                                                                                                           | Effort |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 1 ✅  | Footer `handleMouse`, pill span sink, action table, `/starline` action commands, speech-bubble popover, two actions (queue status → bubble listing what is queued; thinking level → pick from the list, or step from the command) | M      |
+| 2 ✅  | Model picker: the session's scoped models in the bubble, switched with `pi.setModel`                                                                                                                                              | S      |
+| 3     | Branch switcher (list local branches, confirm on a dirty worktree, `git checkout`)                                                                                                                                                | M      |
+| 4 ✅  | Extension-status click hook: a status key opts in by publishing structured data — shipped as the published pill API, which also covers `pi-subagents` and any other extension                                                     | S–M    |
+| 5 ✅  | `subagents` pill: count of running subagents, bubble listing them, read from pi-subagents' public RPC                                                                                                                             | S      |
 
 Phase 1 was the only phase that touched rendering; phases 2–4 are actions added to a
 table that already works, which is the point of doing it in that order. Phase 1
@@ -358,7 +358,7 @@ Phase 4 landed as `pill-api.ts`, and a bridged status pill is exercised end to e
   expose a global mouse channel with screen coordinates. A component that renders
   its own pills gets precise, already-rebased events from Pi's own dispatch, so the
   channel would be a worse source for the same information. It stays useful for
-  extensions that need to watch the mouse *globally*, which is not this.
+  extensions that need to watch the mouse _globally_, which is not this.
 - **No layout work.** The footer is one line and an overlay is composited on top;
   neither the hit map nor the bubble declares a layout node.
 - **No upstream API for rendering.** Everything in that half is public surface in
@@ -372,7 +372,7 @@ Phase 4 landed as `pill-api.ts`, and a bridged status pill is exercised end to e
   for its visible cells; a pill clipped away entirely is not in the map at all.
 - **Accidental clicks while selecting.** The footer sits below the editor, so a
   drag that starts in the transcript and ends on the footer is a selection, not a
-  click. **As built:** the press runs the action, so a gesture that *starts* on a
+  click. **As built:** the press runs the action, so a gesture that _starts_ on a
   pill opens it before it becomes anything else — the drag branch closes it again
   once the pointer has moved more than two columns, and a gesture that slides onto
   the footer and releases there never fires at all, since no press landed on the
