@@ -364,3 +364,95 @@ describe("paste again to expand", () => {
 		expect(pasteExpandHintText()).toBeNull();
 	});
 });
+
+// Another extension may hand us its own Proxy over the editor rather than the
+// editor. `pi-better-background-tasks` does: its get trap answers `handleInput`
+// with a wrapper built on the spot, and writes land on the editor behind. If we
+// capture that wrapper and then shadow the property it dispatches through, the
+// two call each other with nothing underneath and the first keystroke overflows
+// the stack. These cover the capture going to the real handler either way.
+describe("editor wrapped by another extension's Proxy", () => {
+	type Proxied = ReturnType<typeof makeEditor>["editor"];
+
+	/** The shape `pi-better-background-tasks` installs: get trap synthesises
+	 *  `handleInput`, and everything else — writes included — goes to the target. */
+	function proxyLikeNavigator(editor: Proxied, seen: string[]) {
+		return new Proxy(editor, {
+			get(target, prop, receiver) {
+				if (prop === "handleInput") {
+					return (data: string) => {
+						seen.push(data);
+						return target.handleInput?.call(target, data);
+					};
+				}
+				const value = Reflect.get(target, prop, receiver);
+				return typeof value === "function" ? value.bind(target) : value;
+			},
+		});
+	}
+
+	it("does not recurse when the handler is an instance property", () => {
+		const { editor } = makeEditor();
+		const original = editor.handleInput;
+		const seen: string[] = [];
+		const proxy = proxyLikeNavigator(editor, seen);
+
+		const dispose = installPasteCollapse(proxy, () => 3);
+		expect(dispose).toBeTypeOf("function");
+		expect(() => proxy.handleInput?.("x")).not.toThrow();
+
+		// One pass through each layer: the wrapper first, then the real handler.
+		expect(seen).toEqual(["x"]);
+		expect(original).toHaveBeenCalledTimes(1);
+		dispose?.();
+	});
+
+	// Pi keeps its handlers on the prototype, so this is the real layout: nothing
+	// own to find, and the wrapper still gets its look at the keystroke.
+	it("reaches a prototype handler underneath the Proxy", () => {
+		const inputs: string[] = [];
+		const pastes = new Map<number, string>();
+		class ProtoEditor {
+			pastes = pastes;
+			pasteCounter = 0;
+			isInPaste = false;
+			state = { lines: [""], cursorLine: 0, cursorCol: 0 };
+			handlePaste(text: string) {
+				this.state.lines = [text];
+			}
+			handleInput(data: string) {
+				inputs.push(data);
+			}
+			normalizeText(text: string) {
+				return text;
+			}
+			insertTextAtCursorInternal(text: string) {
+				this.state.lines = [text];
+			}
+		}
+		const editor = new ProtoEditor();
+		const seen: string[] = [];
+		const proxy = proxyLikeNavigator(editor as unknown as Proxied, seen);
+
+		const dispose = installPasteCollapse(proxy, () => 3);
+		expect(dispose).toBeTypeOf("function");
+		expect(() => proxy.handleInput?.("x")).not.toThrow();
+		expect(() => proxy.handleInput?.("y")).not.toThrow();
+
+		expect(inputs).toEqual(["x", "y"]);
+		expect(seen).toEqual(["x", "y"]);
+		dispose?.();
+	});
+
+	// The paste path is patched the same way, so it has to survive the Proxy too.
+	it("still collapses a paste arriving through the Proxy", () => {
+		const { editor, inserted } = makeEditor();
+		const proxy = proxyLikeNavigator(editor, []);
+
+		installPasteCollapse(proxy, () => 3);
+		proxy.handlePaste?.(lines(4));
+
+		expect(inserted).toEqual(["[paste #1 +4 lines]"]);
+		expect(editor.pastes.get(1)).toBe(lines(4));
+	});
+});
