@@ -72,11 +72,11 @@ A second press on the same pill puts its bubble away and leaves it away.
 **Fixed**
 
 - **The same pill closes its own bubble again.** Pi sends a synthesized click
-after every press that did not move. Pressing an open pill's own pill closed the
-bubble, but that click was no longer taken for part of the press that closed it,
-so it ran the action again and the bubble came straight back. The press now claims
-its click whichever way it went, opening or closing, which is what the design note
-already said it did.
+  after every press that did not move. Pressing an open pill's own pill closed the
+  bubble, but that click was no longer taken for part of the press that closed it,
+  so it ran the action again and the bubble came straight back. The press now claims
+  its click whichever way it went, opening or closing, which is what the design note
+  already said it did.
 
 No API change: the pill and bubble shapes are untouched, so extensions that bridge
 a pill keep working as they are.
@@ -94,7 +94,7 @@ back up.
 - **A drag still cancels.** Because the press acts, a press that turns into a
   gesture has already opened something; the drag branch closes it once the pointer
   has moved more than two columns, which is past any jitter and short of any
-  selection a user meant to start. A gesture that slides *onto* the footer and
+  selection a user meant to start. A gesture that slides _onto_ the footer and
   releases there still never fires, since no press landed on the pill.
 
 **Changed**
@@ -110,34 +110,34 @@ bridge a pill keep working as they are.
 
 ## [0.5.1] - 2026-10-25
 
-A click outside a bubble now puts it away, the *Pills* tab can place a single
+A click outside a bubble now puts it away, the _Pills_ tab can place a single
 extension status, and a bar with no git pill stops reading the repository.
 
 **Added**
 
 - **Clicking away closes a bubble.** Escape, the same pill and another pill
-already closed it; every other click left it on screen. A press anywhere outside
-the bubble now closes it, and the press is still delivered, so the caret moves or
-the line gets selected exactly as it would with no bubble open. The footer row
-follows the same rule cell by cell: a clickable pill keeps its own meaning (the
-same pill closes, another replaces), while the bar's padding, a gap or a
-read-out pill closes the bubble like anywhere else. Nothing new is patched for
-this: the press is read where the pointer-shape patch already sees every pointer
-report.
+  already closed it; every other click left it on screen. A press anywhere outside
+  the bubble now closes it, and the press is still delivered, so the caret moves or
+  the line gets selected exactly as it would with no bubble open. The footer row
+  follows the same rule cell by cell: a clickable pill keeps its own meaning (the
+  same pill closes, another replaces), while the bar's padding, a gap or a
+  read-out pill closes the bubble like anywhere else. Nothing new is patched for
+  this: the press is read where the pointer-shape patch already sees every pointer
+  report.
 
-- **Per-status rows in the *Pills* tab.** Every status an extension published
-this session gets a row of its own (`extensionStatus:<key>`), so a single status
-can be placed on the bar from the menu instead of by editing `starline.json`. The
-*Other extensions* row still carries every status not placed by name, and a
-status listed both ways is drawn once, where the named row put it.
+- **Per-status rows in the _Pills_ tab.** Every status an extension published
+  this session gets a row of its own (`extensionStatus:<key>`), so a single status
+  can be placed on the bar from the menu instead of by editing `starline.json`. The
+  _Other extensions_ row still carries every status not placed by name, and a
+  status listed both ways is drawn once, where the named row put it.
 
 **Changed**
 
 - **No git pill means no git read.** The refresh on its interval used to run
-`git status` and `git stash list` whatever the bar showed. It now reads the
-repository only when `git`, `gitCommit`, `gitTag` or `gitMetrics` is in
-`pill.segments`, and clears the branch the previous refresh drew when the last
-git pill goes away.
+  `git status` and `git stash list` whatever the bar showed. It now reads the
+  repository only when `git`, `gitCommit`, `gitTag` or `gitMetrics` is in
+  `pill.segments`, and clears the branch the previous refresh drew when the last
+  git pill goes away.
 
 ## [0.5.0] - 2026-10-25
 
@@ -169,7 +169,7 @@ three token pills are one, each with its numbers behind a click.
   `gitStatus` and `gitState` in `pill.segments` are rewritten to `git`, so an
   existing bar keeps its git pill.
 
-- **A *Pills* tab in `/starline`.** One row per segment; the value is its position
+- **A _Pills_ tab in `/starline`.** One row per segment; the value is its position
   in the bar, `off` hides it, and Space cycles through them. Picking a number
   inserts the segment there and shifts the rest along. The same list is still
   `pill.segments` in `starline.json`, so editing the file and the tab are the
@@ -188,7 +188,7 @@ three token pills are one, each with its numbers behind a click.
 - **`separator` and `colors.separator`.** The text footer's separator glyph.
   Pills are joined by the powerline arrows `pill.separator` picks.
 
-- **`footerSegments`.** All nineteen toggles, and the *Built-in segments* tab.
+- **`footerSegments`.** All nineteen toggles, and the _Built-in segments_ tab.
   `pill.segments` is the list; drop a name to hide it. `gitCounts` moved to
   `git.counts`. A pill that was listed but toggled off here now shows, which is
   the behaviour the docs claimed all along.
@@ -559,12 +559,12 @@ named a compositor that no longer exists. It is migrated automatically the
 first time Starline loads — you do not need to edit anything by hand. The old
 keys and where they land:
 
-| Old (`fixedEditor`) | New (`mouse`) |
-| --- | --- |
-| `enabled` | `enabled` |
-| `mouseScroll` | `wheelRouting` |
-| `copyNotice` | `copyNotice` |
-| `copyOnSelect` | `copyOnSelect` |
+| Old (`fixedEditor`)  | New (`mouse`)        |
+| -------------------- | -------------------- |
+| `enabled`            | `enabled`            |
+| `mouseScroll`        | `wheelRouting`       |
+| `copyNotice`         | `copyNotice`         |
+| `copyOnSelect`       | `copyOnSelect`       |
 | `clickToExpandTools` | `clickToExpandTools` |
 
 An explicit `mouse` key already in your config wins over the migration. The
@@ -574,41 +574,41 @@ so.
 ### Added
 
 - **Mouse selection and copy.** Drag to select anywhere — the transcript and
-the input box — with double-click word selection and triple-click line
-selection. Releasing copies; or hold the selection for `ctrl+c` with
-`mouse.copyOnSelect: false` — the same behaviour [Pi #7720][7720] asks for
-upstream (a setting to disable select-to-copy in fullscreen mode). If Pi
-ships its own `fullscreenCopyOnSelect`, Starline should prefer it and let
-both settings agree rather than fight.
+  the input box — with double-click word selection and triple-click line
+  selection. Releasing copies; or hold the selection for `ctrl+c` with
+  `mouse.copyOnSelect: false` — the same behaviour [Pi #7720][7720] asks for
+  upstream (a setting to disable select-to-copy in fullscreen mode). If Pi
+  ships its own `fullscreenCopyOnSelect`, Starline should prefer it and let
+  both settings agree rather than fight.
 - **Clean copies.** Transcript selections drop Starline's message rails, rule
-rows, and pi-toolbox frame borders before they reach the clipboard; editor
-selections copy the draft's text, not the painted rows. Anything unrecognised
-passes through byte-identical.
+  rows, and pi-toolbox frame borders before they reach the clipboard; editor
+  selections copy the draft's text, not the painted rows. Anything unrecognised
+  passes through byte-identical.
 - **Click to move the caret** in the input box; **backspace/delete remove a
 selected range**.
 - **Wheel scrolling over the input box** scrolls the draft instead of the
-transcript.
+  transcript.
 - **Click a tool box's hint row to expand just that box**, and collapse it
-again through the `(ctrl+o to collapse)` anchor row (pi-toolbox 0.2.2+).
+  again through the `(ctrl+o to collapse)` anchor row (pi-toolbox 0.2.2+).
 - **Paths and kebab-case stay whole** on double-click selection.
 - **A pending selection's hint counts the exact characters `ctrl+c` will
 copy**, and an editor selection's hint names the external editor —
-`ctrl+g to edit in nvim`, with `$EDITOR`/`$VISUAL` resolved (unset, the
-literal `$EDITOR` stays, itself the hint that nothing is configured).
+  `ctrl+g to edit in nvim`, with `$EDITOR`/`$VISUAL` resolved (unset, the
+  literal `$EDITOR` stays, itself the hint that nothing is configured).
 - **A draft taller than the box keeps the `ctrl+g` hint on screen** — no
-selection needed. There is no drag-scroll, so part of a long draft is
-unreachable by mouse; the hint points at the external editor as the way to
-act on the whole draft.
+  selection needed. There is no drag-scroll, so part of a long draft is
+  unreachable by mouse; the hint points at the external editor as the way to
+  act on the whole draft.
 
 ### Fixed
 
 - **`ctrl+c` copies a pending selection on Pi 0.84 again.** Pi negotiates the
-Kitty keyboard protocol (falling back to xterm modifyOtherKeys) on capable
-terminals, which encodes the chord as an escape sequence rather than the raw
-`\x03`. The pending copy now recognises every encoding, so `ctrl+c` no longer
-falls through to clearing the editor.
+  Kitty keyboard protocol (falling back to xterm modifyOtherKeys) on capable
+  terminals, which encodes the chord as an escape sequence rather than the raw
+  `\x03`. The pending copy now recognises every encoding, so `ctrl+c` no longer
+  falls through to clearing the editor.
 - **Selections that end on a box's border rows no longer fail to select** —
-the range is clamped instead of rejected.
+  the range is clamped instead of rejected.
 - **Range delete installs even when click-to-caret is the only editor
 feature.**
 

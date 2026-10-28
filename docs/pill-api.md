@@ -39,8 +39,8 @@ For the pill to show up:
   **Users who keep their own `pill.segments` with only specific
   `extensionStatus:<key>` entries will not see a new status until they add it.**
   Say so in your README.
-- The status is not switched off for that key in `/starline`'s *Extension
-  segments* tab, or placed on the editor row.
+- The status is not switched off for that key in `/starline`'s _Extension
+  segments_ tab, or placed on the editor row.
 
 `ctx.ui.setStatus(key, undefined)` removes the pill; do that when there is nothing
 to show, so the bar stays short.
@@ -102,11 +102,11 @@ extension.
 
 What the bridge can show depends on what the other extension makes public:
 
-| It publishes | Bridge quality |
-| --- | --- |
-| Events or an RPC on `pi.events` | Good: exact data, updated when it changes |
-| Files (state, logs, artifacts) | Workable: read on open, may break when it updates |
-| Nothing but its own UI | Not possible; ask its author for an event |
+| It publishes                    | Bridge quality                                    |
+| ------------------------------- | ------------------------------------------------- |
+| Events or an RPC on `pi.events` | Good: exact data, updated when it changes         |
+| Files (state, logs, artifacts)  | Workable: read on open, may break when it updates |
+| Nothing but its own UI          | Not possible; ask its author for an event         |
 
 Prefer documented interfaces. Reading another extension's private state works
 until its next release.
@@ -146,7 +146,9 @@ export default function (pi: ExtensionAPI) {
 				ctx,
 				() => ({
 					title: `${jobs.length} jobs`,
-					body: jobs.map((job) => `· ${job.name} · ${Math.round((Date.now() - job.startedAt) / 1000)}s`),
+					body: jobs.map(
+						(job) => `· ${job.name} · ${Math.round((Date.now() - job.startedAt) / 1000)}s`,
+					),
 					hint: "esc to close",
 				}),
 				pill,
@@ -223,12 +225,12 @@ added; treat that as a click.
 
 `types/pill-api.d.ts` in the package is the source of truth; summary:
 
-| Member | Shape |
-| --- | --- |
-| `Symbol.for("pi-starline.pill-api.v1")` | the `PillApi` object on `globalThis` |
-| `api.version` | `1` |
-| `api.register(key, action)` | returns an unregister function |
-| `action({ ctx, pill?, via? })` | `via` is `"click"` or `"command"` |
-| `api.showBubble(ctx, content, pill?)` | `content` is `PillBubbleContent` or a function returning one; returns `PillBubbleHandle` (0.4+) |
-| `PillBubbleContent` | `{ title?, body: Array<string \| { text, onSelect, current? }>, hint? }` |
-| `PillBubbleHandle` | `refresh()`, `close()`, `isOpen()`, `onClose(callback)` |
+| Member                                  | Shape                                                                                           |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `Symbol.for("pi-starline.pill-api.v1")` | the `PillApi` object on `globalThis`                                                            |
+| `api.version`                           | `1`                                                                                             |
+| `api.register(key, action)`             | returns an unregister function                                                                  |
+| `action({ ctx, pill?, via? })`          | `via` is `"click"` or `"command"`                                                               |
+| `api.showBubble(ctx, content, pill?)`   | `content` is `PillBubbleContent` or a function returning one; returns `PillBubbleHandle` (0.4+) |
+| `PillBubbleContent`                     | `{ title?, body: Array<string \| { text, onSelect, current? }>, hint? }`                        |
+| `PillBubbleHandle`                      | `refresh()`, `close()`, `isOpen()`, `onClose(callback)`                                         |

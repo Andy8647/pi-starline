@@ -8,11 +8,13 @@ const readme = readFileSync(join(process.cwd(), "README.md"), "utf8");
 // keeps only a short taste of the format.
 const configDoc = readFileSync(join(process.cwd(), "docs/configuration.md"), "utf8");
 
-const TABLE_HEADER = "| Key | Type | Default | What it does |";
+// Biome aligns Markdown table cells, so the header cells are padded to the width
+// of the column. Match on the cell values, not on the padding.
+const TABLE_HEADER = /^\|\s*Key\s*\|\s*Type\s*\|\s*Default\s*\|\s*What it does\s*\|\s*$/m;
 const TABLE_END_MARKER = "User config lives at";
 
-const tableStart = configDoc.indexOf(TABLE_HEADER);
-const tableEnd = configDoc.indexOf(TABLE_END_MARKER, tableStart);
+const tableStart = configDoc.match(TABLE_HEADER)?.index ?? -1;
+const tableEnd = tableStart === -1 ? -1 : configDoc.indexOf(TABLE_END_MARKER, tableStart);
 if (tableStart === -1 || tableEnd === -1) {
 	throw new Error("Could not locate the config table in docs/configuration.md");
 }
