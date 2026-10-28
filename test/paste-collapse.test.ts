@@ -407,9 +407,9 @@ describe("editor wrapped by another extension's Proxy", () => {
 		dispose?.();
 	});
 
-	// Pi keeps its handlers on the prototype, so this is the real layout: nothing
-	// own to find, and the wrapper still gets its look at the keystroke.
-	it("reaches a prototype handler underneath the Proxy", () => {
+	/** Pi's real layout: the handlers live on the prototype, so there is nothing
+	 *  own for a shadow to find. */
+	function makeProtoEditor() {
 		const inputs: string[] = [];
 		const pastes = new Map<number, string>();
 		class ProtoEditor {
@@ -430,7 +430,13 @@ describe("editor wrapped by another extension's Proxy", () => {
 				this.state.lines = [text];
 			}
 		}
-		const editor = new ProtoEditor();
+		return { editor: new ProtoEditor(), inputs };
+	}
+
+	// Pi keeps its handlers on the prototype, so this is the real layout: nothing
+	// own to find, and the wrapper still gets its look at the keystroke.
+	it("reaches a prototype handler underneath the Proxy", () => {
+		const { editor, inputs } = makeProtoEditor();
 		const seen: string[] = [];
 		const proxy = proxyLikeNavigator(editor as unknown as Proxied, seen);
 
@@ -442,6 +448,40 @@ describe("editor wrapped by another extension's Proxy", () => {
 		expect(inputs).toEqual(["x", "y"]);
 		expect(seen).toEqual(["x", "y"]);
 		dispose?.();
+	});
+
+	// Reading the shadow back through [[Get]] gets the navigation wrapper, so the
+	// disposer used to decide its shadow was gone and leave it in place — one more
+	// layer per /reload, each holding the editor it was written for.
+	it("puts an instance handleInput back the way it found it", () => {
+		const { editor } = makeEditor();
+		const original = Object.getOwnPropertyDescriptor(editor, "handleInput");
+		const proxy = proxyLikeNavigator(editor, []);
+
+		const dispose = installPasteCollapse(proxy, () => 3);
+		expect(Object.getOwnPropertyDescriptor(editor, "handleInput")?.value).not.toBe(original?.value);
+
+		dispose?.();
+		expect(Object.getOwnPropertyDescriptor(editor, "handleInput")).toEqual(original);
+	});
+
+	it("leaves no handleInput on the instance when the handler is a prototype one", () => {
+		const { editor, inputs } = makeProtoEditor();
+		const proxy = proxyLikeNavigator(editor as unknown as Proxied, []);
+
+		const dispose = installPasteCollapse(proxy, () => 3);
+		expect(Object.getOwnPropertyDescriptor(editor, "handleInput")).toBeDefined();
+
+		dispose?.();
+		expect(Object.getOwnPropertyDescriptor(editor, "handleInput")).toBeUndefined();
+
+		// Nothing left underneath, so the next install covers the real handler and
+		// not the previous shadow.
+		const again = installPasteCollapse(proxy, () => 3);
+		proxy.handleInput?.("x");
+		expect(inputs).toEqual(["x"]);
+		again?.();
+		expect(Object.getOwnPropertyDescriptor(editor, "handleInput")).toBeUndefined();
 	});
 
 	// The paste path is patched the same way, so it has to survive the Proxy too.
