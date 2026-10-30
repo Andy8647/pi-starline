@@ -125,6 +125,26 @@ function clampPercent(percent: number): number {
 }
 
 /**
+ * The x-axis range.
+ *
+ * A window that barely moved is the common case, not an edge case: a short
+ * conversation fills a fraction of a percent per reply, so twenty points land on
+ * one column and the plot says nothing. When the session has moved less than ten
+ * percent, the axis shows the band it moved through rather than starting at
+ * zero, and the labels say where the band is.
+ */
+function axisRange(percents: readonly number[]): { left: number; right: number } {
+	const low = Math.min(...percents);
+	const high = Math.max(...percents);
+	if (high - low >= 10) return { left: 0, right: nicePercentCeiling(high) };
+	if (high === low) {
+		// One move, or one point: centre it in a small band.
+		return { left: Math.max(0, low - 1), right: Math.min(100, low + 1) };
+	}
+	return { left: Math.max(0, Math.floor(low)), right: Math.min(100, Math.ceil(high)) };
+}
+
+/**
  * A point's cell. Several turns can land on one cell (a stable model, a slowly
  * filling window); counting them keeps that visible instead of hiding all but
  * the last.
@@ -133,10 +153,11 @@ const DENSITY = [" ", "·", "+", "#"];
 
 /**
  * The scatter plot: y is tokens per second, x is the context percentage when the
- * turn finished.
+ * reply finished.
  *
- * Both axes are measured off the points — a fixed 0-100% x axis would squash a
- * session that has only reached a fifth of its window into the first column.
+ * Both axes are measured off the points: a fixed 0-100% would squash a session
+ * that has only reached a fifth of its window into the first column, and a
+ * session that stayed in one percent band into the last one.
  *
  * The axes carry the meaning, so they are drawn rather than implied: three y
  * labels (top, middle, zero) and both ends of the x range. A blank region is
@@ -145,12 +166,14 @@ const DENSITY = [" ", "·", "+", "#"];
 export function tpsChartLines(points: readonly TpsPoint[]): string[] {
 	if (points.length === 0) return [];
 	const top = niceCeiling(Math.max(...points.map((point) => point.tps)));
-	const right = nicePercentCeiling(Math.max(...points.map((point) => clampPercent(point.percent))));
+	const percents = points.map((point) => clampPercent(point.percent));
+	const { left, right } = axisRange(percents);
+	const span = Math.max(1, right - left);
 	const cells = Array.from({ length: CHART_HEIGHT }, () => new Array<number>(CHART_WIDTH).fill(0));
 
-	for (const point of points) {
-		const percent = Math.min(right, clampPercent(point.percent));
-		const column = Math.min(CHART_WIDTH - 1, Math.round((percent / right) * (CHART_WIDTH - 1)));
+	for (const [index, point] of points.entries()) {
+		const offset = Math.min(span, Math.max(0, percents[index] - left));
+		const column = Math.min(CHART_WIDTH - 1, Math.round((offset / span) * (CHART_WIDTH - 1)));
 		const row = Math.min(CHART_HEIGHT - 1, Math.floor((point.tps / top) * (CHART_HEIGHT - 1)));
 		cells[CHART_HEIGHT - 1 - row][column] += 1;
 	}
@@ -171,10 +194,10 @@ export function tpsChartLines(points: readonly TpsPoint[]): string[] {
 
 	const pad = " ".repeat(AXIS_WIDTH);
 	lines.push(`${pad}└${"─".repeat(CHART_WIDTH)}`);
+	const leftLabel = `${left}%`;
 	const rightLabel = `${right}%`;
-	lines.push(
-		`${pad} 0%${" ".repeat(Math.max(1, CHART_WIDTH - 2 - rightLabel.length))}${rightLabel}`,
-	);
+	const gap = Math.max(1, CHART_WIDTH - (leftLabel.length - 2) - rightLabel.length);
+	lines.push(`${pad} ${leftLabel}${" ".repeat(gap)}${rightLabel}`);
 	return lines;
 }
 
