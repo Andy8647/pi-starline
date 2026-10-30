@@ -174,9 +174,8 @@ export type TpsPaint = (glyph: string, ratio: number) => string;
  * that has only reached a fifth of its window into the first column, and a
  * session that stayed in one percent band into the last one.
  *
- * The axes carry the meaning, so they are drawn rather than implied. Every y row
- * is labelled: three ticks were enough to say where the top was, not enough to
- * read a point's rate without counting rows.
+ * The axes carry the meaning, so they are drawn rather than implied: four y
+ * labels — top, two thirds, one third, zero — and both ends of the x range.
  */
 export function tpsChartLines(points: readonly TpsPoint[], paint?: TpsPaint): string[] {
 	if (points.length === 0) return [];
@@ -198,6 +197,10 @@ export function tpsChartLines(points: readonly TpsPoint[], paint?: TpsPaint): st
 		if (index === points.length - 1) cell.latest = true;
 	}
 
+	const labelRows = new Set(
+		[0, 1, 2, 3].map((step) => Math.floor(((CHART_HEIGHT - 1) * step) / 3)),
+	);
+
 	const lines: string[] = cells.map((row, index) => {
 		const glyphs = row
 			.map((cell) => {
@@ -213,7 +216,7 @@ export function tpsChartLines(points: readonly TpsPoint[], paint?: TpsPaint): st
 			})
 			.join("");
 		const value = Math.round(((CHART_HEIGHT - 1 - index) / (CHART_HEIGHT - 1)) * top);
-		const label = formatCount(value).padStart(4);
+		const label = (labelRows.has(index) ? formatCount(value) : "").padStart(4);
 		const frame = index === CHART_HEIGHT - 1 ? "└" : "│";
 		return `${label} ${frame}${glyphs}`;
 	});
