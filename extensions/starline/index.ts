@@ -644,8 +644,10 @@ export default function (pi: ExtensionAPI) {
 		liveContext.clear();
 		liveTps.clear();
 		turnClock.clear();
-		// A resumed session carries its earlier points in the transcript.
+		// A resumed session carries its earlier points in the transcript; the pill
+		// starts from the last of them instead of an empty segment.
 		tpsHistory.restore(readSessionEntries(ctx));
+		liveTps.seed(tpsHistory.all().at(-1)?.tps);
 		// A resumed session keeps its original header, and reporting the moment this
 		// process attached to it would make the elapsed-time segment read 0s forever.
 		state.sessionStartEpoch = resolveSessionStartEpoch(readSessionHeader(ctx));

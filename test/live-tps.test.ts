@@ -205,6 +205,20 @@ describe("live decode throughput", () => {
 		expect(() => tps.observe(undefined)).not.toThrow();
 		expect(tps.value()).toBeUndefined();
 	});
+
+	it("keeps a rate measured before this process attached", () => {
+		const tps = new LiveTpsController();
+		tps.seed(38.5);
+		expect(tps.value()).toBe(38.5);
+	});
+
+	it("seeds nothing from a rate that was never measured", () => {
+		const tps = new LiveTpsController();
+		tps.seed(undefined);
+		tps.seed(Number.NaN);
+		tps.seed(0);
+		expect(tps.value()).toBeUndefined();
+	});
 });
 
 describe("tps label", () => {
