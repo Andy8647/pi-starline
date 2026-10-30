@@ -22,7 +22,7 @@ import {
 	probeFor,
 } from "./context-breakdown";
 import { activeContextSnapshot } from "./context-live";
-import { formatCount } from "./format";
+import { buildTpsLabel, formatCount } from "./format";
 import { activeGitStatus } from "./git-live";
 import {
 	cycleThinkingLevel,
@@ -40,6 +40,7 @@ import {
 import { PILL_SEGMENT_VARIABLES } from "./pill-config";
 import type { ThemeLike } from "./style";
 import { type FleetSnapshot, getActiveSubagentFleet } from "./subagent-fleet";
+import { type TpsHistory, tpsChartLines, tpsSummary } from "./tps-history";
 
 /** What an action gets: the session, and where the pill is if a click found it. */
 export type PillActionContext = {
@@ -494,6 +495,46 @@ function showContext({ ctx, pill }: PillActionContext): void {
 	whileOpen(handle, () => handle.refresh());
 }
 
+let tpsHistory: TpsHistory | undefined;
+
+/**
+ * The session's throughput points, injected from `index.ts`: recording a point
+ * needs `pi.appendEntry`, and a pill action only gets a context.
+ */
+export function setTpsHistory(history: TpsHistory | undefined): void {
+	tpsHistory = history;
+}
+
+/**
+ * What the tps pill says when clicked: speed against how full the window was.
+ *
+ * One number says how fast the model writes. The curve says whether the window
+ * filling up is what changed it, which is the question a single rate cannot
+ * answer.
+ */
+export function tpsBubbleContent(): PillBubbleContent {
+	const points = tpsHistory?.all() ?? [];
+	if (points.length === 0) {
+		return { title: "Throughput", body: ["No turns measured yet."], hint: "esc to close" };
+	}
+	const latest = points[points.length - 1];
+	return {
+		title: buildTpsLabel(latest.tps) || "Throughput",
+		body: [...tpsChartLines(points), " ", tpsSummary(points)],
+		hint: "esc to close",
+	};
+}
+
+function showTps({ ctx, pill }: PillActionContext): void {
+	if ((tpsHistory?.all().length ?? 0) === 0) {
+		if (ctx.hasUI) ctx.ui.notify("No throughput measured yet", "info");
+		return;
+	}
+	// Live: the last turn's rate lands while the bubble is open.
+	const handle = showPillBubble(ctx, tpsBubbleContent, pill);
+	whileOpen(handle, () => handle.refresh());
+}
+
 /** How many changed paths the bubble lists before summarising the rest. */
 const MAX_LISTED_CHANGES = 12;
 /** The order the bubble groups changes in: what is staged first, then the rest. */
@@ -588,6 +629,7 @@ export const PILL_ACTIONS: Readonly<Partial<Record<string, PillAction>>> = {
 	queue: showQueuedMessages,
 	subagents: showSubagents,
 	thinking: showThinkingLevel,
+	tps: showTps,
 };
 
 /**

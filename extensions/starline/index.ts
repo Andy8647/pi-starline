@@ -51,7 +51,7 @@ import { LiveTpsController } from "./live-tps";
 import { installMouse } from "./mouse";
 import { setActiveEditor } from "./mouse/editor-mouse";
 import { installPasteCollapse } from "./paste-collapse";
-import { setModelSwitcher } from "./pill-actions";
+import { setModelSwitcher, setTpsHistory } from "./pill-actions";
 import { publishPillApi } from "./pill-api";
 import { setPillBubbleAnimation } from "./pill-bubble";
 import { probeProject } from "./project-probe";
@@ -74,6 +74,7 @@ import {
 	SUBAGENT_TOOL_NAME,
 	setActiveSubagentFleet,
 } from "./subagent-fleet";
+import { contextPercentAfter, TPS_ENTRY_TYPE, TpsHistory } from "./tps-history";
 import { TurnClock } from "./turn-clock";
 import { PolishedEditor, WrappedPolishedEditor } from "./ui";
 import { setWorkingIndicator } from "./working-indicator";
@@ -100,6 +101,20 @@ function isTuiContext(ctx: ExtensionContext): boolean {
  * growing out of it, short enough never to be waited on.
  */
 const BUBBLE_ANIMATION_MS = 60;
+
+/**
+ * Every entry of the session, in order. Extensions keep their own state in
+ * custom entries, so a resumed session's throughput points come back from here.
+ */
+function readSessionEntries(ctx: ExtensionContext): Array<{
+	type?: string;
+	customType?: string;
+	data?: unknown;
+}> {
+	const sessionManager = ctx.sessionManager as { getEntries?: () => unknown[] } | undefined;
+	const entries = sessionManager?.getEntries?.() ?? ctx.sessionManager.getBranch();
+	return entries as Array<{ type?: string; customType?: string; data?: unknown }>;
+}
 
 export default function (pi: ExtensionAPI) {
 	// Published before anything else so a bridge that registers in `session_start`
@@ -147,6 +162,11 @@ export default function (pi: ExtensionAPI) {
 	};
 	const liveContext = new LiveContextController(sessionLifecycle, refresh);
 	const liveTps = new LiveTpsController();
+	// Each measured turn is a point on the throughput curve. The custom entry is
+	// how the points survive `--continue`; pi persists it and never sends it to the
+	// model.
+	const tpsHistory = new TpsHistory((point) => pi.appendEntry(TPS_ENTRY_TYPE, point));
+	setTpsHistory(tpsHistory);
 	const turnClock = new TurnClock();
 	const getActiveTheme = () => activeTheme;
 	const getCurrentConfig = () => currentConfig;
@@ -586,6 +606,7 @@ export default function (pi: ExtensionAPI) {
 			setWorkingIndicator(undefined);
 			stopSessionTimer();
 			stopProjectRefresh();
+			setTpsHistory(undefined);
 			requestFooterRender = undefined;
 			getActiveExtensionStatuses = () => new Map();
 			if (isTuiContext(ctx)) {
@@ -623,6 +644,8 @@ export default function (pi: ExtensionAPI) {
 		liveContext.clear();
 		liveTps.clear();
 		turnClock.clear();
+		// A resumed session carries its earlier points in the transcript.
+		tpsHistory.restore(readSessionEntries(ctx));
 		// A resumed session keeps its original header, and reporting the moment this
 		// process attached to it would make the elapsed-time segment read 0s forever.
 		state.sessionStartEpoch = resolveSessionStartEpoch(readSessionHeader(ctx));
@@ -731,7 +754,16 @@ export default function (pi: ExtensionAPI) {
 		} else if (event.message.role === "assistant") {
 			// The stream's `done` event never reaches an extension, so the output count
 			// has to be closed here, where the finished message arrives with its usage.
-			liveTps.complete(event.message.usage?.output ?? 0);
+			const output = event.message.usage?.output ?? 0;
+			if (liveTps.complete(output)) {
+				// One point per measured turn: the rate it ran at, and how full the
+				// window was when it finished.
+				const tps = liveTps.value();
+				const percent = contextPercentAfter(event.message.usage, ctx.model?.contextWindow);
+				if (tps !== undefined && percent !== undefined) {
+					tpsHistory.record({ tps, percent, at: Date.now() });
+				}
+			}
 		}
 		syncInteractiveAndProjectStateWithUsage(event, ctx);
 	});
