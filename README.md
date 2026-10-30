@@ -31,6 +31,8 @@ Starline makes Pi's fullscreen mode feel like a finished terminal app:
 - **Thinking:** pick a level from the ones the model supports.
 - **Queue:** an inbox icon and a count while messages wait; click to read them.
 - **Subagents:** with [pi-subagents](https://github.com/nicobailon/pi-subagents), a count of running subagents; click for agent, model, time and tokens, live.
+- **Context:** click for the window split into what fills it — system prompt, tool schemas, MCP tools, memory, skills and the conversation — as a grid with a legend, plus the session's token totals.
+- **Throughput:** the last reply's tokens per second; click for a scatter of every reply's rate against how full the context was, coloured by how fast it ran.
 - **Your extension's pill:** a small published API lets any extension open the same bubble with its own content. See [Clickable pills for other extensions](https://github.com/Andy8647/pi-starline/blob/main/docs/pill-api.md).
 - Clicking anywhere else on screen closes the bubble, and the click still does what it would have done: the caret moves, the line gets selected.
 - Every action also runs from the keyboard as `/starline <name>`, and the pointer turns into a hand over anything clickable.
