@@ -83,6 +83,17 @@ export class LiveTpsController {
 	}
 
 	/**
+	 * Show a rate measured before this process attached, so a resumed session's
+	 * pill has a number instead of an empty segment. Nothing is invented: a rate
+	 * that was never measured leaves the pill blank.
+	 */
+	seed(tokensPerSecond: number | undefined): void {
+		if (tokensPerSecond === undefined || !Number.isFinite(tokensPerSecond)) return;
+		if (tokensPerSecond <= 0) return;
+		this.latest = tokensPerSecond;
+	}
+
+	/**
 	 * End a turn's measurement window without discarding the value. Called when a
 	 * new agent run starts: the pill keeps showing the last turn's speed until the
 	 * next message finishes.

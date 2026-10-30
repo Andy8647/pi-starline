@@ -14,8 +14,8 @@
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
+import { collectContextBreakdown, contextBubbleContent, probeFor } from "./context-breakdown";
 import { activeContextSnapshot } from "./context-live";
-import { formatCount } from "./format";
 import { activeGitStatus } from "./git-live";
 import {
 	cycleThinkingLevel,
@@ -31,7 +31,9 @@ import {
 	showPillBubble,
 } from "./pill-bubble";
 import { PILL_SEGMENT_VARIABLES } from "./pill-config";
+import type { ThemeLike } from "./style";
 import { type FleetSnapshot, getActiveSubagentFleet } from "./subagent-fleet";
+import { activeTpsHistory, tpsBubbleContent } from "./tps-history";
 
 /** What an action gets: the session, and where the pill is if a click found it. */
 export type PillActionContext = {
@@ -129,14 +131,13 @@ export function queuedBubbleContent(): PillBubbleContent {
 				"Messages you send while the agent is working wait until the current turn ends, then get delivered.",
 				"This build of Pi does not expose them to the extension, so the count and the text are unknown.",
 			],
-			hint: "esc to close",
 		};
 	}
 
 	const messages = [...pending.steering, ...pending.followUp];
 	// The bubble stays open while the turn ends and the queue drains under it.
 	if (messages.length === 0) {
-		return { title: "Queued messages", body: ["Nothing is queued."], hint: "esc to close" };
+		return { title: "Queued messages", body: ["Nothing is queued."] };
 	}
 	const listed = messages.slice(0, MAX_LISTED_MESSAGES).map((message) => `· ${oneLine(message)}`);
 	if (messages.length > listed.length) {
@@ -145,7 +146,6 @@ export function queuedBubbleContent(): PillBubbleContent {
 	return {
 		title: `${messages.length} message${messages.length === 1 ? "" : "s"} queued`,
 		body: listed,
-		hint: "esc to close",
 	};
 }
 
@@ -167,7 +167,6 @@ function thinkingUnavailable(ctx: ExtensionContext): PillBubbleContent {
 		body: current
 			? [`Current level: ${current}.`, "This session cannot change it from here."]
 			: ["This model has no thinking level to change."],
-		hint: "esc to close",
 	};
 }
 
@@ -214,7 +213,7 @@ function showThinkingLevel({ ctx, pill, via }: PillActionContext): void {
 	showPillBubble(
 		ctx,
 		cycled
-			? { title: "Thinking", body: [`${cycled.from} → ${cycled.to}`], hint: "esc to close" }
+			? { title: "Thinking", body: [`${cycled.from} → ${cycled.to}`] }
 			: thinkingUnavailable(ctx),
 		pill,
 	);
@@ -302,7 +301,6 @@ export function modelPickerContent(ctx: ExtensionContext): PillBubbleContent {
 				current ? `Current model: ${modelLabel(current)}.` : "No model is selected.",
 				"Use /model to pick one.",
 			],
-			hint: "esc to close",
 		};
 	}
 	// The current model is a target too, opened selected, so ↑/↓ start from it.
@@ -340,7 +338,6 @@ async function showModels({ ctx, pill, via }: PillActionContext): Promise<void> 
 		{
 			title: "Model",
 			body: [`${current ? current.id : "none"} → ${next.model.id}`],
-			hint: "esc to close",
 		},
 		pill,
 	);
@@ -379,7 +376,7 @@ export function subagentsBubbleContent(fleet: FleetSnapshot, now = Date.now()): 
 	return {
 		title: total > 0 ? `${total} subagent${total === 1 ? "" : "s"} running` : "Subagents",
 		body: total > 0 ? listed : ["Nothing is running."],
-		hint: "/subagents-fleet for details · esc to close",
+		hint: "/subagents-fleet for details",
 	};
 }
 
@@ -414,50 +411,29 @@ async function showSubagents({ ctx, pill }: PillActionContext): Promise<void> {
 	});
 }
 
-/**
- * What the context pill says when clicked: the numbers the bar has no room for.
- *
- * The pill keeps the percentage; the window, the tokens used, the session's
- * in/out counts and the cache rate are all here. Same source as the pill, so the
- * two cannot disagree while a turn streams.
- */
-export function contextBubbleContent(): PillBubbleContent {
-	const snapshot = activeContextSnapshot();
-	if (!snapshot) {
-		return { title: "Context", body: ["Nothing has been sent yet."], hint: "esc to close" };
-	}
-
-	const body: string[] = [];
-	const percent =
-		snapshot.percent === undefined || !Number.isFinite(snapshot.percent)
-			? undefined
-			: Math.max(0, Math.min(100, Math.round(snapshot.percent)));
-	if (snapshot.contextWindow) {
-		const windowLabel = formatCount(snapshot.contextWindow);
-		const used = percent === undefined ? `window ${windowLabel}` : `${percent}% of ${windowLabel}`;
-		body.push(
-			snapshot.tokens === undefined ? used : `${used} · ${formatCount(snapshot.tokens)} used`,
-		);
-	}
-	if (snapshot.tokenLabel) body.push(`session ${snapshot.tokenLabel}`);
-	if (snapshot.cacheLabel) body.push(`cache ${snapshot.cacheLabel}`);
-
-	const title = percent === undefined ? "Context" : `${percent}% context`;
-	return {
-		title,
-		body: body.length > 0 ? body : ["No usage yet."],
-		hint: "esc to close",
-	};
-}
-
 function showContext({ ctx, pill }: PillActionContext): void {
-	if (!activeContextSnapshot()) {
+	// The theme and the reads are taken on every render, so the bubble follows a
+	// theme change and a model switch while it is open.
+	const theme = ctx.ui.theme as unknown as ThemeLike;
+	const read = () => collectContextBreakdown(probeFor(ctx));
+	if (read().total <= 0 && !activeContextSnapshot()) {
 		if (ctx.hasUI) ctx.ui.notify("No context usage in this session", "info");
 		return;
 	}
 	// Live: tokens grow while a turn streams, and the footer pushes a new
 	// snapshot every render.
-	const handle = showPillBubble(ctx, contextBubbleContent, pill);
+	const handle = showPillBubble(ctx, () => contextBubbleContent(read(), theme), pill);
+	whileOpen(handle, () => handle.refresh());
+}
+
+function showTps({ ctx, pill }: PillActionContext): void {
+	if ((activeTpsHistory()?.all().length ?? 0) === 0) {
+		if (ctx.hasUI) ctx.ui.notify("No throughput measured yet", "info");
+		return;
+	}
+	// Live: the last reply's rate lands while the bubble is open.
+	const theme = ctx.ui.theme as unknown as ThemeLike;
+	const handle = showPillBubble(ctx, () => tpsBubbleContent(theme), pill);
 	whileOpen(handle, () => handle.refresh());
 }
 
@@ -493,7 +469,7 @@ function changeLabel(code: string): string {
 export function gitBubbleContent(): PillBubbleContent {
 	const status = activeGitStatus();
 	if (!status) {
-		return { title: "Git", body: ["No repository in this project."], hint: "esc to close" };
+		return { title: "Git", body: ["No repository in this project."] };
 	}
 
 	const body: string[] = [];
@@ -528,7 +504,7 @@ export function gitBubbleContent(): PillBubbleContent {
 	return {
 		title: changes.length > 0 ? `${name} · ${changes.length} changed` : name,
 		body,
-		hint: changes.length > 0 ? "read-only · esc to close" : "esc to close",
+		hint: changes.length > 0 ? "read-only" : undefined,
 	};
 }
 
@@ -555,6 +531,7 @@ export const PILL_ACTIONS: Readonly<Partial<Record<string, PillAction>>> = {
 	queue: showQueuedMessages,
 	subagents: showSubagents,
 	thinking: showThinkingLevel,
+	tps: showTps,
 };
 
 /**

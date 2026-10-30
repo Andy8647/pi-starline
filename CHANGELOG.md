@@ -10,6 +10,38 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [0.9.1] - 2026-10-30
+
+The context bubble shows what the window is made of, and the tps bubble plots
+speed against it.
+
+**Added**
+
+- **Context breakdown.** Clicking the context pill opens a grid of what fills the
+  window — system prompt, tool schemas, MCP tools, memory, skills and the
+  conversation — each row with its token count and share, plus free space and the
+  autocompact reserve. The split is read from Pi's own prompt sections, so it
+  follows whatever the session actually sends; memory extensions that declare
+  `memory`, `pi_memory`, `memory-context` or `local_memory`, or append a
+  `<memory>` block, are counted as memory rather than system prompt.
+- **A number before the first reply.** The bubble estimates the window from the
+  prompt and the tool schemas and says so, instead of reporting zero. Pi's own
+  count leaves both out and does not exist until a turn has reported usage.
+- **Throughput history.** Clicking the tps pill opens a scatter of every measured
+  reply: tokens per second on the y axis, the context percentage it finished at
+  on the x. Replies are coloured against the session's own top speed, the newest
+  one is a dot, and several in one cell show their count. Both axes follow the
+  data instead of a fixed 0-100%.
+- **Points survive `--continue`.** They are kept as custom entries in the session
+  file — persisted, never sent to the model — and the pill starts from the last
+  one instead of an empty segment.
+
+**Changed**
+
+- Bubbles no longer print `esc to close`: a click anywhere else already closes
+  them, and the line cost a row on every bubble. The git bubble keeps
+  `read-only`, the subagents bubble keeps its command.
+
 ## [0.9.0] - 2026-10-30
 
 The input box is as tall as its text, and user messages in the transcript are

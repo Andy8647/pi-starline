@@ -509,7 +509,6 @@ describe("pill actions", () => {
 		const text = lines.map(plain).join("\n");
 
 		expect(text).toContain("Queued messages");
-		expect(text).toContain("esc to close");
 		expect(lines.every((entry) => visibleWidth(entry) === width)).toBe(true);
 
 		bubble.handleInput("\x1b");

@@ -29,6 +29,7 @@ import {
 	saveUiFeaturesPatch,
 	type UiFeaturesConfig,
 } from "./config";
+import { setContextApi } from "./context-breakdown";
 import { setActiveContextSnapshot } from "./context-live";
 import {
 	getStarlineEditorBaseFactory,
@@ -73,6 +74,7 @@ import {
 	SUBAGENT_TOOL_NAME,
 	setActiveSubagentFleet,
 } from "./subagent-fleet";
+import { contextPercentAfter, setTpsHistory, TPS_ENTRY_TYPE, TpsHistory } from "./tps-history";
 import { TurnClock } from "./turn-clock";
 import { PolishedEditor, WrappedPolishedEditor } from "./ui";
 import { setWorkingIndicator } from "./working-indicator";
@@ -100,10 +102,34 @@ function isTuiContext(ctx: ExtensionContext): boolean {
  */
 const BUBBLE_ANIMATION_MS = 60;
 
+/**
+ * Every entry of the session, in order. Extensions keep their own state in
+ * custom entries, so a resumed session's throughput points come back from here.
+ */
+function readSessionEntries(ctx: ExtensionContext): Array<{
+	type?: string;
+	customType?: string;
+	data?: unknown;
+}> {
+	const sessionManager = ctx.sessionManager as { getEntries?: () => unknown[] } | undefined;
+	const entries = sessionManager?.getEntries?.() ?? ctx.sessionManager.getBranch();
+	return entries as Array<{ type?: string; customType?: string; data?: unknown }>;
+}
+
 export default function (pi: ExtensionAPI) {
 	// Published before anything else so a bridge that registers in `session_start`
 	// finds it, whichever order the extensions were loaded in.
 	publishPillApi();
+	// The context bubble needs the tool schemas and the compaction reserve, and
+	// neither is on the context a pill action gets; hold on to the API instead.
+	setContextApi({
+		allTools: () => pi.getAllTools(),
+		activeTools: () => pi.getActiveTools(),
+		reserveTokens: () => {
+			const compaction = pi.getSettings().compaction;
+			return compaction?.enabled === false ? undefined : compaction?.reserveTokens;
+		},
+	});
 
 	const state: FooterState = createInitialState(emptyGitStatus());
 	// The git pill's bubble reads the same object the footer draws from, so a
@@ -136,6 +162,11 @@ export default function (pi: ExtensionAPI) {
 	};
 	const liveContext = new LiveContextController(sessionLifecycle, refresh);
 	const liveTps = new LiveTpsController();
+	// Each measured turn is a point on the throughput curve. The custom entry is
+	// how the points survive `--continue`; pi persists it and never sends it to the
+	// model.
+	const tpsHistory = new TpsHistory((point) => pi.appendEntry(TPS_ENTRY_TYPE, point));
+	setTpsHistory(tpsHistory);
 	const turnClock = new TurnClock();
 	const getActiveTheme = () => activeTheme;
 	const getCurrentConfig = () => currentConfig;
@@ -575,6 +606,7 @@ export default function (pi: ExtensionAPI) {
 			setWorkingIndicator(undefined);
 			stopSessionTimer();
 			stopProjectRefresh();
+			setTpsHistory(undefined);
 			requestFooterRender = undefined;
 			getActiveExtensionStatuses = () => new Map();
 			if (isTuiContext(ctx)) {
@@ -612,6 +644,10 @@ export default function (pi: ExtensionAPI) {
 		liveContext.clear();
 		liveTps.clear();
 		turnClock.clear();
+		// A resumed session carries its earlier points in the transcript; the pill
+		// starts from the last of them instead of an empty segment.
+		tpsHistory.restore(readSessionEntries(ctx));
+		liveTps.seed(tpsHistory.all().at(-1)?.tps);
 		// A resumed session keeps its original header, and reporting the moment this
 		// process attached to it would make the elapsed-time segment read 0s forever.
 		state.sessionStartEpoch = resolveSessionStartEpoch(readSessionHeader(ctx));
@@ -720,7 +756,16 @@ export default function (pi: ExtensionAPI) {
 		} else if (event.message.role === "assistant") {
 			// The stream's `done` event never reaches an extension, so the output count
 			// has to be closed here, where the finished message arrives with its usage.
-			liveTps.complete(event.message.usage?.output ?? 0);
+			const output = event.message.usage?.output ?? 0;
+			if (liveTps.complete(output)) {
+				// One point per measured turn: the rate it ran at, and how full the
+				// window was when it finished.
+				const tps = liveTps.value();
+				const percent = contextPercentAfter(event.message.usage, ctx.model?.contextWindow);
+				if (tps !== undefined && percent !== undefined) {
+					tpsHistory.record({ tps, percent, at: Date.now() });
+				}
+			}
 		}
 		syncInteractiveAndProjectStateWithUsage(event, ctx);
 	});
