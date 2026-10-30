@@ -134,6 +134,8 @@ export function pillBubbleWidth(
 		anchor?.startColumn !== undefined && anchor.endColumn !== undefined
 			? anchor.endColumn - anchor.startColumn + TAB_INSET * 2 + 2
 			: 0;
+	// Content laid out in columns (the context grid) asks for more than the default
+	// ceiling; the terminal is still the hard limit.
 	const ceiling = Math.max(8, Math.min(MAX_BUBBLE_WIDTH, terminalWidth - 4));
 	return Math.min(Math.max(MIN_BUBBLE_WIDTH, longest, pill), ceiling);
 }

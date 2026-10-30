@@ -14,6 +14,13 @@
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
+import {
+	type ContextBreakdown,
+	collectContextBreakdown,
+	contextBreakdownBody,
+	contextBreakdownNote,
+	probeFor,
+} from "./context-breakdown";
 import { activeContextSnapshot } from "./context-live";
 import { formatCount } from "./format";
 import { activeGitStatus } from "./git-live";
@@ -31,6 +38,7 @@ import {
 	showPillBubble,
 } from "./pill-bubble";
 import { PILL_SEGMENT_VARIABLES } from "./pill-config";
+import type { ThemeLike } from "./style";
 import { type FleetSnapshot, getActiveSubagentFleet } from "./subagent-fleet";
 
 /** What an action gets: the session, and where the pill is if a click found it. */
@@ -85,6 +93,9 @@ export function queuedSegmentText(ctx: ExtensionContext, icon = ""): string {
 
 /** How often an open bubble whose numbers move re-reads them. */
 const LIVE_BUBBLE_INTERVAL_MS = 1_000;
+
+/** Paints nothing: for callers that only need the breakdown's text. */
+const NO_THEME: ThemeLike = { fg: (_color, text) => text };
 
 /**
  * Re-run `tick` every second while `handle` is open, then stop. The timer never
@@ -415,49 +426,71 @@ async function showSubagents({ ctx, pill }: PillActionContext): Promise<void> {
 }
 
 /**
- * What the context pill says when clicked: the numbers the bar has no room for.
+ * What the context pill says when clicked: the window as a grid, what each
+ * colour is, and the numbers the bar has no room for.
  *
  * The pill keeps the percentage; the window, the tokens used, the session's
- * in/out counts and the cache rate are all here. Same source as the pill, so the
- * two cannot disagree while a turn streams.
+ * in/out counts and the cache rate are all here. The breakdown is optional so
+ * this stays callable without a session — without it the bubble shows the
+ * numbers alone, as it did before the grid.
  */
-export function contextBubbleContent(): PillBubbleContent {
+export function contextBubbleContent(
+	breakdown?: ContextBreakdown,
+	theme?: ThemeLike,
+): PillBubbleContent {
 	const snapshot = activeContextSnapshot();
-	if (!snapshot) {
+	if (!breakdown && !snapshot) {
 		return { title: "Context", body: ["Nothing has been sent yet."], hint: "esc to close" };
 	}
 
-	const body: string[] = [];
 	const percent =
-		snapshot.percent === undefined || !Number.isFinite(snapshot.percent)
+		snapshot?.percent ??
+		(breakdown?.contextWindow && breakdown.contextWindow > 0
+			? (breakdown.total / breakdown.contextWindow) * 100
+			: undefined);
+	const rounded =
+		percent === undefined || !Number.isFinite(percent)
 			? undefined
-			: Math.max(0, Math.min(100, Math.round(snapshot.percent)));
-	if (snapshot.contextWindow) {
-		const windowLabel = formatCount(snapshot.contextWindow);
-		const used = percent === undefined ? `window ${windowLabel}` : `${percent}% of ${windowLabel}`;
-		body.push(
-			snapshot.tokens === undefined ? used : `${used} · ${formatCount(snapshot.tokens)} used`,
-		);
-	}
-	if (snapshot.tokenLabel) body.push(`session ${snapshot.tokenLabel}`);
-	if (snapshot.cacheLabel) body.push(`cache ${snapshot.cacheLabel}`);
+			: Math.max(0, Math.min(100, Math.round(percent)));
 
-	const title = percent === undefined ? "Context" : `${percent}% context`;
+	const body: string[] = [];
+	if (breakdown) {
+		const notes = [contextBreakdownNote(breakdown)];
+		if (snapshot?.tokenLabel) notes.push(`session ${snapshot.tokenLabel}`);
+		if (snapshot?.cacheLabel) notes.push(`cache ${snapshot.cacheLabel}`);
+		body.push(...contextBreakdownBody(breakdown, theme ?? NO_THEME, notes));
+	} else if (snapshot) {
+		if (snapshot.contextWindow) {
+			const windowLabel = formatCount(snapshot.contextWindow);
+			const used =
+				rounded === undefined ? `window ${windowLabel}` : `${rounded}% of ${windowLabel}`;
+			body.push(
+				snapshot.tokens === undefined ? used : `${used} · ${formatCount(snapshot.tokens)} used`,
+			);
+		}
+		if (snapshot.tokenLabel) body.push(`session ${snapshot.tokenLabel}`);
+		if (snapshot.cacheLabel) body.push(`cache ${snapshot.cacheLabel}`);
+	}
+
 	return {
-		title,
+		title: rounded === undefined ? "Context" : `${rounded}% context`,
 		body: body.length > 0 ? body : ["No usage yet."],
 		hint: "esc to close",
 	};
 }
 
 function showContext({ ctx, pill }: PillActionContext): void {
-	if (!activeContextSnapshot()) {
+	// The theme and the reads are taken on every render, so the bubble follows a
+	// theme change and a model switch while it is open.
+	const theme = ctx.ui.theme as unknown as ThemeLike;
+	const read = () => collectContextBreakdown(probeFor(ctx));
+	if (read().total <= 0 && !activeContextSnapshot()) {
 		if (ctx.hasUI) ctx.ui.notify("No context usage in this session", "info");
 		return;
 	}
 	// Live: tokens grow while a turn streams, and the footer pushes a new
 	// snapshot every render.
-	const handle = showPillBubble(ctx, contextBubbleContent, pill);
+	const handle = showPillBubble(ctx, () => contextBubbleContent(read(), theme), pill);
 	whileOpen(handle, () => handle.refresh());
 }
 

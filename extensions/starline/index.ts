@@ -29,6 +29,7 @@ import {
 	saveUiFeaturesPatch,
 	type UiFeaturesConfig,
 } from "./config";
+import { setContextApi } from "./context-breakdown";
 import { setActiveContextSnapshot } from "./context-live";
 import {
 	getStarlineEditorBaseFactory,
@@ -104,6 +105,16 @@ export default function (pi: ExtensionAPI) {
 	// Published before anything else so a bridge that registers in `session_start`
 	// finds it, whichever order the extensions were loaded in.
 	publishPillApi();
+	// The context bubble needs the tool schemas and the compaction reserve, and
+	// neither is on the context a pill action gets; hold on to the API instead.
+	setContextApi({
+		allTools: () => pi.getAllTools(),
+		activeTools: () => pi.getActiveTools(),
+		reserveTokens: () => {
+			const compaction = pi.getSettings().compaction;
+			return compaction?.enabled === false ? undefined : compaction?.reserveTokens;
+		},
+	});
 
 	const state: FooterState = createInitialState(emptyGitStatus());
 	// The git pill's bubble reads the same object the footer draws from, so a
