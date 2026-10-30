@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-	DEFAULT_EDITOR_METADATA_FORMAT,
 	expandPaletteInRecord,
 	expandPaletteRefs,
 	mergeConfig,
@@ -125,19 +124,6 @@ describe("mergeConfig palette integration", () => {
 	 * editorMetadataFormat uses `$name` for its own format variables. Palette
 	 * expansion must never reach it.
 	 */
-	it("does not touch format strings", () => {
-		const config = mergeConfig({
-			palette: { blue: "#7aa2f7", model: "#ff0000", cwd: "#00ff00" },
-			editorMetadataFormat: "$model  $provider",
-		});
-		expect(config.editorMetadataFormat).toBe("$model  $provider");
-	});
-
-	it("keeps the editor metadata default when none is given", () => {
-		expect(mergeConfig({ palette: tokyoNightStorm }).editorMetadataFormat).toBe(
-			DEFAULT_EDITOR_METADATA_FORMAT,
-		);
-	});
 });
 
 describe("palette in extensionStatuses.colors", () => {

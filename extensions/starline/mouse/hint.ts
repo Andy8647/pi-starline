@@ -1,9 +1,9 @@
 /**
- * The right-hand side of the editor's metadata row.
+ * The hints on the right end of the editor's top rule.
  *
- * Both hints share one slot. `ui.ts` renders that row whether or not
- * `editorMetadataFormat` has anything in it, which is why 0.2.2 moved the paste
- * hint here off the editor border — blanking the template must not hide it.
+ * Both hints share one slot. They sat on the bottom border until 0.2.2, then on
+ * a metadata row under the text until 0.9, which kept the box a row taller than
+ * its text; the top rule holds them without adding a row.
  */
 export function composeHints(
 	pasteHint: string | null,

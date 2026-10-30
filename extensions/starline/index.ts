@@ -75,7 +75,6 @@ import {
 } from "./subagent-fleet";
 import { TurnClock } from "./turn-clock";
 import { PolishedEditor, WrappedPolishedEditor } from "./ui";
-import { installUserMessageStyle } from "./user-message";
 import { setWorkingIndicator } from "./working-indicator";
 
 type EditorFactory = NonNullable<Parameters<ExtensionContext["ui"]["setEditorComponent"]>[0]>;
@@ -230,12 +229,7 @@ export default function (pi: ExtensionAPI) {
 
 	const installPrototypePatches = () => {
 		if (prototypePatchesInstalled) return;
-		const cleanupSelectorBorderStyle = installSelectorBorderStyle(getActiveTheme, getCurrentConfig);
-		const cleanupUserMessageStyle = installUserMessageStyle(getActiveTheme, getCurrentConfig);
-		cleanupPrototypePatches = () => {
-			cleanupSelectorBorderStyle();
-			cleanupUserMessageStyle();
-		};
+		cleanupPrototypePatches = installSelectorBorderStyle(getActiveTheme, getCurrentConfig);
 		prototypePatchesInstalled = true;
 	};
 
@@ -392,22 +386,7 @@ export default function (pi: ExtensionAPI) {
 		const sessionTheme = ctx.ui.theme;
 		const factory = ((tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) => {
 			syncHardwareCursor(tui);
-			const editor = new PolishedEditor(
-				tui,
-				theme,
-				keybindings,
-				sessionTheme,
-				getCurrentConfig,
-				() => ({
-					modelLabel: state.modelLabel,
-					modelId: state.modelId,
-					modelName: state.modelName,
-					providerLabel: state.providerLabel,
-					sessionName: ctx.sessionManager.getSessionName() ?? "",
-				}),
-				getThinkingLevel,
-				() => getActiveExtensionStatuses(),
-			);
+			const editor = new PolishedEditor(tui, theme, keybindings, sessionTheme, getCurrentConfig);
 			applyPasteCollapse(editor);
 			// Nothing on Pi's renderer points at the live editor, and the
 			// extension API hands out the factory rather than what it built — so
@@ -428,20 +407,7 @@ export default function (pi: ExtensionAPI) {
 			syncHardwareCursor(tui);
 			const base = baseFactory(tui, theme, keybindings);
 			applyPasteCollapse(base);
-			const wrapped = new WrappedPolishedEditor(
-				base,
-				sessionTheme,
-				getCurrentConfig,
-				() => ({
-					modelLabel: state.modelLabel,
-					modelId: state.modelId,
-					modelName: state.modelName,
-					providerLabel: state.providerLabel,
-					sessionName: ctx.sessionManager.getSessionName() ?? "",
-				}),
-				getThinkingLevel,
-				() => getActiveExtensionStatuses(),
-			);
+			const wrapped = new WrappedPolishedEditor(base, sessionTheme, getCurrentConfig);
 			// Two references, because these are two different objects here: the
 			// wrapper is what gets mounted and hit-tested, while the draft's
 			// visual lines live on the base editor it delegates to.

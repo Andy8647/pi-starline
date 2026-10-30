@@ -45,7 +45,10 @@ export type EditorBoxGeometry = {
  * they cannot be mistaken for a rule.
  *
  * Layout between the rules, per renderPolishedFrame:
- *   rule, [pad], ...text, [pad], metadata, rule
+ *   rule, [pad], ...text, [filler], [pad], rule
+ *
+ * Filler rows (`editorMinRows`) are counted as text rows here; a click on one
+ * lands past the end of the draft either way.
  */
 export function findEditorBox(
 	clusterLines: string[],
@@ -72,8 +75,8 @@ export function findEditorBox(
 
 	const pad = paddingY > 0 ? 1 : 0;
 	const firstTextRow = top + 1 + pad;
-	// Below the text: the padding row, then the metadata row, then the rule.
-	const lastTextRow = bottom - 2 - pad;
+	// Below the text: the padding row, then the rule.
+	const lastTextRow = bottom - 1 - pad;
 	if (lastTextRow < firstTextRow) return null;
 
 	return { firstTextRow, lastTextRow, textColumn };

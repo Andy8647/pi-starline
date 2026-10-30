@@ -32,6 +32,38 @@ describe("a broken config file says so", () => {
 	});
 });
 
+describe("user message settings that moved to pi-tidy", () => {
+	it("are named in one warning per process, and the config still loads", () => {
+		const path = tempConfig(
+			JSON.stringify({
+				userMessagePaddingY: 0,
+				colors: { userMessageBorder: "accent", cwd: "bold red" },
+				colorSources: { userMessages: "terminal" },
+			}),
+		);
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const config = loadConfig(path);
+		loadConfig(path);
+		const calls = warn.mock.calls.map((call) => String(call[0]));
+		warn.mockRestore();
+
+		expect(config.colors.cwd).toBe("bold red");
+		expect(calls).toHaveLength(1);
+		expect(calls[0]).toContain("pi-tidy");
+		expect(calls[0]).toContain(
+			"userMessagePaddingY, colors.userMessageBorder, colorSources.userMessages",
+		);
+	});
+
+	it("say nothing when none are set", () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		loadConfig(tempConfig(JSON.stringify({ editorPaddingY: 0 })));
+		const count = warn.mock.calls.length;
+		warn.mockRestore();
+		expect(count).toBe(0);
+	});
+});
+
 describe("the pill spinner follows icons.mode", () => {
 	const frame = (ascii: boolean) => {
 		setWorkingIndicator({

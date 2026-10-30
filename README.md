@@ -21,7 +21,7 @@ Starline makes Pi's fullscreen mode feel like a finished terminal app:
 - A colour palette with `$name` references; the bar is built from `pill.segments`, in your order.
 - One `git` pill: branch, dirty markers and any operation in progress together. Click it for the changed files, ahead/behind and stashes. The list is read-only, because an agent may be running in the same tree.
 - One `context` pill: the percentage, and nothing else. Click it for the window size, tokens used, session in/out totals and the cache rate.
-- Other extensions' statuses from `ctx.ui.setStatus()` as pills, on either side, or on the editor row.
+- Other extensions' statuses from `ctx.ui.setStatus()` as pills, on either side or in the middle.
 - The model pill's icon spins while the agent works, and the pill counts the run's elapsed time; when the run ends the number stays as the total it reached.
 - No git pill on the bar means no `git status`: the refresh only reads the repository when something on the bar shows it.
 
@@ -37,7 +37,8 @@ Starline makes Pi's fullscreen mode feel like a finished terminal app:
 
 **Editor**
 
-- Bordered input box with an accent rail, the model and provider inside the frame, and matching user-message boxes.
+- Bordered input box with an accent rail, as tall as its text; paste, selection and `ctrl+g` hints ride its top rule. `editorMinRows` keeps it a fixed minimum height.
+- User messages in the transcript are styled by [pi-tidy](https://github.com/Andy8647/pi-tidy), which draws them to match.
 - Copy-friendly mode drops the rail glyphs so terminal selection copies less chrome.
 
 **Mouse** (Pi's `tuiMode: "fullscreen"`)

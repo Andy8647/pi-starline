@@ -4,28 +4,27 @@ Every option Starline has.
 
 ## All options
 
-| Key                        | Type    | Default                                                               | What it does                                                                                                    |
-| -------------------------- | ------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `projectRefreshIntervalMs` | number  | `30000`                                                               | How often git and runtime state are re-read. Minimum 5000.                                                      |
-| `pill`                     | object  | see [Pill footer](#pill-footer)                                       | Segment order, separator glyph, boldness, and cap style for the pill footer.                                    |
-| `editorMetadataFormat`     | string  | `"$model  $provider(  $thinking)"`                                    | Template for the left side of the editor metadata row, see [Editor Metadata Format](#editor-metadata-format).   |
-| `contextStyle`             | string  | `"text"`                                                              | Whether the context segment shows text, a gauge, or both.                                                       |
-| `segmentOptions`           | object  | see [Segment display options](#segment-display-options)               | Formatting details for the context pill, the numbers in its bubble, and the subagents pill.                     |
-| `editorModelLabel`         | string  | `"id"`                                                                | Whether the editor frame shows the model id or its display name.                                                |
-| `editorCursor`             | string  | `"block"`                                                             | Cursor style in the editor, see [Editor cursor](#editor-cursor).                                                |
-| `editorClickCursor`        | boolean | `true`                                                                | Clicking in the editor text moves the caret there, see [Mouse](#mouse).                                         |
-| `pasteCollapseLines`       | number  | `11`                                                                  | Line count at which a paste collapses into a marker, see [Paste collapse threshold](#paste-collapse-threshold). |
-| `editorPaddingY`           | number  | `1`                                                                   | Blank rows inside the editor box, see [Box height](#box-height).                                                |
-| `userMessagePaddingY`      | number  | `1`                                                                   | Blank rows inside the previous-message box, see [Box height](#box-height).                                      |
-| `contextThresholds`        | object  | `{ "warning": 70, "error": 90 }`                                      | Percentages that select the context segment's normal/warning/error colours.                                     |
-| `pathDisplay`              | object  | `{ "mode": "basename", "depth": 0 }`                                  | Whether the cwd segment shows the basename or a full path, and how many trailing directories to keep.           |
-| `git`                      | object  | see [Git](#git)                                                       | Branch length, forge logo, commit and line-metric options.                                                      |
-| `icons`                    | object  | see the JSON block below                                              | Per-icon glyph overrides and the icon mode (`auto`, `nerd`, `ascii`).                                           |
-| `colors`                   | object  | see [Colors](#colors)                                                 | Style string for every themeable segment and editor element.                                                    |
-| `colorSources`             | object  | `{ "starship": "theme", "editor": "theme", "userMessages": "theme" }` | Whether each area's colours come from the Pi theme or the terminal palette.                                     |
-| `features`                 | object  | `{ "editor": true, "statusLine": true, "copyFriendly": false }`       | Toggles the custom editor, the custom footer, and copy-friendly mode.                                           |
-| `extensionStatuses`        | object  | see [Pill footer](#pill-footer)                                       | Placement, colour, and icon for third-party extension statuses.                                                 |
-| `mouse`                    | object  | see [Mouse features](#mouse-features)                                 | Wheel routing, click-to-expand tool boxes, path-aware word selection, and Starline's own copy behaviour.        |
+| Key                        | Type    | Default                                                         | What it does                                                                                                    |
+| -------------------------- | ------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `projectRefreshIntervalMs` | number  | `30000`                                                         | How often git and runtime state are re-read. Minimum 5000.                                                      |
+| `pill`                     | object  | see [Pill footer](#pill-footer)                                 | Segment order, separator glyph, boldness, and cap style for the pill footer.                                    |
+| `contextStyle`             | string  | `"text"`                                                        | Whether the context segment shows text, a gauge, or both.                                                       |
+| `segmentOptions`           | object  | see [Segment display options](#segment-display-options)         | Formatting details for the context pill, the numbers in its bubble, and the subagents pill.                     |
+| `editorModelLabel`         | string  | `"id"`                                                          | Whether the model pill shows the model id or its display name.                                                  |
+| `editorCursor`             | string  | `"block"`                                                       | Cursor style in the editor, see [Editor cursor](#editor-cursor).                                                |
+| `editorClickCursor`        | boolean | `true`                                                          | Clicking in the editor text moves the caret there, see [Mouse](#mouse).                                         |
+| `pasteCollapseLines`       | number  | `11`                                                            | Line count at which a paste collapses into a marker, see [Paste collapse threshold](#paste-collapse-threshold). |
+| `editorPaddingY`           | number  | `1`                                                             | Blank rows inside the editor box, see [Box height](#box-height).                                                |
+| `editorMinRows`            | number  | `1`                                                             | Height floor for the editor's text area, see [Box height](#box-height).                                         |
+| `contextThresholds`        | object  | `{ "warning": 70, "error": 90 }`                                | Percentages that select the context segment's normal/warning/error colours.                                     |
+| `pathDisplay`              | object  | `{ "mode": "basename", "depth": 0 }`                            | Whether the cwd segment shows the basename or a full path, and how many trailing directories to keep.           |
+| `git`                      | object  | see [Git](#git)                                                 | Branch length, forge logo, commit and line-metric options.                                                      |
+| `icons`                    | object  | see the JSON block below                                        | Per-icon glyph overrides and the icon mode (`auto`, `nerd`, `ascii`).                                           |
+| `colors`                   | object  | see [Colors](#colors)                                           | Style string for every themeable segment and editor element.                                                    |
+| `colorSources`             | object  | `{ "starship": "theme", "editor": "theme" }`                    | Whether each area's colours come from the Pi theme or the terminal palette.                                     |
+| `features`                 | object  | `{ "editor": true, "statusLine": true, "copyFriendly": false }` | Toggles the custom editor, the custom footer, and copy-friendly mode.                                           |
+| `extensionStatuses`        | object  | see [Pill footer](#pill-footer)                                 | Placement, colour, and icon for third-party extension statuses.                                                 |
+| `mouse`                    | object  | see [Mouse features](#mouse-features)                           | Wheel routing, click-to-expand tool boxes, path-aware word selection, and Starline's own copy behaviour.        |
 
 User config lives at `~/.pi/agent/starline.json`. The file is optional: missing or invalid known values fall back to Starline defaults, unknown keys are ignored at runtime, and `/starline` can patch color-source settings, UI feature toggles, and active third-party status placements.
 
@@ -56,7 +55,6 @@ Default config values — copy this and change any value you want:
 		"bold": true,
 		"caps": "round"
 	},
-	"editorMetadataFormat": "$model  $provider(  $thinking)",
 	"contextStyle": "text",
 	"segmentOptions": {
 		"context": {
@@ -69,7 +67,7 @@ Default config values — copy this and change any value you want:
 	"editorModelLabel": "id",
 	"editorCursor": "block",
 	"editorPaddingY": 1,
-	"userMessagePaddingY": 1,
+	"editorMinRows": 1,
 	"contextThresholds": {
 		"warning": 70,
 		"error": 90
@@ -153,8 +151,7 @@ Default config values — copy this and change any value you want:
 	},
 	"colorSources": {
 		"starship": "theme",
-		"editor": "theme",
-		"userMessages": "theme"
+		"editor": "theme"
 	},
 	"features": {
 		"editor": true,
@@ -180,23 +177,19 @@ Default config values — copy this and change any value you want:
 - Style values can be Starship/terminal strings (`bold purple`, `fg:202`, `#89b` / `#89b4fa`, `bg:blue fg:bright-green`) or Pi theme tokens (`accent`, `borderMuted`, `thinkingHigh`). Short `#rgb` hex values expand to `#rrggbb`.
 - `projectRefreshIntervalMs`: project status polling interval; `0` disables polling. Values `1..4999` clamp up to `5000` (minimum 5s); invalid/non-finite values fall back to `30000`.
 - `contextStyle`: `text` (default), `gauge`, or `text+gauge` for the context segment. Context usage refreshes during assistant streaming; token and cost totals remain canonical and finalize at turn boundaries.
-- `editorModelLabel`: controls the model shown in the editor frame. `id` (default) shows the model id; `name` shows the model's display name (including custom `name` values set in `models.json`), falling back to the id when no name is set.
-- `editorMetadataFormat`: JSON-only template for the left side of the editor metadata row. Missing, non-string, or empty values restore the default `$model  $provider(  $thinking)` layout; non-empty strings, including whitespace-only strings, are preserved. See [Editor Metadata Format](#editor-metadata-format) below.
+- `editorModelLabel`: controls the model shown in the model pill. `id` (default) shows the model id; `name` shows the model's display name (including custom `name` values set in `models.json`), falling back to the id when no name is set. (The name is from when the model was also shown inside the editor frame, which it no longer is.)
 - `contextThresholds`: `{ warning, error }` percentages (default `70` / `90`) that select contextNormal / contextWarning / contextError colors.
 - `pathDisplay`: controls how the cwd/`$cwd` path is shown. `mode` is `basename` (default, last segment only) or `full` (path with home contracted to `~`). In `full` mode, `depth` keeps only the last N trailing directories (`0` = entire path after `~`, max `5`); when parents are dropped the path is prefixed with `…/` (Starship-style). The `/starline` **Layout** tab cycles path mode and path depth (`0`–`5`; depth is ignored for basename). Example: `~/Projects/foo/bar` with `depth: 2` → `…/foo/bar`.
-- `icons`: every shown icon key is configurable; omit any key to use the Starline default. `icons.mode` is `auto` | `nerd` | `ascii` (default `auto`, same glyphs as nerd). ASCII mode swaps in plain fallbacks for statusline icons and runtime symbols — useful without a Nerd Font. Custom per-icon strings always win over mode defaults. Custom `icons.os` always wins; when left at the mode default, Starline maps the OS icon by platform. `rail` sets the vertical glyph drawn as the left rail of the active editor frame and previous user messages when `copyFriendly` is disabled (default `│`; any single Unicode vertical or block glyph). `editorPrompt` controls an optional copy-friendly editor prompt glyph; the default is `""` so copy-friendly mode stays rail-free.
+- `icons`: every shown icon key is configurable; omit any key to use the Starline default. `icons.mode` is `auto` | `nerd` | `ascii` (default `auto`, same glyphs as nerd). ASCII mode swaps in plain fallbacks for statusline icons and runtime symbols — useful without a Nerd Font. Custom per-icon strings always win over mode defaults. Custom `icons.os` always wins; when left at the mode default, Starline maps the OS icon by platform. `rail` sets the vertical glyph drawn as the left rail of the editor frame when `copyFriendly` is disabled (default `│`; any single Unicode vertical or block glyph). `editorPrompt` controls an optional copy-friendly editor prompt glyph; the default is `""` so copy-friendly mode stays rail-free.
 - `colorSources`: `theme` maps styles through Pi theme tokens; `terminal` emits terminal colors. `/starline` switches these sources; manual JSON controls specific style values.
-- `features`: `editor` enables Starline's custom editor, selector borders, and previous-message chrome. `statusLine` enables Starline's custom footer/status line. `copyFriendly` hides editor and previous-message rail glyphs so native terminal selection copies less chrome. All three can be changed from `/starline` or direct slash-command arguments.
+- `features`: `editor` enables Starline's custom editor and selector borders. `statusLine` enables Starline's custom footer/status line. `copyFriendly` hides the editor's rail glyphs so native terminal selection copies less chrome. All three can be changed from `/starline` or direct slash-command arguments.
 - `git`: everything the git segments read, see [Git](#git). Also drives which optional probes run: a tag lookup only happens when `gitCommit` or `gitTag` is in `pill.segments`, `git diff --numstat` only for `gitMetrics`, and the remote lookup only for the `git` pill with `hostIcon` on. With none of `git`, `gitCommit`, `gitTag` or `gitMetrics` on the bar, the refresh does not read the repository at all.
-- `extensionStatuses`: controls third-party statuses published by other Pi extensions through `ctx.ui.setStatus()`. `defaultPlacement` and each `placements` value can be `off`, `left`, `middle`, `right`, or `editor`. The `Extension segments` tab in `/starline` lists only statuses that are currently active. `editor` puts the status on the right-hand side of the editor's metadata row, next to the copy and paste hints — it is drawn there as one muted line, so `colors`, `icons`, and `colorMode` do not apply, and it needs both `features.editor` and `features.statusLine` on (the status map only reaches Starline through its footer). Publishing extensions can also make their pill clickable and open a bubble with their own detail through the pill API — see [Clickable pills for other extensions](pill-api.md).
+- `extensionStatuses`: controls third-party statuses published by other Pi extensions through `ctx.ui.setStatus()`. `defaultPlacement` and each `placements` value can be `off`, `left`, `middle`, or `right`. The `Extension segments` tab in `/starline` lists only statuses that are currently active. `editor`, which placed a status on the editor's metadata row until 0.9, is read as `right`. Publishing extensions can also make their pill clickable and open a bubble with their own detail through the pill API — see [Clickable pills for other extensions](pill-api.md).
 - The shown `editor*` values match the default `theme` source. Omit those keys to keep Starline's source-aware defaults when switching between `theme` and `terminal`.
-- `editorAccent` styles the active editor rail and previous user-message rail when `features.copyFriendly` is disabled.
+- `editorAccent` styles the editor rail when `features.copyFriendly` is disabled.
 - `editorPrompt` styles the copy-friendly editor prompt glyph. Omit it to use `editorAccent`, then the default accent fallback.
-- `editorBorder` styles the active editor and previous user-message top/bottom border color only; the border glyph stays `─`.
-- `editorModel`, `editorProvider`, and `editorThinking*` style the editor metadata. `editorThinking` applies to every non-`off` thinking level unless a level-specific key is set.
-
-- `userMessageBorder` styles the previous user-message border on its own. Omit it to keep borrowing `editorBorder`, which is the upstream behaviour.
-- `userMessageText` styles previous user-message body text. Omit it to follow the theme's `userMessageText` colour.
+- `editorBorder` styles the editor's top/bottom border color only; the border glyph stays `─`.
+- User messages in the transcript are styled by [pi-tidy](https://github.com/Andy8647/pi-tidy) since 0.9: its `userMessageStyle`, `userMessagePaddingY` and `userMessageColors`. Starline's former `userMessagePaddingY`, `colors.userMessageBorder`, `colors.userMessageText` and `colorSources.userMessages` are ignored, with a one-time warning.
 - `model` styles the `model` footer segment; `thinking` styles the `thinking` segment. Omit `thinking` to colour it by level from the theme's `thinkingOff`/`thinkingMinimal`/`thinkingLow`/`thinkingMedium`/`thinkingHigh`/`thinkingXhigh` keys.
 
 Tip: when using copy-friendly mode, setting Pi's `editorPaddingX` to `1` in `~/.pi/agent/settings.json` keeps a small left gutter without copying a rail glyph.
@@ -248,7 +241,7 @@ Declare a scheme once and reference it, so switching schemes means editing one b
 }
 ```
 
-A reference that does not resolve is left as written, so the segment renders unstyled and the typo is visible rather than silently becoming empty. Palette expansion applies to `colors` only — `editorMetadataFormat` uses `$name` for its own variables and is never rewritten.
+A reference that does not resolve is left as written, so the segment renders unstyled and the typo is visible rather than silently becoming empty. Palette expansion applies to colour values only.
 
 **Known limitation:** hex literals are always emitted as truecolor. On a terminal without truecolor support they may render incorrectly, where theme colour keys degrade correctly because Pi picks the encoding. Use theme keys if you need 256-colour terminals to look right.
 
@@ -439,19 +432,27 @@ The numstat diff is the Starship “total dirty” view: staged and unstaged com
 
 ## Box height
 
-The editor and previous-message boxes each carry a blank row above and below
-their content. Set either to `0` to reclaim those rows:
+The editor box is its two rules, a blank row above and below the text, and the
+text. Set `editorPaddingY` to `0` to reclaim the blank rows:
 
 ```json
 {
 	"editorPaddingY": 1,
-	"userMessagePaddingY": 1
+	"editorMinRows": 1
 }
 ```
 
-Only `0` and `1` are accepted. The editor frame is parsed back by position when
-one editor wraps another, so the padding the renderer emits and the padding the
+Only `0` and `1` are accepted for `editorPaddingY`. A frame from elsewhere is
+parsed back by position, so the padding the renderer emits and the padding the
 parser assumes have to agree — a second padding row has nowhere to be described.
+
+`editorMinRows` keeps the text area at least that many rows tall: a shorter
+draft is followed by blank rows, so the box does not grow when you type a
+second line. `1` (the default) is the height of the text alone; up to `10`. A
+click on one of those blank rows puts the caret at the end of the draft.
+
+The box has no row of its own for the model or the hints: the model is in the
+pill footer, and the hints ride the top rule (see below).
 
 ## Paste collapse threshold
 
@@ -471,15 +472,17 @@ does not expose what this needs, nothing is patched and Pi's threshold stands.
 
 ### Paste again to expand
 
-While a collapsed paste is fresh, `paste again to expand` sits on the right of
-the editor's metadata row, beside the vim mode indicator when there is one.
-Pasting the same content again replaces the placeholder with the full text in
-place, rather than adding a second one.
+While a collapsed paste is fresh, `paste again to expand` sits at the right end
+of the editor's top rule, after the vim mode indicator when there is one (from a
+wrapped modal editor). The selection hint (`N characters selected, ctrl+x to
+copy`) and the `ctrl+g` external-editor hint share the same spot. Pasting the
+same content again replaces the placeholder with the full text in place, rather
+than adding a second one.
 
-That row is drawn whether or not `editorMetadataFormat` has anything in it, so
-blanking the template does not take the hint with it. The hint used to sit on
-the editor's bottom border, drawn there by the fixed editor that Pi 0.84
-superseded; it moved so that it no longer depends on that.
+Pi's own status text (a retry, compaction) starts at the left of the same rule
+and wins when the two do not fit; the hint is cut from its end. Until 0.9 the
+hints sat on a row of their own under the text, which kept the box a row taller
+than its text even when there was nothing to say.
 
 This works for both kinds of collapse — the ones lowered by `pasteCollapseLines`
 and the ones Pi does itself above its own threshold — and needs no configuration.
@@ -525,28 +528,3 @@ guessing would be silently pasting the wrong thing.
 ```json
 { "showHardwareCursor": true }
 ```
-
-## Editor Metadata Format
-
-Set `editorMetadataFormat` in `~/.pi/agent/starline.json` to customize the left side of the editor metadata row. Set it to `""` to show nothing there — useful when `$model` and `$thinking` have moved to the pill footer. The row itself stays (the frame is parsed back by position, so its line count is fixed); it just renders blank.
-
-```json
-{
-	"editorMetadataFormat": "$model_name ($model_id)( · $provider)( · $thinking)( · $session_name)"
-}
-```
-
-The syntax follows the same conventions as `editorMetadataFormat`: `$variable` and `${variable}` references, literal text and spaces, and conditional groups `( ... )` that disappear when all variables inside are empty. Unknown variables and `$fill` render empty; `$fill` never creates an editor layout zone because the right side remains reserved for structural Vim status.
-
-| Token           | Renders                                                               |
-| --------------- | --------------------------------------------------------------------- |
-| `$model`        | label selected by `editorModelLabel` (`id`, or name with ID fallback) |
-| `$model_id`     | active Pi model ID                                                    |
-| `$model_name`   | active Pi model display name; empty when no name is set               |
-| `$provider`     | provider label using Starline's existing formatting                   |
-| `$thinking`     | current thinking level; empty when thinking is `off`                  |
-| `$session_name` | current Pi session name; empty when unnamed                           |
-
-Model variables use `editorModel`, provider uses `editorProvider`, and thinking uses the matching `editorThinking*` style. Literal text and `$session_name` use the neutral editor border theme style. The template controls spacing. ANSI/VT sequences, control characters, and line-breaking whitespace are sanitized before rendering without collapsing ordinary spaces.
-
-Missing, non-string, or empty values use the default `$model  $provider(  $thinking)`. A non-empty format that resolves to no visible metadata keeps the normal blank spacer and metadata rows so the editor frame height remains stable. This option is configured only through JSON in its first version; `/starline format` continues to control the footer only.

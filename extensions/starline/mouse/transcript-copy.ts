@@ -5,19 +5,20 @@
  * Pi's `copyActiveSelectionToClipboard` copies *rendered* rows. In the transcript
  * those rows carry chrome that two components paint around their content:
  *
- * - Starline's own user messages (`user-message.ts`): a full-width `─` rule
- *   above and below, and every content row prefixed with the configured rail
- *   glyph plus a space (`│ hello`).
- * - `pi-toolbox`'s tool box frames (`frame.ts`): rounded corners
- *   (`╭──╮` / `╰──╯`) and every content row wrapped in verticals
- *   (`│ hello │`).
+ * - pi-tidy's "rail" user messages (`user-message.ts` there; Starline drew
+ *   them itself before 0.9): a full-width `─` rule above and below, every
+ *   content row prefixed with `│ ` (`│ hello`), and padding rows that are the
+ *   bare `│`. With tidy's icons on, the first text row also carries the user
+ *   icon (`│  hello`) and the rows after it hang two cells further in; both
+ *   come off too.
+ * - pi-tidy's tool box frames (`frame.ts`; `pi-toolbox` before the rename):
+ *   rounded corners (`╭──╮` / `╰──╯`, the top one possibly labelled, as a
+ *   "frame" user message's `╭─  ─╮` is) and every content row wrapped in
+ *   verticals (`│ hello │`).
  * - pi-coding-agent's `DynamicBorder` (bash boxes) paints the same full-width
  *   `─` rule — but bash content rows start with a space, not the rail
- *   (`bash-execution.js` renders them with paddingX=1), so under the default
- *   rail the pair below never forms and a bash box copies verbatim. Only in
- *   `copyFriendly` mode (empty rail prefix), where the rule pair alone
- *   decides, do its borders come off. Its content is never touched either
- *   way.
+ *   (`bash-execution.js` renders them with paddingX=1), so the pair below never
+ *   forms and a bash box copies verbatim.
  *
  * The clipboard should hold the content, not the chrome. The frame-free
  * selection task that was cut from 0.3.0 tried to do this by *inferring* where
@@ -25,7 +26,7 @@
  * produced a new edge case — a frame is not a structural concept in Pi. This
  * module therefore recognises only the exact markers above: a rounded-corner
  * pair of equal width, and a full-width rule pair whose every inner row
- * carries the configured rail prefix. Anything else — a markdown table with
+ * carries the rail. Anything else — a markdown table with
  * its square `┌┬┐` corners, a blockquote's `│ ` gutter, a horizontal rule the
  * assistant actually wrote — is content and passes through byte-identical.
  *
@@ -53,10 +54,28 @@ export type CleanedRows = {
 	changed: boolean;
 };
 
-/** A full-width rule: Starline's user message border, `DynamicBorder`. */
+/**
+ * pi-tidy's user message rail. Fixed there (its `USER_RAIL_GLYPH`) so this
+ * side can recognise it without reading tidy's settings.
+ */
+const USER_RAIL_GLYPH = "│";
+const USER_RAIL_PREFIX = `${USER_RAIL_GLYPH} `;
+/** pi-tidy's user icon (its `MESSAGE_ICONS.user`), and the indent that hangs under it. */
+const USER_ICON_PREFIX = `${USER_RAIL_PREFIX}\u{f007} `;
+const USER_HANG_PREFIX = `${USER_RAIL_PREFIX}  `;
+
+/** A content row or a bare padding row of a rail message. */
+function isRailRow(text: string): boolean {
+	return text.startsWith(USER_RAIL_PREFIX) || text.trimEnd() === USER_RAIL_GLYPH;
+}
+
+/** A full-width rule: a rail message's border, `DynamicBorder`. */
 const RULE_ROW_RE = /^─+$/;
-/** pi-toolbox's rounded frame edges. Square corners are content (tables). */
-const FRAME_OPEN_RE = /^╭─*╮$/;
+/**
+ * pi-tidy's rounded frame edges; the top one may carry a label (`╭─  ─╮`,
+ * a "frame" user message). Square corners are content (tables).
+ */
+const FRAME_OPEN_RE = /^╭(?:─ [^─]+ )?─*╮$/;
 const FRAME_CLOSE_RE = /^╰─*╯$/;
 
 function strippedRow(lines: readonly string[], cache: string[], row: number): string {
@@ -66,6 +85,37 @@ function strippedRow(lines: readonly string[], cache: string[], row: number): st
 		cache[row] = text;
 	}
 	return text;
+}
+
+/**
+ * Decide what each row of one rail message sheds. Padding rows lose the bare
+ * rail. When the first text row leads with the user icon, it loses the icon
+ * too, and the rows hanging under it lose the indent that lines them up.
+ */
+function claimRailMessage(
+	lines: readonly string[],
+	cache: string[],
+	first: number,
+	end: number,
+	claimed: Map<number, string>,
+): void {
+	let iconed: boolean | undefined;
+	for (let row = first; row < end; row++) {
+		const text = strippedRow(lines, cache, row);
+		if (!text.startsWith(USER_RAIL_PREFIX) || text.trim() === USER_RAIL_GLYPH) {
+			claimed.set(row, USER_RAIL_GLYPH);
+			continue;
+		}
+		if (iconed === undefined) {
+			iconed = text.startsWith(USER_ICON_PREFIX);
+			claimed.set(row, iconed ? USER_ICON_PREFIX : USER_RAIL_PREFIX);
+			continue;
+		}
+		claimed.set(
+			row,
+			iconed && text.startsWith(USER_HANG_PREFIX) ? USER_HANG_PREFIX : USER_RAIL_PREFIX,
+		);
+	}
 }
 
 /**
@@ -79,15 +129,14 @@ export function cleanTranscriptRows(
 	lines: readonly string[],
 	startRow: number,
 	endRow: number,
-	railGlyph: string,
 ): CleanedRows {
 	const cache: string[] = new Array(lines.length);
 	/** Rows to drop: paired frame edges and paired border rules. */
 	const dropped = new Set<number>();
 	/** pi-toolbox frame content rows: strip one `│` from each side. */
 	const frameContent = new Set<number>();
-	/** Starline user message rows: strip the rail prefix. */
-	const railContent = new Set<number>();
+	/** Rail user message rows, and the prefix each one sheds. */
+	const railContent = new Map<number, string>();
 
 	// Pass 1 — rounded frames. Edges pair strictly by equal width, inner rows
 	// are content. A rounded box drawn inside bash output can mis-pair, but the
@@ -113,17 +162,10 @@ export function cleanTranscriptRows(
 	}
 
 	// Pass 2 — full-width rule pairs. Two rules of equal width with at least
-	// one row between them are a Starline user message's borders, and the rows
-	// between carry the rail. Any inner row *without* the rail prefix breaks
-	// the candidate: it is what keeps an assistant's own `---` rules, and the
-	// text between two of them, from being eaten — those rows are content.
-	//
-	// With an empty rail prefix (the `copyFriendly` render drops the rail)
-	// nothing can break a candidate, so any two equal-width rules pair. That
-	// also matches a markdown `---` pair, which then loses its rules from the
-	// copy — accepted: a horizontal rule is closer to chrome than to content,
-	// and the alternative is leaving real borders in every copyFriendly copy.
-	const railPrefix = railGlyph.length > 0 ? `${railGlyph} ` : "";
+	// one row between them are a rail user message's borders, and the rows
+	// between carry the rail. Any inner row *without* the rail breaks the
+	// candidate: it is what keeps an assistant's own `---` rules, and the text
+	// between two of them, from being eaten — those rows are content.
 	let lastRule: { row: number; width: number } | undefined;
 	for (let row = 0; row < lines.length; row++) {
 		if (dropped.has(row)) continue;
@@ -133,10 +175,10 @@ export function cleanTranscriptRows(
 			if (lastRule && lastRule.width === width && row - lastRule.row >= 2) {
 				dropped.add(lastRule.row);
 				dropped.add(row);
-				for (let inner = lastRule.row + 1; inner < row; inner++) railContent.add(inner);
+				claimRailMessage(lines, cache, lastRule.row + 1, row, railContent);
 			}
 			lastRule = { row, width };
-		} else if (railPrefix.length > 0 && !text.startsWith(railPrefix)) {
+		} else if (!isRailRow(text)) {
 			lastRule = undefined;
 		}
 	}
@@ -155,8 +197,9 @@ export function cleanTranscriptRows(
 			changed = true;
 			continue;
 		}
-		if (railContent.has(row) && railPrefix.length > 0 && text.startsWith(railPrefix)) {
-			rows.push({ text: text.slice(railPrefix.length), leftTrim: visibleWidth(railPrefix) });
+		const prefix = railContent.get(row);
+		if (prefix !== undefined && text.startsWith(prefix)) {
+			rows.push({ text: text.slice(prefix.length), leftTrim: visibleWidth(prefix) });
 			changed = true;
 			continue;
 		}

@@ -132,7 +132,7 @@ export function installFooter(
 			const visibleSpans: PillSpan[] = [];
 			const anchors = new Map<string, PillAnchor>();
 			for (const span of spans) {
-				// The bar is drawn after a one-column pad, and the line may have been cut
+				// The bar starts `columnOffset` columns in, and the line may have been cut
 				// again after the bar was; clamp to what the terminal actually shows.
 				const startColumn = Math.min(lineWidth, span.startColumn + columnOffset);
 				const endColumn = Math.min(lineWidth, span.endColumn + columnOffset);
@@ -522,7 +522,7 @@ export function installFooter(
 					theme,
 					colorSource,
 					config.pill,
-					Math.max(0, width - 2),
+					width,
 					{
 						ascii: iconMode === "ascii",
 						onSpan: (span) => spans.push(span),
@@ -534,9 +534,10 @@ export function installFooter(
 					clearPillAnchors();
 					return [""];
 				}
-				const columnOffset = width > 2 ? 1 : 0;
-				const line = truncateToWidth(width > 2 ? ` ${bar} ` : bar, width, "");
-				rememberPillSpans(width, spans, columnOffset, visibleWidth(line));
+				// Flush left, in the editor's first column: the bar's round cap sits
+				// under the editor's rail rather than a column to its right.
+				const line = truncateToWidth(bar, width, "");
+				rememberPillSpans(width, spans, 0, visibleWidth(line));
 				return [line];
 			},
 		};

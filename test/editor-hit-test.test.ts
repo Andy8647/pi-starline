@@ -28,7 +28,6 @@ function cluster(textRows: string[], paddingY: number): string[] {
 		...pad,
 		...textRows.map((row) => `${RAIL}${row}`),
 		...pad,
-		`${RAIL}the metadata`,
 		RULE,
 		"footer text",
 	];
@@ -72,7 +71,7 @@ describe("findEditorBox", () => {
 
 	// Reading the padding wrong would put the text rows somewhere they are not.
 	it("is null when the geometry leaves no room for text", () => {
-		expect(findEditorBox([RULE, `${RAIL}meta`, RULE], 1, 2)).toBeNull();
+		expect(findEditorBox([RULE, `${RAIL}`, RULE], 1, 2)).toBeNull();
 	});
 });
 

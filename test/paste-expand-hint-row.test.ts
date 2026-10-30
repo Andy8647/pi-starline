@@ -6,11 +6,9 @@ import { PolishedEditor } from "../extensions/starline/ui";
 
 /**
  * The "paste again to expand" hint used to be drawn on the editor's bottom
- * border by the fixed editor's compositor. Pi 0.84 supersedes the fixed editor,
- * so the hint has to reach the frame without it — and it cannot go back on the
- * border, because `isHorizontalBorder` needs an unbroken rule to find the frame
- * again. It rides the metadata row instead, which is rendered even when
- * `editorMetadataFormat` is blank.
+ * border by the fixed editor's compositor, then (Pi 0.84 to Starline 0.8) on a
+ * metadata row under the text. That row kept the box a row taller than its
+ * text, so 0.9 moved the hint to the right end of the top rule.
  */
 
 const HINT = "paste again to expand";
@@ -34,8 +32,6 @@ function makeEditor(config: PolishedTuiConfig) {
 		{} as never,
 		makeTheme(),
 		() => config,
-		() => ({ modelLabel: "m", providerLabel: "p" }),
-		() => "off",
 	);
 }
 
@@ -73,34 +69,25 @@ function armHint(): void {
 }
 
 describe("paste expand hint in the editor frame", () => {
-	// The metadata template is blanked deliberately: the hint must not depend on
-	// it, since blanking it is a supported thing for a user to do.
-	const blankMeta = { ...defaultConfig, editorMetadataFormat: "" };
-
 	it("is absent from the frame with nothing armed", () => {
 		expect(pasteExpandHintText()).toBeNull();
-		const rendered = makeEditor(blankMeta).render(120).map(stripTags).join("\n");
+		const rendered = makeEditor(defaultConfig).render(120).map(stripTags).join("\n");
 		expect(rendered).not.toContain(HINT);
 	});
 
-	it("shows in the frame once a paste collapses, with the template blank", () => {
+	it("shows at the right end of the top rule once a paste collapses", () => {
 		armHint();
 		expect(pasteExpandHintText()).toBe(HINT);
 
-		const rendered = makeEditor(blankMeta).render(120).map(stripTags).join("\n");
-		expect(rendered).toContain(HINT);
+		const rendered = makeEditor(defaultConfig).render(120).map(stripTags);
+		expect(rendered[0]).toMatch(new RegExp(`^─+ ${HINT} ──$`));
+		expect(rendered.filter((line) => line.includes(HINT))).toHaveLength(1);
 	});
 
-	it("leaves both borders unbroken rules so the frame still parses", () => {
+	it("does not make the box taller", () => {
 		armHint();
-		const rendered = makeEditor(blankMeta).render(120).map(stripTags);
-		expect(rendered.filter((line) => /^─+$/.test(line.trim()))).toHaveLength(2);
-	});
-
-	it("does not steal the row from a populated metadata template", () => {
-		armHint();
-		const rendered = makeEditor(defaultConfig).render(120).map(stripTags).join("\n");
-		expect(rendered).toContain(HINT);
-		expect(rendered).toContain("m");
+		const rendered = makeEditor({ ...defaultConfig, editorPaddingY: 0 }).render(120);
+		expect(rendered).toHaveLength(3);
+		expect(rendered.map(stripTags).filter((line) => /^─+$/.test(line.trim()))).toHaveLength(1);
 	});
 });

@@ -1,6 +1,6 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
-import { defaultConfig, mergeConfig } from "../extensions/starline/config";
+import { mergeConfig } from "../extensions/starline/config";
 import { PolishedEditor, WrappedPolishedEditor } from "../extensions/starline/ui";
 import { setWorkingIndicator } from "../extensions/starline/working-indicator";
 
@@ -23,7 +23,7 @@ function makeTheme(): Theme {
 	} as unknown as Theme;
 }
 
-const config = mergeConfig({ editorMetadataFormat: "", editorPaddingY: 0 });
+const config = mergeConfig({ editorPaddingY: 0 });
 
 function makeEditor() {
 	return new PolishedEditor(
@@ -32,8 +32,6 @@ function makeEditor() {
 		{} as never,
 		makeTheme(),
 		() => config,
-		() => ({ modelLabel: "m", providerLabel: "p" }),
-		() => "off",
 	);
 }
 
@@ -95,13 +93,7 @@ describe("draft scroll cue", () => {
 			handleInput() {},
 			invalidate() {},
 		};
-		const wrapped = new WrappedPolishedEditor(
-			base as never,
-			makeTheme(),
-			() => config,
-			() => ({ modelLabel: "m", providerLabel: "p" }),
-			() => "off",
-		);
+		const wrapped = new WrappedPolishedEditor(base as never, makeTheme(), () => config);
 		const lines = wrapped.render(120).map(strip);
 
 		expect(lines[0]).toMatch(/↑ 3 more/);

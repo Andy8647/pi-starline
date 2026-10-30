@@ -168,12 +168,10 @@ describe("the editor advertises Pi's embedding contract", () => {
 			{} as never,
 			makeTheme(),
 			() => config,
-			() => ({ modelLabel: "m", providerLabel: "p" }),
-			() => "off",
 		);
 	}
 
-	const bare = { ...defaultConfig, editorMetadataFormat: "", editorPaddingY: 0 };
+	const bare = { ...defaultConfig, editorPaddingY: 0 };
 	const stripTags = (line: string) => line.replace(/\u001b\[[0-9;]*m/g, "");
 	const isRule = (line: string) => /^─+$/.test(stripTags(line).trim());
 

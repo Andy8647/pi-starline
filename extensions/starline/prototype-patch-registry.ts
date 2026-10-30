@@ -1,8 +1,6 @@
 export const STARLINE_PROTOTYPE_PATCH_REGISTRY = Symbol.for("pi-starline.prototype-patch-registry");
 
 type PrototypePatchAdapter =
-	| "user-message-render"
-	| "user-message-invalidate"
 	| "selector-border-render"
 	| "mouse-viewport-input"
 	| "mouse-wheel"

@@ -40,7 +40,7 @@ For the pill to show up:
   `extensionStatus:<key>` entries will not see a new status until they add it.**
   Say so in your README.
 - The status is not switched off for that key in `/starline`'s _Extension
-  segments_ tab, or placed on the editor row.
+  segments_ tab.
 
 `ctx.ui.setStatus(key, undefined)` removes the pill; do that when there is nothing
 to show, so the bar stays short.

@@ -6,27 +6,32 @@ import { PolishedEditor, WrappedPolishedEditor } from "../extensions/starline/ui
 describe("box padding config", () => {
 	it("defaults to one blank row, which is upstream's look", () => {
 		expect(defaultConfig.editorPaddingY).toBe(1);
-		expect(defaultConfig.userMessagePaddingY).toBe(1);
 	});
 
 	it("accepts 0", () => {
-		const config = mergeConfig({ editorPaddingY: 0, userMessagePaddingY: 0 });
-		expect(config.editorPaddingY).toBe(0);
-		expect(config.userMessagePaddingY).toBe(0);
+		expect(mergeConfig({ editorPaddingY: 0 }).editorPaddingY).toBe(0);
 	});
 
-	// Only 0 and 1 are meaningful: the frame is parsed back by position, and the
-	// parser assumes at most one padding row on each side.
+	// Only 0 and 1 are meaningful: a frame from elsewhere is parsed back by
+	// position, and the parser assumes at most one padding row on each side.
 	it("rejects anything other than 0 or 1", () => {
 		for (const value of [2, -1, 1.5, "1", true, null]) {
 			expect(mergeConfig({ editorPaddingY: value }).editorPaddingY).toBe(1);
-			expect(mergeConfig({ userMessagePaddingY: value }).userMessagePaddingY).toBe(1);
 		}
 	});
+});
 
-	it("is independent per box", () => {
-		expect(mergeConfig({ editorPaddingY: 0 }).userMessagePaddingY).toBe(1);
-		expect(mergeConfig({ userMessagePaddingY: 0 }).editorPaddingY).toBe(1);
+describe("editorMinRows config", () => {
+	it("defaults to 1, the height of the text alone", () => {
+		expect(defaultConfig.editorMinRows).toBe(1);
+	});
+
+	it("takes whole numbers from 1 and caps them at 10", () => {
+		expect(mergeConfig({ editorMinRows: 2 }).editorMinRows).toBe(2);
+		expect(mergeConfig({ editorMinRows: 40 }).editorMinRows).toBe(10);
+		for (const value of [0, -1, 1.5, "2", true, null]) {
+			expect(mergeConfig({ editorMinRows: value }).editorMinRows).toBe(1);
+		}
 	});
 });
 
@@ -48,8 +53,6 @@ function makeEditor(config: PolishedTuiConfig) {
 		{} as never,
 		makeTheme(),
 		() => config,
-		() => ({ modelLabel: "m", providerLabel: "p" }),
-		() => "off",
 	);
 }
 
@@ -57,56 +60,97 @@ function makeEditor(config: PolishedTuiConfig) {
 const stripTags = (line: string) =>
 	line.replace(/\u001b\[[0-9;]*m/g, "").replace(/\[[^\]]*\]/g, "");
 
-describe("editorPaddingY in the rendered frame", () => {
-	const blankMeta = { ...defaultConfig, editorMetadataFormat: "" };
+const isRule = (line: string) => /^─+$/.test(stripTags(line).trim());
 
+describe("editorPaddingY in the rendered frame", () => {
 	it("keeps the two blank rows by default", () => {
-		expect(makeEditor(blankMeta).render(120)).toHaveLength(6);
+		expect(makeEditor(defaultConfig).render(120)).toHaveLength(5);
 	});
 
-	it("drops both blank rows at 0, saving two lines", () => {
-		expect(makeEditor({ ...blankMeta, editorPaddingY: 0 }).render(120)).toHaveLength(4);
+	it("drops both blank rows at 0, leaving the rules and the text", () => {
+		expect(makeEditor({ ...defaultConfig, editorPaddingY: 0 }).render(120)).toHaveLength(3);
 	});
 
 	it("still draws exactly two borders either way", () => {
 		for (const editorPaddingY of [0, 1]) {
-			const lines = makeEditor({ ...blankMeta, editorPaddingY }).render(120);
-			expect(lines.filter((line) => /^─+$/.test(stripTags(line).trim()))).toHaveLength(2);
+			const lines = makeEditor({ ...defaultConfig, editorPaddingY }).render(120);
+			expect(lines.filter(isRule)).toHaveLength(2);
 		}
 	});
 
 	it("keeps the typed text", () => {
-		const editor = makeEditor({ ...blankMeta, editorPaddingY: 0 });
+		const editor = makeEditor({ ...defaultConfig, editorPaddingY: 0 });
 		editor.setText("typed text");
 		expect(editor.render(120).join("\n")).toContain("typed text");
 	});
 });
 
+describe("editorMinRows in the rendered frame", () => {
+	it("follows a short draft with blank railed rows", () => {
+		const editor = makeEditor({ ...defaultConfig, editorPaddingY: 0, editorMinRows: 2 });
+		editor.setText("one line");
+		const lines = editor.render(120);
+		expect(lines).toHaveLength(4);
+		expect(stripTags(lines[1] ?? "")).toContain("one line");
+		expect(stripTags(lines[2] ?? "").trim()).toBe("│");
+	});
+
+	it("adds nothing once the draft reaches the floor", () => {
+		const editor = makeEditor({ ...defaultConfig, editorPaddingY: 0, editorMinRows: 2 });
+		editor.setText("one\ntwo\nthree");
+		expect(editor.render(120)).toHaveLength(5);
+	});
+
+	it("sits inside the padding, which stays at the frame's edges", () => {
+		const editor = makeEditor({ ...defaultConfig, editorPaddingY: 1, editorMinRows: 3 });
+		const lines = editor.render(120);
+		expect(lines).toHaveLength(7);
+		expect(lines.filter(isRule)).toHaveLength(2);
+	});
+});
+
 /**
- * splitPolishedFrame parses the frame back by position, so the padding the
- * renderer emits and the padding the parser assumes have to agree. When they
- * disagree the wrapper fails to unwrap the inner frame and its content ends up
- * rendered twice.
+ * A wrapper takes an inner Starline frame apart again. The inner editor answers
+ * from what it drew; a copy of its lines goes through the positional parse,
+ * which has to agree with the renderer about padding. When they disagree the
+ * wrapper fails to unwrap the inner frame and its content is drawn twice.
  */
 describe("padding stays symmetric between render and unwrap", () => {
 	for (const editorPaddingY of [0, 1]) {
 		it(`keeps one copy of the typed text at padding ${editorPaddingY}`, () => {
-			const config = { ...defaultConfig, editorMetadataFormat: "the-meta", editorPaddingY };
+			const config = { ...defaultConfig, editorPaddingY };
 			const inner = makeEditor(config);
 			inner.setText("typed text");
-			const wrapped = new WrappedPolishedEditor(
-				inner as never,
-				makeTheme(),
-				() => config,
-				() => ({ modelLabel: "m2", providerLabel: "p2" }),
-				() => "off",
-			);
+			const wrapped = new WrappedPolishedEditor(inner as never, makeTheme(), () => config);
 			expect(
 				wrapped
 					.render(120)
 					.join("\n")
 					.match(/typed text/g),
 			).toHaveLength(1);
+		});
+
+		it(`parses a copy of the frame by position at padding ${editorPaddingY}`, () => {
+			const config = { ...defaultConfig, editorPaddingY };
+			const inner = makeEditor(config);
+			inner.setText("typed text");
+			// A copy is not the array the editor returned, so the positional parse runs.
+			const base = {
+				render: (width: number) => [...inner.render(width)],
+				invalidate() {},
+				handleInput() {},
+				getText: () => inner.getText(),
+				setText() {},
+				[Symbol.for("pi-starline.polished-frame")]: (lines: string[]) =>
+					(inner as unknown as Record<symbol, (lines: string[]) => unknown>)[
+						Symbol.for("pi-starline.polished-frame")
+					]?.(lines),
+			};
+			const wrapped = new WrappedPolishedEditor(base as never, makeTheme(), () => config);
+			const lines = wrapped.render(120);
+			expect(lines.join("\n").match(/typed text/g)).toHaveLength(1);
+			expect(lines.filter(isRule)).toHaveLength(2);
+			expect(lines).toHaveLength(3 + 2 * editorPaddingY);
 		});
 	}
 });
