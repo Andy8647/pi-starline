@@ -58,7 +58,15 @@ describe("tps history", () => {
 		expect(lines).toHaveLength(10);
 		expect(lines[8]).toContain("└");
 		expect(lines[9]).toContain("0%");
-		expect(lines[9]).toContain("100%");
+		// The x axis ends at the fullest window the points saw, rounded up.
+		expect(lines[9]).toContain("90%");
+	});
+
+	it("spreads an early session across the whole axis", () => {
+		const lines = tpsChartLines([point(50, 2), point(50, 10)]);
+		expect(lines[9]).toContain("10%");
+		// 10% of a 10% axis is the right edge, not a tenth of the plot.
+		expect(lines[0][6 + 39]).toBe("·");
 	});
 
 	it("puts a slow turn on the floor and a fast one at the top", () => {

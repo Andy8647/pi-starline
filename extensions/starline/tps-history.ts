@@ -101,6 +101,24 @@ function niceCeiling(value: number): number {
 	return Math.ceil(value / step) * step;
 }
 
+/**
+ * The top of the x axis: the fullest window this session has seen, rounded up.
+ *
+ * A fixed 0-100% puts every point of a young session in the first column or two.
+ * The axis grows with the data instead, so the first turns spread across the
+ * plot and a window that reaches 80% still shows the curve at a new scale. The
+ * small floors keep one point from stretching the axis by itself.
+ */
+function nicePercentCeiling(value: number): number {
+	if (!Number.isFinite(value) || value <= 0) return 5;
+	const clamped = Math.min(100, value);
+	if (clamped <= 5) return 5;
+	if (clamped <= 10) return 10;
+	if (clamped <= 20) return 20;
+	if (clamped <= 25) return 25;
+	return Math.min(100, Math.ceil(clamped / 10) * 10);
+}
+
 function clampPercent(percent: number): number {
 	if (!Number.isFinite(percent)) return 0;
 	return Math.max(0, Math.min(100, percent));
@@ -117,20 +135,22 @@ const DENSITY = [" ", "·", "+", "#"];
  * The scatter plot: y is tokens per second, x is the context percentage when the
  * turn finished.
  *
+ * Both axes are measured off the points — a fixed 0-100% x axis would squash a
+ * session that has only reached a fifth of its window into the first column.
+ *
  * The axes carry the meaning, so they are drawn rather than implied: three y
  * labels (top, middle, zero) and both ends of the x range. A blank region is
- * information too — it means no turn ran at that speed and that fullness yet.
+ * information too — it means no reply ran at that speed and that fullness yet.
  */
 export function tpsChartLines(points: readonly TpsPoint[]): string[] {
 	if (points.length === 0) return [];
 	const top = niceCeiling(Math.max(...points.map((point) => point.tps)));
+	const right = nicePercentCeiling(Math.max(...points.map((point) => clampPercent(point.percent))));
 	const cells = Array.from({ length: CHART_HEIGHT }, () => new Array<number>(CHART_WIDTH).fill(0));
 
 	for (const point of points) {
-		const column = Math.min(
-			CHART_WIDTH - 1,
-			Math.round((clampPercent(point.percent) / 100) * (CHART_WIDTH - 1)),
-		);
+		const percent = Math.min(right, clampPercent(point.percent));
+		const column = Math.min(CHART_WIDTH - 1, Math.round((percent / right) * (CHART_WIDTH - 1)));
 		const row = Math.min(CHART_HEIGHT - 1, Math.floor((point.tps / top) * (CHART_HEIGHT - 1)));
 		cells[CHART_HEIGHT - 1 - row][column] += 1;
 	}
@@ -151,8 +171,10 @@ export function tpsChartLines(points: readonly TpsPoint[]): string[] {
 
 	const pad = " ".repeat(AXIS_WIDTH);
 	lines.push(`${pad}└${"─".repeat(CHART_WIDTH)}`);
-	const right = "100%";
-	lines.push(`${pad} 0%${" ".repeat(Math.max(1, CHART_WIDTH - 2 - right.length))}${right}`);
+	const rightLabel = `${right}%`;
+	lines.push(
+		`${pad} 0%${" ".repeat(Math.max(1, CHART_WIDTH - 2 - rightLabel.length))}${rightLabel}`,
+	);
 	return lines;
 }
 
