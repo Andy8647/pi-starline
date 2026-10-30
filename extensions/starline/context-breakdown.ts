@@ -19,6 +19,8 @@
  */
 
 import { visibleWidth } from "@earendil-works/pi-tui";
+import type { PillBubbleContent } from "../../types/pill-api";
+import { activeContextSnapshot } from "./context-live";
 import { formatCount } from "./format";
 import type { ThemeLike } from "./style";
 
@@ -499,4 +501,60 @@ export function contextBreakdownNote(breakdown: ContextBreakdown): string {
 	return window
 		? `${used} of ${formatCount(window)}${percent ? ` · ${percent}` : ""}`
 		: `${used} used`;
+}
+
+/** Paints nothing: for callers that only need the breakdown's text. */
+const NO_THEME: ThemeLike = { fg: (_color, text) => text };
+
+/**
+ * What the context pill says when clicked: the window as a grid, what each
+ * colour is, and the numbers the bar has no room for.
+ *
+ * The pill keeps the percentage; the window, the tokens used, the session's
+ * in/out counts and the cache rate are all here. The breakdown is optional so
+ * this stays callable without a session — without it the bubble shows the
+ * numbers alone, as it did before the grid.
+ */
+export function contextBubbleContent(
+	breakdown?: ContextBreakdown,
+	theme?: ThemeLike,
+): PillBubbleContent {
+	const snapshot = activeContextSnapshot();
+	if (!breakdown && !snapshot) {
+		return { title: "Context", body: ["Nothing has been sent yet."] };
+	}
+
+	const percent =
+		snapshot?.percent ??
+		(breakdown?.contextWindow && breakdown.contextWindow > 0
+			? (breakdown.total / breakdown.contextWindow) * 100
+			: undefined);
+	const rounded =
+		percent === undefined || !Number.isFinite(percent)
+			? undefined
+			: Math.max(0, Math.min(100, Math.round(percent)));
+
+	const body: string[] = [];
+	if (breakdown) {
+		const notes = [contextBreakdownNote(breakdown)];
+		if (snapshot?.tokenLabel) notes.push(`session ${snapshot.tokenLabel}`);
+		if (snapshot?.cacheLabel) notes.push(`cache ${snapshot.cacheLabel}`);
+		body.push(...contextBreakdownBody(breakdown, theme ?? NO_THEME, notes));
+	} else if (snapshot) {
+		if (snapshot.contextWindow) {
+			const windowLabel = formatCount(snapshot.contextWindow);
+			const used =
+				rounded === undefined ? `window ${windowLabel}` : `${rounded}% of ${windowLabel}`;
+			body.push(
+				snapshot.tokens === undefined ? used : `${used} · ${formatCount(snapshot.tokens)} used`,
+			);
+		}
+		if (snapshot.tokenLabel) body.push(`session ${snapshot.tokenLabel}`);
+		if (snapshot.cacheLabel) body.push(`cache ${snapshot.cacheLabel}`);
+	}
+
+	return {
+		title: rounded === undefined ? "Context" : `${rounded}% context`,
+		body: body.length > 0 ? body : ["No usage yet."],
+	};
 }

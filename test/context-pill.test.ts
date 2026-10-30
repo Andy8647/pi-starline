@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { contextBubbleContent } from "../extensions/starline/context-breakdown";
 import { setActiveContextSnapshot } from "../extensions/starline/context-live";
-import { contextBubbleContent, pillActionFor } from "../extensions/starline/pill-actions";
+import { pillActionFor } from "../extensions/starline/pill-actions";
 
 afterEach(() => setActiveContextSnapshot(undefined));
 

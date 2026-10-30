@@ -66,21 +66,28 @@ describe("tps history", () => {
 		const lines = tpsChartLines([point(50, 2), point(50, 10)]);
 		expect(lines[9]).toContain("10%");
 		// 10% of a 10% axis is the right edge, not a tenth of the plot.
-		expect(lines[0][6 + 39]).toBe("·");
+		expect(lines[0][6 + 39]).toBe("●");
 	});
 
 	it("puts a slow turn on the floor and a fast one at the top", () => {
 		const slow = tpsChartLines([point(1, 0)]);
 		// The y axis tops out at 10 for a rate this low, and the single point sits
 		// on the bottom row, in the first column after the frame.
-		expect(slow[7][6]).toBe("·");
+		expect(slow[7][6]).toBe("●");
 		const fast = tpsChartLines([point(100, 100)]);
-		expect(fast[0][6 + 39]).toBe("·");
+		expect(fast[0][6 + 39]).toBe("●");
+	});
+
+	it("marks the newest reply instead of counting it", () => {
+		const lines = tpsChartLines([point(50, 50), point(50, 50)]);
+		// Both land in one cell, and the newest one is a dot, not a density mark.
+		expect(lines.join("\n")).toContain("●");
+		expect(lines.join("\n")).not.toContain("+");
 	});
 
 	it("counts turns that land in one cell instead of hiding all but one", () => {
-		const lines = tpsChartLines([point(50, 50), point(50, 50), point(50, 50)]);
-		expect(lines.join("\n")).toContain("#");
+		const lines = tpsChartLines([point(50, 50), point(50, 50), point(10, 90)]);
+		expect(lines.join("\n")).toContain("+");
 	});
 
 	it("summarises the latest reply and the average", () => {

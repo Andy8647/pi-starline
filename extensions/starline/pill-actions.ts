@@ -14,15 +14,8 @@
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
-import {
-	type ContextBreakdown,
-	collectContextBreakdown,
-	contextBreakdownBody,
-	contextBreakdownNote,
-	probeFor,
-} from "./context-breakdown";
+import { collectContextBreakdown, contextBubbleContent, probeFor } from "./context-breakdown";
 import { activeContextSnapshot } from "./context-live";
-import { buildTpsLabel, formatCount } from "./format";
 import { activeGitStatus } from "./git-live";
 import {
 	cycleThinkingLevel,
@@ -40,7 +33,7 @@ import {
 import { PILL_SEGMENT_VARIABLES } from "./pill-config";
 import type { ThemeLike } from "./style";
 import { type FleetSnapshot, getActiveSubagentFleet } from "./subagent-fleet";
-import { type TpsHistory, tpsChartLines, tpsSummary } from "./tps-history";
+import { activeTpsHistory, tpsBubbleContent } from "./tps-history";
 
 /** What an action gets: the session, and where the pill is if a click found it. */
 export type PillActionContext = {
@@ -94,9 +87,6 @@ export function queuedSegmentText(ctx: ExtensionContext, icon = ""): string {
 
 /** How often an open bubble whose numbers move re-reads them. */
 const LIVE_BUBBLE_INTERVAL_MS = 1_000;
-
-/** Paints nothing: for callers that only need the breakdown's text. */
-const NO_THEME: ThemeLike = { fg: (_color, text) => text };
 
 /**
  * Re-run `tick` every second while `handle` is open, then stop. The timer never
@@ -421,59 +411,6 @@ async function showSubagents({ ctx, pill }: PillActionContext): Promise<void> {
 	});
 }
 
-/**
- * What the context pill says when clicked: the window as a grid, what each
- * colour is, and the numbers the bar has no room for.
- *
- * The pill keeps the percentage; the window, the tokens used, the session's
- * in/out counts and the cache rate are all here. The breakdown is optional so
- * this stays callable without a session — without it the bubble shows the
- * numbers alone, as it did before the grid.
- */
-export function contextBubbleContent(
-	breakdown?: ContextBreakdown,
-	theme?: ThemeLike,
-): PillBubbleContent {
-	const snapshot = activeContextSnapshot();
-	if (!breakdown && !snapshot) {
-		return { title: "Context", body: ["Nothing has been sent yet."] };
-	}
-
-	const percent =
-		snapshot?.percent ??
-		(breakdown?.contextWindow && breakdown.contextWindow > 0
-			? (breakdown.total / breakdown.contextWindow) * 100
-			: undefined);
-	const rounded =
-		percent === undefined || !Number.isFinite(percent)
-			? undefined
-			: Math.max(0, Math.min(100, Math.round(percent)));
-
-	const body: string[] = [];
-	if (breakdown) {
-		const notes = [contextBreakdownNote(breakdown)];
-		if (snapshot?.tokenLabel) notes.push(`session ${snapshot.tokenLabel}`);
-		if (snapshot?.cacheLabel) notes.push(`cache ${snapshot.cacheLabel}`);
-		body.push(...contextBreakdownBody(breakdown, theme ?? NO_THEME, notes));
-	} else if (snapshot) {
-		if (snapshot.contextWindow) {
-			const windowLabel = formatCount(snapshot.contextWindow);
-			const used =
-				rounded === undefined ? `window ${windowLabel}` : `${rounded}% of ${windowLabel}`;
-			body.push(
-				snapshot.tokens === undefined ? used : `${used} · ${formatCount(snapshot.tokens)} used`,
-			);
-		}
-		if (snapshot.tokenLabel) body.push(`session ${snapshot.tokenLabel}`);
-		if (snapshot.cacheLabel) body.push(`cache ${snapshot.cacheLabel}`);
-	}
-
-	return {
-		title: rounded === undefined ? "Context" : `${rounded}% context`,
-		body: body.length > 0 ? body : ["No usage yet."],
-	};
-}
-
 function showContext({ ctx, pill }: PillActionContext): void {
 	// The theme and the reads are taken on every render, so the bubble follows a
 	// theme change and a model switch while it is open.
@@ -489,49 +426,8 @@ function showContext({ ctx, pill }: PillActionContext): void {
 	whileOpen(handle, () => handle.refresh());
 }
 
-let tpsHistory: TpsHistory | undefined;
-
-/**
- * The session's throughput points, injected from `index.ts`: recording a point
- * needs `pi.appendEntry`, and a pill action only gets a context.
- */
-export function setTpsHistory(history: TpsHistory | undefined): void {
-	tpsHistory = history;
-}
-
-/**
- * What the tps pill says when clicked: speed against how full the window was.
- *
- * One number says how fast the model writes. The curve says whether the window
- * filling up is what changed it, which is the question a single rate cannot
- * answer. Colour is the other half of that: a cell is green while the model is
- * near its own top speed, yellow in the middle, red at the slow end.
- */
-export function tpsBubbleContent(theme?: ThemeLike): PillBubbleContent {
-	const points = tpsHistory?.all() ?? [];
-	if (points.length === 0) {
-		return { title: "Throughput", body: ["No turns measured yet."] };
-	}
-	const latest = points[points.length - 1];
-	const paint = theme
-		? (glyph: string, ratio: number) => {
-				const color = ratio >= 0.6 ? "success" : ratio >= 0.35 ? "warning" : "error";
-				try {
-					return theme.fg(color, glyph);
-				} catch {
-					// An unknown token throws in pi's theme; drop the colour, keep the glyph.
-					return glyph;
-				}
-			}
-		: undefined;
-	return {
-		title: buildTpsLabel(latest.tps) || "Throughput",
-		body: [...tpsChartLines(points, paint), " ", tpsSummary(points)],
-	};
-}
-
 function showTps({ ctx, pill }: PillActionContext): void {
-	if ((tpsHistory?.all().length ?? 0) === 0) {
+	if ((activeTpsHistory()?.all().length ?? 0) === 0) {
 		if (ctx.hasUI) ctx.ui.notify("No throughput measured yet", "info");
 		return;
 	}

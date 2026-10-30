@@ -51,7 +51,7 @@ import { LiveTpsController } from "./live-tps";
 import { installMouse } from "./mouse";
 import { setActiveEditor } from "./mouse/editor-mouse";
 import { installPasteCollapse } from "./paste-collapse";
-import { setModelSwitcher, setTpsHistory } from "./pill-actions";
+import { setModelSwitcher } from "./pill-actions";
 import { publishPillApi } from "./pill-api";
 import { setPillBubbleAnimation } from "./pill-bubble";
 import { probeProject } from "./project-probe";
@@ -74,7 +74,7 @@ import {
 	SUBAGENT_TOOL_NAME,
 	setActiveSubagentFleet,
 } from "./subagent-fleet";
-import { contextPercentAfter, TPS_ENTRY_TYPE, TpsHistory } from "./tps-history";
+import { contextPercentAfter, setTpsHistory, TPS_ENTRY_TYPE, TpsHistory } from "./tps-history";
 import { TurnClock } from "./turn-clock";
 import { PolishedEditor, WrappedPolishedEditor } from "./ui";
 import { setWorkingIndicator } from "./working-indicator";

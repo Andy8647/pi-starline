@@ -13,7 +13,9 @@
  * happened since the process started.
  */
 
-import { formatCount } from "./format";
+import type { PillBubbleContent } from "../../types/pill-api";
+import { buildTpsLabel, formatCount } from "./format";
+import type { ThemeLike } from "./style";
 
 export type TpsPoint = {
 	/** Tokens per second, as the finished message measured them. */
@@ -153,9 +155,10 @@ const DENSITY = [" ", "·", "+", "#"];
 
 /**
  * A cell holds however many replies landed on it and their total rate, so a
- * stacked cell can still be coloured by how fast it was.
+ * stacked cell can still be coloured by how fast it was. `latest` marks the row
+ * that holds the newest reply.
  */
-type CellStat = { count: number; total: number };
+type CellStat = { count: number; total: number; latest?: boolean };
 
 /**
  * Optional colouring. `ratio` is the cell's average rate over the top of the y
@@ -192,13 +195,18 @@ export function tpsChartLines(points: readonly TpsPoint[], paint?: TpsPaint): st
 		const cell = cells[CHART_HEIGHT - 1 - row][column];
 		cell.count += 1;
 		cell.total += point.tps;
+		if (index === points.length - 1) cell.latest = true;
 	}
 
 	const lines: string[] = cells.map((row, index) => {
 		const glyphs = row
 			.map((cell) => {
 				if (cell.count === 0) return " ";
-				const glyph = DENSITY[Math.min(DENSITY.length - 1, cell.count)] ?? "#";
+				// The newest reply is marked rather than counted: it is where the
+				// session is, which the density character cannot say.
+				const glyph = cell.latest
+					? "●"
+					: (DENSITY[Math.min(DENSITY.length - 1, cell.count)] ?? "#");
 				// Several replies in one cell are coloured by their average, so a
 				// dense slow cluster does not read as fast.
 				return paint ? paint(glyph, cell.total / cell.count / top) : glyph;
@@ -256,4 +264,51 @@ export function contextPercentAfter(
 			positive(usage.cacheWrite);
 	if (total <= 0) return undefined;
 	return Math.min(100, (total / contextWindow) * 100);
+}
+
+let current: TpsHistory | undefined;
+
+/**
+ * The session's throughput points, injected from `index.ts`: recording a point
+ * needs `pi.appendEntry`, and a pill action only gets a context.
+ */
+export function setTpsHistory(history: TpsHistory | undefined): void {
+	current = history;
+}
+
+/** The points the bubble draws, or undefined before a session bound one. */
+export function activeTpsHistory(): TpsHistory | undefined {
+	return current;
+}
+
+/**
+ * What the tps pill says when clicked: speed against how full the window was.
+ *
+ * One number says how fast the model writes. The curve says whether the window
+ * filling up is what changed it, which is the question a single rate cannot
+ * answer. Colour is the other half of that: a cell is green while the model is
+ * near its own top speed, yellow in the middle, red at the slow end; the newest
+ * reply is a dot rather than a density mark.
+ */
+export function tpsBubbleContent(theme?: ThemeLike): PillBubbleContent {
+	const points = current?.all() ?? [];
+	if (points.length === 0) {
+		return { title: "Throughput", body: ["No turns measured yet."] };
+	}
+	const latest = points[points.length - 1];
+	const paint = theme
+		? (glyph: string, ratio: number) => {
+				const color = ratio >= 0.6 ? "success" : ratio >= 0.35 ? "warning" : "error";
+				try {
+					return theme.fg(color, glyph);
+				} catch {
+					// An unknown token throws in pi's theme; drop the colour, keep the glyph.
+					return glyph;
+				}
+			}
+		: undefined;
+	return {
+		title: buildTpsLabel(latest.tps) || "Throughput",
+		body: [...tpsChartLines(points, paint), " ", tpsSummary(points)],
+	};
 }
