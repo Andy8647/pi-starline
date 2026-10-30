@@ -10,6 +10,54 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [0.9.0] - 2026-10-30
+
+The input box is as tall as its text, and user messages in the transcript are
+pi-tidy's to draw. **Breaking:** several settings are gone; see below.
+
+**Changed**
+
+- **No more row under the text.** The editor drew a metadata row below the
+  draft — model, provider, thinking level, and the paste/selection hints on its
+  right. With the model already on the pill footer most setups blanked it, and
+  the box stayed a row taller than its text anyway. The row is gone: the box is
+  its two rules, the padding and the text, like Pi's own.
+- **Hints ride the top rule.** `paste again to expand`, the selection hint and
+  the `ctrl+g` hint now sit at the right end of the editor's top rule, after a
+  wrapped modal editor's `INSERT`/`NORMAL` when there is one. Pi's own status
+  text (a retry, compaction) keeps the left end and wins when both do not fit.
+- **The pill bar starts in the first column.** It was drawn one column in from
+  each side, so its round cap sat a column to the right of the editor's rail.
+  It is flush left now, under the rail.
+- **User messages are styled by pi-tidy.** Starline restyled user messages too,
+  and only while its editor was on, so turning the editor off sent the
+  transcript's prompts back to Pi's filled block. pi-tidy 0.5 draws them
+  independently of Starline: in its rounded frame by default, or with
+  `userMessageStyle: "rail"` in the look Starline drew. The
+  `features.editor` switch now covers the editor and selector borders only.
+  Install or update pi-tidy before updating Starline, or user messages fall back
+  to Pi's style. A clean copy of a user message still comes out as its text:
+  tidy's frame or rail, its user icon and the indent under it are left out.
+
+**Added**
+
+- **`editorMinRows`** keeps the editor's text area at least that many rows tall
+  (default `1`, at most `10`): a short draft is followed by blank rows, so the
+  box does not grow when a second line arrives. A click on one of them puts the
+  caret at the end of the draft.
+
+**Removed**
+
+- `editorMetadataFormat` and the `editorModel`, `editorProvider` and
+  `editorThinking*` colours: there is no metadata row to format. They are
+  ignored if still set. `editorModelLabel` stays; it chooses what the model pill
+  shows.
+- `userMessagePaddingY`, `colors.userMessageBorder`, `colors.userMessageText`
+  and `colorSources.userMessages`: pi-tidy's `userMessagePaddingY` and
+  `userMessageColors` replace them. Starline ignores them and says so once.
+- The `editor` placement for third-party statuses, which put them on the
+  metadata row. A stored `editor` placement now reads as `right`.
+
 ## [0.8.1] - 2026-10-28
 
 Typing no longer takes the session down when another package wraps the editor,

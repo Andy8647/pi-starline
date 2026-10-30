@@ -61,7 +61,8 @@ const WIDTH = 40;
 const HEIGHT = 24;
 /** `editorVisibleLines(24)` — Pi's own `max(5, floor(rows * 0.3))`. */
 const VISIBLE = 7;
-const CONTENT_TOP = 14;
+/** Rule, padding row, then text; the box is docked at the bottom of the 24 rows. */
+const CONTENT_TOP = 15;
 const TEXT_COLUMN = 2;
 
 function makeTheme(): Theme {
@@ -75,9 +76,8 @@ function makeTheme(): Theme {
 	} as unknown as Theme;
 }
 
-/** `defaultConfig` with the metadata row blanked, so the frame is only frame. */
 function makeConfig(overrides: Partial<PolishedTuiConfig> = {}): PolishedTuiConfig {
-	return { ...defaultConfig, editorMetadataFormat: "", ...overrides };
+	return { ...defaultConfig, ...overrides };
 }
 
 function makeEditor(config: PolishedTuiConfig): PolishedEditor {
@@ -87,8 +87,6 @@ function makeEditor(config: PolishedTuiConfig): PolishedEditor {
 		{} as never,
 		makeTheme(),
 		() => config,
-		() => ({ modelLabel: "m", providerLabel: "p" }),
-		() => "off",
 	);
 }
 

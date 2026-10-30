@@ -10,7 +10,6 @@ It shows useful session/project state at a glance:
 - context usage
 - input/output token counts
 - running session cost
-- model/provider in the editor frame
 
 ## How it works
 
@@ -32,7 +31,6 @@ On `session_start`, Starline installs:
 
 - a custom footer (`footer.ts`)
 - a custom editor (`ui.ts`)
-- custom user-message styling (`user-message.ts`)
 - a project refresh timer for git/runtime status
 
 Most updates happen by syncing shared footer state and asking the TUI to re-render after Pi events like model changes, message completion, tool completion, and compaction.
@@ -49,7 +47,6 @@ Most updates happen by syncing shared footer state and asking the TUI to re-rend
 - `extensions/starline/runtime.ts` — runtime/language detection and version lookup.
 - `extensions/starline/settings-command.ts` — `/starline` settings UI for color-source preferences.
 - `extensions/starline/ui.ts` — custom editor frame.
-- `extensions/starline/user-message.ts` — prompt-box-style user message rendering.
 
 ## Config
 
@@ -59,14 +56,13 @@ User config is created at:
 ~/.pi/agent/starline.json
 ```
 
-Use `colors` for Starship-style color strings, hex/256-color values, or Pi theme tokens. `colorSources` controls whether Starline maps colors through the Pi theme or renders terminal colors directly. `/starline` changes editor and previous user-message sources together.
+Use `colors` for Starship-style color strings, hex/256-color values, or Pi theme tokens. `colorSources` controls whether Starline maps colors through the Pi theme or renders terminal colors directly. User messages are pi-tidy's to style, not Starline's.
 
 ## Things to preserve
 
 - Keep `index.ts` mostly orchestration; put rendering/formatting logic in focused modules.
 - Preserve Nerd Font icons. Many are private-use Unicode characters and can be easy to accidentally replace with empty strings.
 - Runtime color values should follow Starship's terminal style strings.
-- `user-message.ts` intentionally patches `UserMessageComponent`; treat it as fragile and avoid changing it unless necessary.
 - Silent fallbacks are intentional for git/runtime/config failures so the UI does not break the session.
 
 ## Development

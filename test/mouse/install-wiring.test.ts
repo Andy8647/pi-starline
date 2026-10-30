@@ -166,7 +166,7 @@ describe("extension wiring of installMouse", () => {
 	/**
 	 * The hint is derived, so nothing about a release needs Starline's help: Pi
 	 * 0.84.4's `copyOnSelect: false` keeps the selection highlighted and its own
-	 * repaints put the hint on screen via the metadata row. This drives the real
+	 * repaints put the hint on screen via the editor's top rule. This drives the real
 	 * prototype the way a real session would — selection on the live renderer,
 	 * one input event to register the instance — and reads the derived hint.
 	 */

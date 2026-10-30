@@ -29,23 +29,22 @@ If your `pi` binary is not at the default path, override it:
 PI_BIN=/absolute/path/to/pi npm run pi:dev
 ```
 
-Manual testing is required for any change that affects the footer, editor, user-message styling, runtime/git detection, colors, or `/starline` settings.
+Manual testing is required for any change that affects the footer, editor, runtime/git detection, colors, or `/starline` settings.
 
 ## Coding expectations
 
 Please follow the conventions already in this repo. The most important ones:
 
 - **Preserve Nerd Font / private-use icon glyphs.** Many of the icons are private-use Unicode characters; it is easy to replace them with empty strings by accident.
-- **Keep `extensions/starline/index.ts` orchestration-focused.** Rendering, formatting, and parsing logic belong in focused modules such as `footer.ts`, `format.ts`, `style.ts`, `git.ts`, `runtime.ts`, `ui.ts`, or `user-message.ts`.
+- **Keep `extensions/starline/index.ts` orchestration-focused.** Rendering, formatting, and parsing logic belong in focused modules such as `footer.ts`, `format.ts`, `style.ts`, `git.ts`, `runtime.ts`, or `ui.ts`.
 - **Use focused modules.** New rendering or formatting code should generally go into the matching module rather than being inlined.
 - **Silent fallbacks are intentional.** Git, runtime detection, and config lookups fail silently so that a broken environment does not break the session. Do not add throws or noisy errors for these paths without a strong reason.
-- **`user-message.ts` patches `UserMessageComponent`.** Treat it as fragile and avoid changes unless they are necessary.
 - **Runtime color values follow Starship's terminal style strings** (e.g. `bold purple`, `fg:202`, `bg:blue`).
 
 ## Pull request expectations
 
 - Describe the user-facing behavior change in the PR summary.
-- Include screenshots or a short recording for footer, editor, user-message, or rendering changes.
+- Include screenshots or a short recording for footer, editor, or rendering changes.
 - Run `npm run verify` and `npm run pack:check` locally.
 - Keep the diff surgical. Don't refactor adjacent code, reformat unrelated files, or upgrade dependencies that aren't part of the fix.
 - Use a conventional commit-style subject (e.g. `feat: add ...`, `fix: handle ...`), lowercase after the type, imperative, and concise. No trailing period.

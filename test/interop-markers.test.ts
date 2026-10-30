@@ -46,7 +46,7 @@ describe("prototype patch registry", () => {
 		const cleanup = installPrototypePatch(
 			target,
 			"render",
-			"user-message-render",
+			"selector-border-render",
 			({ predecessor, receiver, args }) => Reflect.apply(predecessor, receiver, args),
 		);
 
@@ -67,7 +67,7 @@ describe("prototype patch registry", () => {
 		const cleanup = installPrototypePatch(
 			target as unknown as object,
 			"render",
-			"user-message-render",
+			"selector-border-render",
 			({ predecessor, receiver, args }) => Reflect.apply(predecessor, receiver, args),
 		);
 
@@ -95,13 +95,11 @@ function makeEditor(config: PolishedTuiConfig) {
 		{} as never,
 		makeTheme(),
 		() => config,
-		() => ({ modelLabel: "m", providerLabel: "p" }),
-		() => "off",
 	);
 }
 
 describe("polished-frame split marker", () => {
-	const config = { ...defaultConfig, editorMetadataFormat: "the-meta" };
+	const config = defaultConfig;
 
 	it("exposes the splitter on a starline-built editor", () => {
 		const inner = makeEditor(config) as unknown as Record<PropertyKey, unknown>;
@@ -113,13 +111,7 @@ describe("polished-frame split marker", () => {
 		const inner = makeEditor(config);
 		inner.setText("typed text");
 
-		const wrapped = new WrappedPolishedEditor(
-			inner as never,
-			makeTheme(),
-			() => config,
-			() => ({ modelLabel: "m2", providerLabel: "p2" }),
-			() => "off",
-		);
+		const wrapped = new WrappedPolishedEditor(inner as never, makeTheme(), () => config);
 
 		expect(
 			wrapped

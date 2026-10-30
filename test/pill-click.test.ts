@@ -198,6 +198,18 @@ function columnOf(line: string, needle: string): number {
 describe("footer pill clicks", () => {
 	const width = 80;
 
+	it("draws the bar from column 0, under the editor's rail, and hit-tests the same columns", () => {
+		const { footer, custom } = makeFooter({ queued: true });
+		const line = footer.render(width)[0] ?? "";
+		expect(plain(line).startsWith(" ")).toBe(false);
+
+		// The first cell is the bar's left cap, and it already belongs to the first pill.
+		expect(footer.handleMouse?.({ type: "press", x: 0, y: 0, width })).toBeUndefined();
+		const x = columnOf(line, "queued");
+		expect(footer.handleMouse?.({ type: "press", x, y: 0, width })).toEqual({ handled: true });
+		expect(custom).toHaveBeenCalledTimes(1);
+	});
+
 	it("runs the segment's action on the press, before the button is released", () => {
 		const { footer, custom } = makeFooter({ queued: true });
 		const line = footer.render(width)[0] ?? "";

@@ -60,8 +60,8 @@
  *
  * `transcriptCleanCopy`, sharing the same patch:
  * - A selection in the transcript is copied with the chrome two components
- *   paint around their content removed: Starline's user message rails and
- *   border rules, and `pi-toolbox`'s rounded tool box frames. The cleaning
+ *   paint around their content removed: pi-tidy's user message rails and
+ *   border rules, and its rounded tool box frames. The cleaning
  *   itself is `transcript-copy.ts`, which recognises only those exact markers
  *   and passes everything else through untouched; a selection with no
  *   recognised decoration falls back to Pi's verbatim copy, so nothing that
@@ -214,7 +214,7 @@ type MouseCapablePrototype = {
  * depend on whatever repaint path the extension happened to own — which, until
  * this was fixed, was the footer's, so with `features.statusLine` off the
  * pending hint never appeared until some unrelated frame came along. The hint
- * lives in the editor's metadata row; it was never the footer's to schedule.
+ * lives on the editor's top rule; it was never the footer's to schedule.
  */
 export type InstallMouseDeps = {
 	getConfig: () => PolishedTuiConfig;
@@ -278,7 +278,7 @@ export function activeSelectionHintText(): string | null {
 		);
 	} catch {
 		// The renderer is best effort; a receiver that has moved on offers no
-		// hint rather than breaking the metadata row.
+		// hint rather than breaking the editor's top rule.
 		return null;
 	}
 }
@@ -303,7 +303,7 @@ function copyKeyText(): string {
  * is offered whenever the draft outgrows the box, not only while a selection
  * is live. Refreshed on every `handleViewportInput` call (keystrokes and
  * mouse events both land there), read by `ui.ts` when nothing else owns the
- * metadata row's right side.
+ * right end of the editor's top rule.
  */
 let externalEditorHint: string | null = null;
 
@@ -483,7 +483,6 @@ async function copyEditorSelection(
  */
 function transcriptSelectionText(
 	receiver: MouseCapablePrototype,
-	config: PolishedTuiConfig,
 	bounds: SelectionBounds,
 ): string | undefined {
 	const scrollView = bounds.start.scrollView;
@@ -491,12 +490,7 @@ function transcriptSelectionText(
 	if (receiver.hasOverlay()) return undefined;
 	const sourceLines = scrollContentLinesFor(receiver.currentLayout?.root, scrollView);
 	if (!sourceLines) return undefined;
-	const cleaned = cleanTranscriptRows(
-		sourceLines,
-		bounds.start.row,
-		bounds.end.row,
-		config.icons.rail,
-	);
+	const cleaned = cleanTranscriptRows(sourceLines, bounds.start.row, bounds.end.row);
 	if (!cleaned.changed) return undefined;
 	const adjusted: SelectionBounds = {
 		start: bounds.start,
@@ -547,7 +541,7 @@ async function copyTranscriptSelection(
 	try {
 		const bounds = receiver.getSelectionBounds();
 		if (!bounds) return false;
-		const text = transcriptSelectionText(receiver, config, bounds);
+		const text = transcriptSelectionText(receiver, bounds);
 		if (text === undefined) return false;
 		if (text.length === 0) return true;
 		return await writeSelectionToClipboard(receiver, text, config);
@@ -639,7 +633,7 @@ function pendingSelectionText(
 	// delivers, so a selection the copy would clean is counted after cleaning.
 	if (cleanCopy && config.mouse.transcriptCleanCopy) {
 		try {
-			const cleaned = transcriptSelectionText(receiver, config, bounds);
+			const cleaned = transcriptSelectionText(receiver, bounds);
 			if (cleaned !== undefined) return { text: cleaned, inEditor: false };
 		} catch {
 			// A cleaning failure falls back to the verbatim count, which is what
@@ -864,8 +858,8 @@ function isWheelEvent(event: unknown): event is WheelEventLike {
  * behaves the way it always has.
  *
  * The window it scrolls within is Pi's own `max(5, rows * 0.3)`, taken from the
- * terminal rather than from the box's rect: the rect includes Starline's border
- * and metadata rows, and guessing how many of those there are would put the
+ * terminal rather than from the box's rect: the rect includes Starline's border,
+ * padding and filler rows, and guessing how many of those there are would put the
  * boundary in the wrong place. Without a row count there is nothing to compute
  * it from, so the notch falls through.
  */

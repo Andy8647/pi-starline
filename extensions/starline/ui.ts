@@ -12,8 +12,6 @@ import {
 } from "@earendil-works/pi-tui";
 import type { PolishedTuiConfig } from "./config";
 import { applyEditorCursorStyleToLines } from "./editor-cursor";
-import { renderEditorMetadataFormat } from "./editor-metadata-format";
-import { collectExtensionStatusSegments } from "./extension-status";
 import { activeSelectionHintText, externalEditorHintText } from "./mouse";
 import { composeHints } from "./mouse/hint";
 import { pasteExpandHintText } from "./paste-collapse";
@@ -34,6 +32,14 @@ const SPLIT_POLISHED_FRAME: unique symbol = Symbol.for("pi-starline.polished-fra
 type PolishedFrameSplit = {
 	editorLines: string[];
 	trailingLines: string[];
+};
+
+/** What one render drew, kept so a wrapper can take the frame apart again. */
+type DrawnFrame = PolishedFrameSplit & {
+	/** The array `render` returned; a wrapper hands back this exact one. */
+	lines: string[];
+	/** Blank rows `editorMinRows` added below the text. */
+	fillerRows: number;
 };
 
 type AutocompleteEditorInternals = {
@@ -65,32 +71,21 @@ type WrappedEditor = EditorComponent &
 		[SPLIT_POLISHED_FRAME]?: (lines: string[]) => PolishedFrameSplit | undefined;
 	};
 
-type EditorMeta = {
-	modelLabel: string;
-	modelId?: string;
-	modelName?: string;
-	providerLabel: string;
-	sessionName?: string;
-};
-
 type PolishedFrameOptions = {
 	width: number;
 	baseRendered: string[];
 	autocompleteSource: AutocompleteEditorInternals;
 	uiTheme: Theme;
 	config: PolishedTuiConfig;
-	modelMeta: EditorMeta;
-	thinkingLevel: string | undefined;
-	rightStatus?: string;
-	/** Third-party statuses placed on the editor row (`placement: "editor"`). */
-	editorStatus?: string;
+	/** A wrapped base editor's mode (`INSERT`, `NORMAL`, …), when it has one. */
+	vimStatus?: string;
 	/** Pi's status text for the top rule (retry, compaction, …). */
 	borderStatus?: string;
 	/** Draft lines scrolled out of view above / below, for Pi's `↑ N more` cue. */
 	scrollTop?: number;
 	scrollBottom?: number;
-	/** Reports how many text rows the frame drew, so `handleMouse` can bound clicks. */
-	onEditorLines?: (count: number) => void;
+	/** Reports what the frame drew: `handleMouse` bounds clicks by it, a wrapper splits by it. */
+	onFrame?: (frame: Omit<DrawnFrame, "lines">) => void;
 	splitBaseFrame?: (lines: string[]) => PolishedFrameSplit | undefined;
 };
 
@@ -138,24 +133,15 @@ function getEditorChromeWidths(config: PolishedTuiConfig, uiTheme: Theme, reset:
 }
 
 /**
- * The right side of the metadata row: vim mode, third-party statuses placed
- * there, and the paste/selection hints.
+ * The right end of the top rule: a wrapped editor's vim mode, then the paste
+ * and selection hints.
  *
- * The hint used to live on the editor's bottom border, drawn there by the fixed
- * editor's compositor. Pi 0.84 supersedes the fixed editor, so the hint needs a
- * home that does not depend on it — and the border is not it, because
- * `isHorizontalBorder` requires an unbroken rule to find the frame again. The
- * metadata row is always rendered, even when `editorMetadataFormat` is blank,
- * so the hint shows up whatever the user has done to that template.
- *
- * Hints come last: `composeMetadataLine` truncates this string from the right
- * when it cannot fit, and the hints are the transient, actionable part.
+ * Until 0.9 these sat on a metadata row under the text, which made the box a
+ * row taller than Pi's even with nothing to say. The top rule is there anyway,
+ * and nothing else claims its right end — Pi's status text starts at the left,
+ * the scroll cue is centred — so the box stays the height of its text.
  */
-function composeRightStatus(
-	vimStatus: string | undefined,
-	editorStatus: string | undefined,
-	uiTheme: Theme,
-): string | undefined {
+function composeTopRightStatus(vimStatus: string | undefined, uiTheme: Theme): string | undefined {
 	// A live selection hint already spells the external editor out ("N
 	// characters selected, ctrl+x to copy ⋅ ctrl+g to edit in $EDITOR"), so it
 	// takes precedence; the always-on hint only speaks when nothing else does.
@@ -164,42 +150,8 @@ function composeRightStatus(
 		activeSelectionHintText() ?? externalEditorHintText(),
 	);
 	const styled = hint ? safeThemeFg(uiTheme, "muted", hint) : undefined;
-	const parts = [vimStatus, editorStatus, styled].filter((part): part is string => Boolean(part));
+	const parts = [vimStatus, styled].filter((part): part is string => Boolean(part));
 	return parts.length > 0 ? parts.join(" ⋅ ") : undefined;
-}
-
-/**
- * Statuses configured with `placement: "editor"`, joined for the metadata row.
- *
- * The row is one muted line like the hints beside it, so the per-status colours
- * and icons (footer features) are not applied here; `colorMode: "original"`
- * text keeps whatever the extension already styled it with.
- */
-function editorStatusText(
-	config: PolishedTuiConfig,
-	uiTheme: Theme,
-	statuses: ReadonlyMap<string, string> | undefined,
-): string | undefined {
-	if (!statuses || statuses.size === 0) return undefined;
-	const segments = collectExtensionStatusSegments(statuses, config).editor;
-	if (segments.length === 0) return undefined;
-	return segments
-		.map((segment) =>
-			segment.colorMode === "original" ? segment.text : safeThemeFg(uiTheme, "muted", segment.text),
-		)
-		.join(" ⋅ ");
-}
-
-function composeMetadataLine(left: string, right: string | undefined, width: number): string {
-	if (!right) return left;
-	const maxWidth = Math.max(0, width);
-	const rightWidth = visibleWidth(right);
-	if (rightWidth >= maxWidth) return truncateToWidth(right, maxWidth, "");
-
-	const leftWidth = Math.max(0, maxWidth - rightWidth - 1);
-	const leftText = truncateToWidth(left, leftWidth, "");
-	const gap = " ".repeat(Math.max(1, maxWidth - visibleWidth(leftText) - rightWidth));
-	return `${leftText}${gap}${right}`;
 }
 
 function plainRenderedText(line: string): string {
@@ -209,11 +161,21 @@ function plainRenderedText(line: string): string {
 		.replace(/\[\/?[^\]]+\]/g, "");
 }
 
+/**
+ * A frame rule, possibly with text riding on it (`── ⠋ Retrying ──── hint ──`):
+ * it starts and ends with rule glyphs. Rail rows start with the rail and
+ * autocomplete rows with text, so neither matches.
+ */
 function isHorizontalBorder(line: string): boolean {
 	const plain = plainRenderedText(line).trim();
-	return plain.length > 0 && /^─+$/.test(plain);
+	return plain.length > 1 && plain.startsWith("─") && plain.endsWith("─");
 }
 
+/**
+ * Take a Starline frame apart from its lines alone. Only the fallback for
+ * `splitPolishedFrame` — an editor normally answers from what it drew — so it
+ * cannot tell `editorMinRows` filler from blank draft lines and keeps both.
+ */
 function unwrapPolishedFrameOnly(
 	lines: string[],
 	config: PolishedTuiConfig,
@@ -223,26 +185,20 @@ function unwrapPolishedFrameOnly(
 	// to be the padding assumed here.
 	const padY = config.editorPaddingY > 0 ? 1 : 0;
 	if (
-		lines.length < 4 + padY ||
+		lines.length < 3 + 2 * padY ||
 		!isHorizontalBorder(lines[0] ?? "") ||
 		!isHorizontalBorder(lines.at(-1) ?? "")
 	)
 		return undefined;
 
 	const interior = lines.slice(1, -1);
-	if (interior.length < 2 + padY) return undefined;
+	const isBlank = (line: string | undefined) => plainRenderedText(line ?? "").trim() === "";
 
 	if (config.features.copyFriendly) {
-		if (
-			(padY > 0 && plainRenderedText(interior[0] ?? "").trim() !== "") ||
-			(padY > 0 && plainRenderedText(interior.at(-2) ?? "").trim() !== "") ||
-			!(interior.at(-1) ?? "").startsWith(" ")
-		)
-			return undefined;
-
+		if (padY > 0 && (!isBlank(interior[0]) || !isBlank(interior.at(-1)))) return undefined;
 		const { prompt, promptWidth } = getEditorChromeWidths(config, uiTheme, "\x1b[0m");
 		const continuation = " ".repeat(promptWidth);
-		const content = interior.slice(padY, -(1 + padY));
+		const content = interior.slice(padY, interior.length - padY);
 		const unwrapped: string[] = [];
 		for (let index = 0; index < content.length; index++) {
 			const prefix = index === 0 ? prompt : continuation;
@@ -256,13 +212,8 @@ function unwrapPolishedFrameOnly(
 	const { rail } = getEditorChromeWidths(config, uiTheme, "\x1b[0m");
 	if (!rail || interior.some((line) => !line.startsWith(rail))) return undefined;
 	const unrailed = interior.map((line) => line.slice(rail.length));
-	if (
-		padY > 0 &&
-		(plainRenderedText(unrailed[0] ?? "").trim() !== "" ||
-			plainRenderedText(unrailed.at(-2) ?? "").trim() !== "")
-	)
-		return undefined;
-	return unrailed.slice(padY, -(1 + padY));
+	if (padY > 0 && (!isBlank(unrailed[0]) || !isBlank(unrailed.at(-1)))) return undefined;
+	return unrailed.slice(padY, unrailed.length - padY);
 }
 
 function splitPolishedFrame(
@@ -271,7 +222,7 @@ function splitPolishedFrame(
 	uiTheme: Theme,
 ): PolishedFrameSplit | undefined {
 	if (!isHorizontalBorder(lines[0] ?? "")) return undefined;
-	for (let bottomIndex = lines.length - 1; bottomIndex >= 4; bottomIndex--) {
+	for (let bottomIndex = lines.length - 1; bottomIndex >= 2; bottomIndex--) {
 		if (!isHorizontalBorder(lines[bottomIndex] ?? "")) continue;
 		const editorLines = unwrapPolishedFrameOnly(lines.slice(0, bottomIndex + 1), config, uiTheme);
 		if (editorLines) {
@@ -279,6 +230,24 @@ function splitPolishedFrame(
 		}
 	}
 	return undefined;
+}
+
+/**
+ * Split a frame this editor drew. A wrapper hands back the very array `render`
+ * returned, so the frame is known exactly — text rows apart from padding and
+ * `editorMinRows` filler, whatever rides on the rules. Lines from anywhere else
+ * go through the positional parse.
+ */
+function splitDrawnFrame(
+	drawn: DrawnFrame | undefined,
+	lines: string[],
+	config: PolishedTuiConfig,
+	uiTheme: Theme,
+): PolishedFrameSplit | undefined {
+	if (drawn && drawn.lines === lines) {
+		return { editorLines: drawn.editorLines, trailingLines: drawn.trailingLines };
+	}
+	return splitPolishedFrame(lines, config, uiTheme);
 }
 
 function vimModeColor(mode: string): string {
@@ -301,17 +270,19 @@ function vimModeColor(mode: string): string {
 /**
  * A frame rule with things riding on it.
  *
- * Two things can share the rule: Pi's status text on the left (`── ⠋ Retrying (1/3)
- * ────`), and the draft's scroll position, centred in Pi's own ` ↑ 3 more `
- * wording. The status wins when both cannot fit — it is the one carrying a cancel
- * hint — and the scroll label is dropped rather than pushed off-centre.
+ * Three things can share the rule: Pi's status text on the left (`── ⠋ Retrying
+ * (1/3) ────`), hints on the right (`──── 12 characters selected ──`), and the
+ * draft's scroll position, centred in Pi's own ` ↑ 3 more ` wording. When they
+ * cannot all fit, the status wins (it carries a cancel hint), then the right
+ * side, which is cut from its end; the scroll label is dropped rather than
+ * pushed off-centre.
  *
- * The status arrives already coloured by Pi, so only the rule and the label are
- * painted here.
+ * The status and hints arrive already coloured, so only the rule and the label
+ * are painted here.
  */
 function composeBorderLine(
 	width: number,
-	parts: { status?: string; scroll?: string },
+	parts: { status?: string; scroll?: string; right?: string },
 	border: (text: string) => string,
 ): string {
 	const rule = (count: number) => border("─".repeat(Math.max(0, count)));
@@ -321,17 +292,27 @@ function composeBorderLine(
 	const statusWidth = visibleWidth(status);
 	const leftWidth = statusWidth > 0 ? statusWidth + 4 : 0;
 
+	// ` hint ──`, kept clear of the status by at least one rule cell.
+	const rightRoom = width - leftWidth - 1 - 4;
+	const right = parts.right && rightRoom >= 1 ? truncateToWidth(parts.right, rightRoom, "") : "";
+	const rightTextWidth = visibleWidth(right);
+	const rightWidth = rightTextWidth > 0 ? rightTextWidth + 4 : 0;
+
 	const label = parts.scroll ? ` ${parts.scroll} ` : "";
 	const labelWidth = visibleWidth(label);
 	const labelStart = labelWidth > 0 ? Math.floor((width - labelWidth) / 2) : -1;
 	const centred =
-		labelWidth > 0 && labelStart >= leftWidth + 1 && labelStart + labelWidth <= width - 1;
+		labelWidth > 0 &&
+		labelStart >= leftWidth + 1 &&
+		labelStart + labelWidth <= width - rightWidth - 1;
 	// A label that cannot be centred still beats dropping it, but only when there
-	// is no status competing for the left of the rule.
-	const rightAligned = labelWidth > 0 && !centred && leftWidth === 0 && labelWidth + 2 <= width;
+	// is nothing else on the rule competing for its ends.
+	const rightAligned =
+		labelWidth > 0 && !centred && leftWidth === 0 && rightWidth === 0 && labelWidth + 2 <= width;
 
 	let out = statusWidth > 0 ? `${border("── ")}${status}${border(" ")}` : "";
 	let cursor = leftWidth;
+	const end = width - rightWidth;
 	if (centred) {
 		out += rule(labelStart - cursor) + border(label);
 		cursor = labelStart + labelWidth;
@@ -339,7 +320,8 @@ function composeBorderLine(
 		out += rule(width - labelWidth) + border(label);
 		cursor = width;
 	}
-	return out + rule(width - cursor);
+	out += rule(end - cursor);
+	return rightWidth > 0 ? `${out}${border(" ")}${right}${border(" ──")}` : out;
 }
 
 /** Pi's own wording for the border scroll cue. */
@@ -372,27 +354,30 @@ export type FrameMouseEvent = {
  *
  * Pi counts from its own frame: `y = 1` is the first text row, `x = 0` is the box's
  * left edge, and `width` is the whole box. Starline's frame puts a rail (or a
- * copy-friendly prompt) in front of every row, pads above the text when
- * `editorPaddingY` is on, and adds a metadata row below it.
+ * copy-friendly prompt) in front of every row, pads above and below the text when
+ * `editorPaddingY` is on, and follows a short draft with `editorMinRows` filler.
  *
- * Returns undefined for anything outside the text block. The borders and the
- * metadata row are Starline's, and Pi would otherwise read a click on the bottom
- * rule as a click in its autocomplete list — which it draws immediately after that
- * rule in its own frame, but two rows earlier in ours.
+ * A click on a filler row lands at the end of the last text row, as a click
+ * past the end of a line does. Anything else outside the text block returns
+ * undefined: the borders and padding are Starline's, and Pi would otherwise read
+ * a click on the bottom rule as a click in its autocomplete list — which it
+ * draws immediately after that rule in its own frame, but rows earlier in ours.
  */
 export function translateEditorMouse<Event extends FrameMouseEvent>(
 	event: Event,
-	geometry: { railWidth: number; padTop: number; editorLineCount: number },
+	geometry: { railWidth: number; padTop: number; editorLineCount: number; fillerRows?: number },
 ): Event | undefined {
-	const { railWidth, padTop, editorLineCount } = geometry;
+	const { railWidth, padTop, editorLineCount, fillerRows = 0 } = geometry;
 	if (editorLineCount <= 0) return undefined;
-	const y = event.y - padTop;
-	if (!Number.isFinite(y) || y < 1 || y > editorLineCount) return undefined;
+	const row = event.y - padTop;
+	if (!Number.isFinite(row) || row < 1 || row > editorLineCount + fillerRows) return undefined;
+	const width = Math.max(1, event.width - railWidth);
+	const filler = row > editorLineCount;
 	return {
 		...event,
-		x: event.x - railWidth,
-		y,
-		width: Math.max(1, event.width - railWidth),
+		x: filler ? width - 1 : event.x - railWidth,
+		y: filler ? editorLineCount : row,
+		width,
 	};
 }
 
@@ -424,14 +409,11 @@ function renderPolishedFrame({
 	autocompleteSource,
 	uiTheme,
 	config,
-	modelMeta,
-	thinkingLevel,
-	rightStatus,
-	editorStatus,
+	vimStatus,
 	borderStatus,
 	scrollTop,
 	scrollBottom,
-	onEditorLines,
+	onFrame,
 	splitBaseFrame,
 }: PolishedFrameOptions): string[] {
 	if (width <= 2) return clampRenderedLines(baseRendered, width);
@@ -469,23 +451,8 @@ function renderPolishedFrame({
 		ownedFrame?.editorLines ?? editorFrame.slice(1, -1),
 		config.editorCursor,
 	);
-	onEditorLines?.(editorLines.length);
-	const meta = renderEditorMetadataFormat(
-		config.editorMetadataFormat,
-		{
-			model: modelMeta.modelLabel,
-			modelId: modelMeta.modelId ?? "",
-			modelName: modelMeta.modelName ?? "",
-			provider: modelMeta.providerLabel,
-			thinking: thinkingLevel ?? "",
-			sessionName: modelMeta.sessionName ?? "",
-		},
-		uiTheme,
-		config,
-	);
-	const status = composeRightStatus(rightStatus, editorStatus, uiTheme);
-	const copyFriendlyMeta = composeMetadataLine(meta, status, Math.max(0, width - 1));
-	const railedMeta = composeMetadataLine(meta, status, innerWidth);
+	const fillerRows = Math.max(0, config.editorMinRows - editorLines.length);
+	onFrame?.({ editorLines, trailingLines: autocompleteLines, fillerRows });
 
 	const borderPaint = (text: string) =>
 		renderStyleForSourceOrFallback(
@@ -497,15 +464,16 @@ function renderPolishedFrame({
 		);
 	const top = composeBorderLine(
 		width,
-		{ status: borderStatus, scroll: scrollLabel("↑", scrollTop) },
+		{
+			status: borderStatus,
+			scroll: scrollLabel("↑", scrollTop),
+			right: composeTopRightStatus(vimStatus, uiTheme),
+		},
 		borderPaint,
 	);
 	const bottom = composeBorderLine(width, { scroll: scrollLabel("↓", scrollBottom) }, borderPaint);
-	// The metadata row stays even when it renders blank: splitPolishedFrame parses
-	// the frame back by position, so changing the line count breaks the wrapped
-	// editor path. An empty editorMetadataFormat leaves a blank row, not no row.
 	const padRows = config.editorPaddingY > 0 ? [""] : [];
-	const lines = [...padRows, ...editorLines, ...padRows, railedMeta];
+	const fillRows = Array.from({ length: fillerRows }, () => "");
 	const renderedLines = config.features.copyFriendly
 		? [
 				top,
@@ -514,14 +482,16 @@ function renderPolishedFrame({
 					(line, index) =>
 						`${index === 0 ? prompt : copyFriendlyContinuation}${fillLine(line, innerWidth)}`,
 				),
+				...fillRows,
 				...padRows,
-				` ${truncateToWidth(copyFriendlyMeta, Math.max(0, width - 1), "")}`,
 				bottom,
 				...autocompleteLines,
 			]
 		: [
 				top,
-				...lines.map((line) => `${rail}${fillLine(line, innerWidth)}`),
+				...[...padRows, ...editorLines, ...fillRows, ...padRows].map(
+					(line) => `${rail}${fillLine(line, innerWidth)}`,
+				),
 				bottom,
 				...autocompleteLines,
 			];
@@ -530,13 +500,10 @@ function renderPolishedFrame({
 }
 
 export class PolishedEditor extends CustomEditor {
-	private readonly getModelMeta: () => EditorMeta;
-	private readonly getThinkingLevel: () => string | undefined;
 	private readonly getConfig: () => PolishedTuiConfig;
 	private readonly uiTheme: Theme;
-	private readonly getExtensionStatuses: (() => ReadonlyMap<string, string>) | undefined;
-	/** Text rows the last frame drew; bounds what `handleMouse` is allowed to translate. */
-	private editorLineCount = 0;
+	/** The last frame drawn: bounds what `handleMouse` translates, and answers a wrapper's split. */
+	private lastFrame: DrawnFrame | undefined;
 	/**
 	 * Pi only routes a status to the editor when it advertises this flag, and stops
 	 * drawing its own row above the editor. Starline wants that deal so the plain
@@ -552,17 +519,11 @@ export class PolishedEditor extends CustomEditor {
 		keybindings: KeybindingsManager,
 		uiTheme: Theme,
 		getConfig: () => PolishedTuiConfig,
-		getModelMeta: () => EditorMeta,
-		getThinkingLevel: () => string | undefined,
-		getExtensionStatuses?: () => ReadonlyMap<string, string>,
 	) {
 		super(tui, theme, keybindings, { paddingX: 0 });
 		this.borderColor = (text: string) => safeThemeFg(uiTheme, "border", text);
 		this.uiTheme = uiTheme;
 		this.getConfig = getConfig;
-		this.getModelMeta = getModelMeta;
-		this.getThinkingLevel = getThinkingLevel;
-		this.getExtensionStatuses = getExtensionStatuses;
 	}
 
 	render(width: number): string[] {
@@ -574,16 +535,13 @@ export class PolishedEditor extends CustomEditor {
 		const { railWidth } = getEditorChromeWidths(config, this.uiTheme, "\x1b[0m");
 		const innerWidth = Math.max(0, width - railWidth);
 		const rendered = super.render(innerWidth);
-		const modelMeta = this.getModelMeta();
+		let drawn: Omit<DrawnFrame, "lines"> | undefined;
 		const result = renderPolishedFrame({
 			width,
 			baseRendered: rendered,
 			autocompleteSource: this as unknown as AutocompleteEditorInternals,
 			uiTheme: this.uiTheme,
 			config,
-			modelMeta,
-			thinkingLevel: this.getThinkingLevel(),
-			editorStatus: editorStatusText(config, this.uiTheme, this.getExtensionStatuses?.()),
 			borderStatus: workingStatusForBorder(config, Math.max(1, width - 5)),
 			// Pi paints the draft's scroll position into the borders it draws, and both
 			// of those lines are dropped when Starline redraws the frame, so the counts
@@ -591,10 +549,11 @@ export class PolishedEditor extends CustomEditor {
 			// (Pi 0.84) or routes it through renderTopBorder (Pi 1.4+).
 			scrollTop: readScrollCount(rendered[0], "↑"),
 			scrollBottom: readScrollCount(rendered.at(-1), "↓"),
-			onEditorLines: (count) => {
-				this.editorLineCount = count;
+			onFrame: (frame) => {
+				drawn = frame;
 			},
 		});
+		this.lastFrame = drawn && { ...drawn, lines: result };
 		return result;
 	}
 
@@ -611,7 +570,8 @@ export class PolishedEditor extends CustomEditor {
 		const translated = translateEditorMouse(event, {
 			railWidth,
 			padTop: config.editorPaddingY > 0 ? 1 : 0,
-			editorLineCount: this.editorLineCount,
+			editorLineCount: this.lastFrame?.editorLines.length ?? 0,
+			fillerRows: this.lastFrame?.fillerRows ?? 0,
 		});
 		if (!translated) return undefined;
 		return baseHandleMouse.call(this, translated);
@@ -622,7 +582,7 @@ export class PolishedEditor extends CustomEditor {
 	}
 
 	[SPLIT_POLISHED_FRAME](lines: string[]): PolishedFrameSplit | undefined {
-		return splitPolishedFrame(lines, this.getConfig(), this.uiTheme);
+		return splitDrawnFrame(this.lastFrame, lines, this.getConfig(), this.uiTheme);
 	}
 }
 
@@ -637,10 +597,9 @@ export class WrappedPolishedEditor implements EditorComponent {
 		private readonly base: WrappedEditor,
 		private readonly uiTheme: Theme,
 		private readonly getConfig: () => PolishedTuiConfig,
-		private readonly getModelMeta: () => EditorMeta,
-		private readonly getThinkingLevel: () => string | undefined,
-		private readonly getExtensionStatuses?: () => ReadonlyMap<string, string>,
 	) {}
+
+	private lastFrame: DrawnFrame | undefined;
 
 	get focused(): boolean {
 		return Boolean(this.base.focused);
@@ -726,25 +685,26 @@ export class WrappedPolishedEditor implements EditorComponent {
 		const { railWidth } = getEditorChromeWidths(config, this.uiTheme, "\x1b[0m");
 		const innerWidth = Math.max(0, width - railWidth);
 		const rendered = this.base.render(innerWidth);
-		const vimStatus = readVimStatus(this.base, this.uiTheme);
-		const modelMeta = this.getModelMeta();
-		return renderPolishedFrame({
+		let drawn: Omit<DrawnFrame, "lines"> | undefined;
+		const result = renderPolishedFrame({
 			width,
 			baseRendered: rendered,
 			autocompleteSource: this.base,
 			uiTheme: this.uiTheme,
 			config,
-			modelMeta,
-			thinkingLevel: this.getThinkingLevel(),
-			rightStatus: vimStatus,
-			editorStatus: editorStatusText(config, this.uiTheme, this.getExtensionStatuses?.()),
+			vimStatus: readVimStatus(this.base, this.uiTheme),
 			borderStatus: workingStatusForBorder(config, Math.max(1, width - 5)),
 			// The base's frame lines are dropped, so its scroll cues are read back
 			// from them and redrawn by Starline's own borders.
 			scrollTop: readScrollCount(rendered[0], "↑"),
 			scrollBottom: readScrollCount(rendered.at(-1), "↓"),
 			splitBaseFrame: this.base[SPLIT_POLISHED_FRAME]?.bind(this.base),
+			onFrame: (frame) => {
+				drawn = frame;
+			},
 		});
+		this.lastFrame = drawn && { ...drawn, lines: result };
+		return result;
 	}
 
 	setWorkingStatusIndicator(indicator: WorkingIndicator | undefined): void {
@@ -752,7 +712,7 @@ export class WrappedPolishedEditor implements EditorComponent {
 	}
 
 	[SPLIT_POLISHED_FRAME](lines: string[]): PolishedFrameSplit | undefined {
-		return splitPolishedFrame(lines, this.getConfig(), this.uiTheme);
+		return splitDrawnFrame(this.lastFrame, lines, this.getConfig(), this.uiTheme);
 	}
 
 	invalidate(): void {
