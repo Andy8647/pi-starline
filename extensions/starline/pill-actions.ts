@@ -141,14 +141,13 @@ export function queuedBubbleContent(): PillBubbleContent {
 				"Messages you send while the agent is working wait until the current turn ends, then get delivered.",
 				"This build of Pi does not expose them to the extension, so the count and the text are unknown.",
 			],
-			hint: "esc to close",
 		};
 	}
 
 	const messages = [...pending.steering, ...pending.followUp];
 	// The bubble stays open while the turn ends and the queue drains under it.
 	if (messages.length === 0) {
-		return { title: "Queued messages", body: ["Nothing is queued."], hint: "esc to close" };
+		return { title: "Queued messages", body: ["Nothing is queued."] };
 	}
 	const listed = messages.slice(0, MAX_LISTED_MESSAGES).map((message) => `· ${oneLine(message)}`);
 	if (messages.length > listed.length) {
@@ -157,7 +156,6 @@ export function queuedBubbleContent(): PillBubbleContent {
 	return {
 		title: `${messages.length} message${messages.length === 1 ? "" : "s"} queued`,
 		body: listed,
-		hint: "esc to close",
 	};
 }
 
@@ -179,7 +177,6 @@ function thinkingUnavailable(ctx: ExtensionContext): PillBubbleContent {
 		body: current
 			? [`Current level: ${current}.`, "This session cannot change it from here."]
 			: ["This model has no thinking level to change."],
-		hint: "esc to close",
 	};
 }
 
@@ -226,7 +223,7 @@ function showThinkingLevel({ ctx, pill, via }: PillActionContext): void {
 	showPillBubble(
 		ctx,
 		cycled
-			? { title: "Thinking", body: [`${cycled.from} → ${cycled.to}`], hint: "esc to close" }
+			? { title: "Thinking", body: [`${cycled.from} → ${cycled.to}`] }
 			: thinkingUnavailable(ctx),
 		pill,
 	);
@@ -314,7 +311,6 @@ export function modelPickerContent(ctx: ExtensionContext): PillBubbleContent {
 				current ? `Current model: ${modelLabel(current)}.` : "No model is selected.",
 				"Use /model to pick one.",
 			],
-			hint: "esc to close",
 		};
 	}
 	// The current model is a target too, opened selected, so ↑/↓ start from it.
@@ -352,7 +348,6 @@ async function showModels({ ctx, pill, via }: PillActionContext): Promise<void> 
 		{
 			title: "Model",
 			body: [`${current ? current.id : "none"} → ${next.model.id}`],
-			hint: "esc to close",
 		},
 		pill,
 	);
@@ -391,7 +386,7 @@ export function subagentsBubbleContent(fleet: FleetSnapshot, now = Date.now()): 
 	return {
 		title: total > 0 ? `${total} subagent${total === 1 ? "" : "s"} running` : "Subagents",
 		body: total > 0 ? listed : ["Nothing is running."],
-		hint: "/subagents-fleet for details · esc to close",
+		hint: "/subagents-fleet for details",
 	};
 }
 
@@ -441,7 +436,7 @@ export function contextBubbleContent(
 ): PillBubbleContent {
 	const snapshot = activeContextSnapshot();
 	if (!breakdown && !snapshot) {
-		return { title: "Context", body: ["Nothing has been sent yet."], hint: "esc to close" };
+		return { title: "Context", body: ["Nothing has been sent yet."] };
 	}
 
 	const percent =
@@ -476,7 +471,6 @@ export function contextBubbleContent(
 	return {
 		title: rounded === undefined ? "Context" : `${rounded}% context`,
 		body: body.length > 0 ? body : ["No usage yet."],
-		hint: "esc to close",
 	};
 }
 
@@ -510,18 +504,29 @@ export function setTpsHistory(history: TpsHistory | undefined): void {
  *
  * One number says how fast the model writes. The curve says whether the window
  * filling up is what changed it, which is the question a single rate cannot
- * answer.
+ * answer. Colour is the other half of that: a cell is green while the model is
+ * near its own top speed, yellow in the middle, red at the slow end.
  */
-export function tpsBubbleContent(): PillBubbleContent {
+export function tpsBubbleContent(theme?: ThemeLike): PillBubbleContent {
 	const points = tpsHistory?.all() ?? [];
 	if (points.length === 0) {
-		return { title: "Throughput", body: ["No turns measured yet."], hint: "esc to close" };
+		return { title: "Throughput", body: ["No turns measured yet."] };
 	}
 	const latest = points[points.length - 1];
+	const paint = theme
+		? (glyph: string, ratio: number) => {
+				const color = ratio >= 0.6 ? "success" : ratio >= 0.35 ? "warning" : "error";
+				try {
+					return theme.fg(color, glyph);
+				} catch {
+					// An unknown token throws in pi's theme; drop the colour, keep the glyph.
+					return glyph;
+				}
+			}
+		: undefined;
 	return {
 		title: buildTpsLabel(latest.tps) || "Throughput",
-		body: [...tpsChartLines(points), " ", tpsSummary(points)],
-		hint: "esc to close",
+		body: [...tpsChartLines(points, paint), " ", tpsSummary(points)],
 	};
 }
 
@@ -530,8 +535,9 @@ function showTps({ ctx, pill }: PillActionContext): void {
 		if (ctx.hasUI) ctx.ui.notify("No throughput measured yet", "info");
 		return;
 	}
-	// Live: the last turn's rate lands while the bubble is open.
-	const handle = showPillBubble(ctx, tpsBubbleContent, pill);
+	// Live: the last reply's rate lands while the bubble is open.
+	const theme = ctx.ui.theme as unknown as ThemeLike;
+	const handle = showPillBubble(ctx, () => tpsBubbleContent(theme), pill);
 	whileOpen(handle, () => handle.refresh());
 }
 
@@ -567,7 +573,7 @@ function changeLabel(code: string): string {
 export function gitBubbleContent(): PillBubbleContent {
 	const status = activeGitStatus();
 	if (!status) {
-		return { title: "Git", body: ["No repository in this project."], hint: "esc to close" };
+		return { title: "Git", body: ["No repository in this project."] };
 	}
 
 	const body: string[] = [];
@@ -602,7 +608,7 @@ export function gitBubbleContent(): PillBubbleContent {
 	return {
 		title: changes.length > 0 ? `${name} · ${changes.length} changed` : name,
 		body,
-		hint: changes.length > 0 ? "read-only · esc to close" : "esc to close",
+		hint: changes.length > 0 ? "read-only" : undefined,
 	};
 }
 

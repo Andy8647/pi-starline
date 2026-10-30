@@ -152,6 +152,18 @@ function axisRange(percents: readonly number[]): { left: number; right: number }
 const DENSITY = [" ", "·", "+", "#"];
 
 /**
+ * A cell holds however many replies landed on it and their total rate, so a
+ * stacked cell can still be coloured by how fast it was.
+ */
+type CellStat = { count: number; total: number };
+
+/**
+ * Optional colouring. `ratio` is the cell's average rate over the top of the y
+ * axis, 0 to 1; returning the glyph unchanged keeps the plot plain.
+ */
+export type TpsPaint = (glyph: string, ratio: number) => string;
+
+/**
  * The scatter plot: y is tokens per second, x is the context percentage when the
  * reply finished.
  *
@@ -159,35 +171,41 @@ const DENSITY = [" ", "·", "+", "#"];
  * that has only reached a fifth of its window into the first column, and a
  * session that stayed in one percent band into the last one.
  *
- * The axes carry the meaning, so they are drawn rather than implied: three y
- * labels (top, middle, zero) and both ends of the x range. A blank region is
- * information too — it means no reply ran at that speed and that fullness yet.
+ * The axes carry the meaning, so they are drawn rather than implied. Every y row
+ * is labelled: three ticks were enough to say where the top was, not enough to
+ * read a point's rate without counting rows.
  */
-export function tpsChartLines(points: readonly TpsPoint[]): string[] {
+export function tpsChartLines(points: readonly TpsPoint[], paint?: TpsPaint): string[] {
 	if (points.length === 0) return [];
 	const top = niceCeiling(Math.max(...points.map((point) => point.tps)));
 	const percents = points.map((point) => clampPercent(point.percent));
 	const { left, right } = axisRange(percents);
 	const span = Math.max(1, right - left);
-	const cells = Array.from({ length: CHART_HEIGHT }, () => new Array<number>(CHART_WIDTH).fill(0));
+	const cells: CellStat[][] = Array.from({ length: CHART_HEIGHT }, () =>
+		Array.from({ length: CHART_WIDTH }, () => ({ count: 0, total: 0 })),
+	);
 
 	for (const [index, point] of points.entries()) {
 		const offset = Math.min(span, Math.max(0, percents[index] - left));
 		const column = Math.min(CHART_WIDTH - 1, Math.round((offset / span) * (CHART_WIDTH - 1)));
 		const row = Math.min(CHART_HEIGHT - 1, Math.floor((point.tps / top) * (CHART_HEIGHT - 1)));
-		cells[CHART_HEIGHT - 1 - row][column] += 1;
+		const cell = cells[CHART_HEIGHT - 1 - row][column];
+		cell.count += 1;
+		cell.total += point.tps;
 	}
 
-	const middleRow = Math.floor((CHART_HEIGHT - 1) / 2);
-	const labels = new Map<number, string>([
-		[0, formatCount(top)],
-		[middleRow, formatCount(Math.round(top / 2))],
-		[CHART_HEIGHT - 1, "0"],
-	]);
-
 	const lines: string[] = cells.map((row, index) => {
-		const glyphs = row.map((count) => DENSITY[Math.min(DENSITY.length - 1, count)] ?? "#").join("");
-		const label = (labels.get(index) ?? "").padStart(4);
+		const glyphs = row
+			.map((cell) => {
+				if (cell.count === 0) return " ";
+				const glyph = DENSITY[Math.min(DENSITY.length - 1, cell.count)] ?? "#";
+				// Several replies in one cell are coloured by their average, so a
+				// dense slow cluster does not read as fast.
+				return paint ? paint(glyph, cell.total / cell.count / top) : glyph;
+			})
+			.join("");
+		const value = Math.round(((CHART_HEIGHT - 1 - index) / (CHART_HEIGHT - 1)) * top);
+		const label = formatCount(value).padStart(4);
 		const frame = index === CHART_HEIGHT - 1 ? "└" : "│";
 		return `${label} ${frame}${glyphs}`;
 	});
