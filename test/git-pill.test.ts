@@ -40,6 +40,8 @@ describe("git pill", () => {
 			"added · src/new.ts",
 			"untracked · notes.md",
 		]);
+		// The bubble ends on the last path: no footer row above the pill.
+		expect(content.hint).toBeUndefined();
 	});
 
 	it("summarises the paths past the twelfth", () => {

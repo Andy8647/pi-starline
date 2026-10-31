@@ -224,6 +224,12 @@ export type PolishedTuiConfig = {
 		packageVersion: ColorSpec;
 		gitCommit: ColorSpec;
 		gitMetricsAdded: ColorSpec;
+		/** The pull pill: one background per pull state, plus the bare open count. */
+		gitPrOpen: ColorSpec;
+		gitPrDraft: ColorSpec;
+		gitPrMerged: ColorSpec;
+		gitPrClosed: ColorSpec;
+		gitPrCount: ColorSpec;
 		username: ColorSpec;
 		time: ColorSpec;
 		os: ColorSpec;
@@ -285,6 +291,11 @@ export const defaultConfig: PolishedTuiConfig = {
 		packageVersion: "208",
 		gitCommit: "bold green",
 		gitMetricsAdded: "bold green",
+		gitPrOpen: "bold green",
+		gitPrDraft: "bold lavender",
+		gitPrMerged: "bold purple",
+		gitPrClosed: "bold red",
+		gitPrCount: "bold purple",
 		username: "bold yellow",
 		time: "bold yellow",
 		os: "bold white",
@@ -524,6 +535,11 @@ function normalizeColors(record: Record<string, unknown>): Partial<PolishedTuiCo
 		packageVersion: colorValue(record, "packageVersion"),
 		gitCommit: colorValue(record, "gitCommit"),
 		gitMetricsAdded: colorValue(record, "gitMetricsAdded"),
+		gitPrOpen: colorValue(record, "gitPrOpen"),
+		gitPrDraft: colorValue(record, "gitPrDraft"),
+		gitPrMerged: colorValue(record, "gitPrMerged"),
+		gitPrClosed: colorValue(record, "gitPrClosed"),
+		gitPrCount: colorValue(record, "gitPrCount"),
 		username: colorValue(record, "username"),
 		time: colorValue(record, "time"),
 		os: colorValue(record, "os"),

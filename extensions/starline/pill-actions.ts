@@ -31,6 +31,7 @@ import {
 	showPillBubble,
 } from "./pill-bubble";
 import { PILL_SEGMENT_VARIABLES } from "./pill-config";
+import { showPulls } from "./pull-bubble";
 import type { ThemeLike } from "./style";
 import { type FleetSnapshot, getActiveSubagentFleet } from "./subagent-fleet";
 import { activeTpsHistory, tpsBubbleContent } from "./tps-history";
@@ -504,7 +505,6 @@ export function gitBubbleContent(): PillBubbleContent {
 	return {
 		title: changes.length > 0 ? `${name} · ${changes.length} changed` : name,
 		body,
-		hint: changes.length > 0 ? "read-only" : undefined,
 	};
 }
 
@@ -527,6 +527,9 @@ function showGitChanges({ ctx, pill }: PillActionContext): void {
 export const PILL_ACTIONS: Readonly<Partial<Record<string, PillAction>>> = {
 	context: showContext,
 	git: showGitChanges,
+	gitPr: ({ ctx, pill }) => {
+		showPulls(ctx, pill);
+	},
 	model: showModels,
 	queue: showQueuedMessages,
 	subagents: showSubagents,
@@ -538,12 +541,19 @@ export const PILL_ACTIONS: Readonly<Partial<Record<string, PillAction>>> = {
  * The action for a pill span's key.
  *
  * A segment key Starline owns (a builtin segment) wins over a bridge, so a status
- * cannot hijack `queue`. Everything else is looked up in the published API, which
- * is how `extensionStatus:<key>` pills become clickable. No entry anywhere means
- * the pill is a label and the click falls through.
+ * cannot hijack `queue`. The comparison ignores case because `/starline <name>`
+ * lowercases its argument, and `gitPr` would otherwise only answer to the mouse.
+ * Everything else is looked up in the published API, which is how
+ * `extensionStatus:<key>` pills become clickable. No entry anywhere means the
+ * pill is a label and the click falls through.
  */
 export function pillActionFor(key: string): PillAction | undefined {
 	if (key in PILL_SEGMENT_VARIABLES) return PILL_ACTIONS[key];
+	const lowered = key.toLowerCase();
+	const segment = Object.keys(PILL_SEGMENT_VARIABLES).find(
+		(name) => name.toLowerCase() === lowered,
+	);
+	if (segment) return PILL_ACTIONS[segment];
 	return externalPillAction(key);
 }
 

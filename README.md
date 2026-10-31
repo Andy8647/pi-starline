@@ -39,7 +39,8 @@ Starline makes Pi's fullscreen mode feel like a finished terminal app:
 
 **Editor**
 
-- Bordered input box with an accent rail, as tall as its text; paste, selection and `ctrl+g` hints ride its top rule. `editorMinRows` keeps it a fixed minimum height.
+- Bordered input box with an accent rail, as tall as its text; paste, selection and `ctrl+g` hints ride its top rule. `editorMinRows` keeps it a fixed minimum height, and the blank row Pi keeps above the box is dropped.
+- A `gitPr` segment for the current branch's pull or merge request, with the checks mark and the repository's open count when the branch has none. Clicking it lists your pulls, the ones waiting on your review, and the rest you are involved in; a row opens in the browser.
 - User messages in the transcript are styled by [pi-tidy](https://github.com/Andy8647/pi-tidy), which draws them to match.
 - Copy-friendly mode drops the rail glyphs so terminal selection copies less chrome.
 

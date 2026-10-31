@@ -254,13 +254,14 @@ describe("git probes never write to the repository", () => {
 		writeFileSync(join(root, "file.txt"), "one\n");
 		run("add", "file.txt");
 		run("commit", "--quiet", "-m", "initial");
-		// A changed file is what makes git want to refresh the index on the next
-		// status: without the opt-out, `status` rewrites it. The mtime is pushed a
-		// little into the future, because git treats a file whose timestamp equals
-		// the index's as "racy" and may skip the refresh — which made the control
-		// test below fail now and then on fast disks.
+		// A tracked file whose timestamp moved is what makes git want to refresh the
+		// index on the next status: the content still hashes the same, so the only
+		// thing to update is the cached stat, and without the opt-out `status`
+		// writes that back. Editing the content would NOT do it — a file git can see
+		// is modified needs no stat refresh, so the index stays untouched either
+		// way. The mtime is pushed into the future so it cannot equal the index's,
+		// which git treats as "racy" and may re-hash instead.
 		const edited = join(root, "file.txt");
-		writeFileSync(edited, "one\ntwo\n");
 		const future = new Date(Date.now() + 2000);
 		utimesSync(edited, future, future);
 		return root;

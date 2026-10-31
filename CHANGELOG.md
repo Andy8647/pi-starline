@@ -10,6 +10,52 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [0.10.0] - 2026-10-31
+
+A pull request pill, and one blank row less above the input box.
+
+**Added**
+
+- **A `gitPr` pill.** It shows the current branch's pull or merge request: the
+  forge's marker in front of the number (`#123` on GitHub, `!123` on GitLab), the
+  state in the pill's colour (open, draft, merged, closed) and a mark for the
+  checks (`✓` passing, `✗` failing, `⋯` running). With no pull on the branch it
+  shows how many the repository has open (`12`, in the branch pill's purple,
+  `0` included). Clicking it, or running `/starline gitpr`, lists your open pulls
+  in three groups (yours, waiting on your review, the rest you are involved in),
+  and a row opens in the browser.
+- **No token to configure.** The pill reads through `gh` and `glab`, in the
+  repository directory, so it uses the login and host configuration those CLIs
+  already have. A pull is kept for a minute; a failed read keeps the last answer
+  and backs off (two minutes, doubling to ten), so a forge that is down or a
+  laptop off the network costs one process occasionally instead of two a minute.
+  Without the CLI, or on a forge they do not cover, there is no pill.
+- **`colors.gitPrOpen` / `gitPrDraft` / `gitPrMerged` / `gitPrClosed` /
+  `gitPrCount`** and **`icons.gitPrOpen` / `gitPrDraft` / `gitPrMerged` /
+  `gitPrClosed` / `gitPrList`** for the pill. `icons.gitPr*` stay empty in
+  `icons.mode: "ascii"`, where the `#`/`!` marker carries the meaning.
+
+**Changed**
+
+- **One blank row less above the input box.** Pi keeps a row in its above-editor
+  widget slot even when no extension fills it; the box draws its own edges, so
+  Starline clears it. A real widget in that slot (pi-subagents' fleet status,
+  pi-processes' dock) still gets Pi's separating row, and `features.editor: false`
+  gives the row back.
+- **The git bubble no longer ends on `read-only`.** The bubble is still read-only;
+  the footer row said so once per click.
+- **The pull list is open pulls only**, on both forges.
+
+**Fixed**
+
+- **The line-metrics probe no longer rewrites `.git/index`.** `git diff HEAD
+  --numstat` takes the index lock as a side effect, and `GIT_OPTIONAL_LOCKS=0`
+  does not stop that one, so a repo with a `gitMetrics` pill was having its index
+  rewritten on every refresh. The staged and unstaged halves are now read with
+  `diff-index` and `diff-files`, which do not touch it.
+- **`/starline gitpr` reaches the pull pill.** `/starline <name>` lowercases its
+  argument, so a camelCase segment key only answered to the mouse.
+
 ## [0.9.1] - 2026-10-30
 
 The context bubble shows what the window is made of, and the tps bubble plots

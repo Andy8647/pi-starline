@@ -125,7 +125,12 @@ Default config values — copy this and change any value you want:
 		"gitHostGithub": "",
 		"gitHostGitlab": "",
 		"gitHostBitbucket": "",
-		"gitHostGeneric": ""
+		"gitHostGeneric": "",
+		"gitPrOpen": "",
+		"gitPrDraft": "",
+		"gitPrMerged": "",
+		"gitPrClosed": "",
+		"gitPrList": ""
 	},
 	"colors": {
 		"model": "bold blue",
@@ -145,6 +150,11 @@ Default config values — copy this and change any value you want:
 		"packageVersion": "208",
 		"gitCommit": "bold green",
 		"gitMetricsAdded": "bold green",
+		"gitPrOpen": "bold green",
+		"gitPrDraft": "bold lavender",
+		"gitPrMerged": "bold purple",
+		"gitPrClosed": "bold red",
+		"gitPrCount": "bold purple",
 		"username": "bold yellow",
 		"time": "bold yellow",
 		"os": "bold white"
@@ -183,7 +193,7 @@ Default config values — copy this and change any value you want:
 - `icons`: every shown icon key is configurable; omit any key to use the Starline default. `icons.mode` is `auto` | `nerd` | `ascii` (default `auto`, same glyphs as nerd). ASCII mode swaps in plain fallbacks for statusline icons and runtime symbols — useful without a Nerd Font. Custom per-icon strings always win over mode defaults. Custom `icons.os` always wins; when left at the mode default, Starline maps the OS icon by platform. `rail` sets the vertical glyph drawn as the left rail of the editor frame when `copyFriendly` is disabled (default `│`; any single Unicode vertical or block glyph). `editorPrompt` controls an optional copy-friendly editor prompt glyph; the default is `""` so copy-friendly mode stays rail-free.
 - `colorSources`: `theme` maps styles through Pi theme tokens; `terminal` emits terminal colors. `/starline` switches these sources; manual JSON controls specific style values.
 - `features`: `editor` enables Starline's custom editor and selector borders. `statusLine` enables Starline's custom footer/status line. `copyFriendly` hides the editor's rail glyphs so native terminal selection copies less chrome. All three can be changed from `/starline` or direct slash-command arguments.
-- `git`: everything the git segments read, see [Git](#git). Also drives which optional probes run: a tag lookup only happens when `gitCommit` or `gitTag` is in `pill.segments`, `git diff --numstat` only for `gitMetrics`, and the remote lookup only for the `git` pill with `hostIcon` on. With none of `git`, `gitCommit`, `gitTag` or `gitMetrics` on the bar, the refresh does not read the repository at all.
+- `git`: everything the git segments read, see [Git](#git). Also drives which optional probes run: a tag lookup only happens when `gitCommit` or `gitTag` is in `pill.segments`, `git diff --numstat` only for `gitMetrics`, and the forge read only for `gitPr`, and the remote lookup only for the `git` pill with `hostIcon` on. With none of `git`, `gitCommit`, `gitTag`, `gitMetrics` or `gitPr` on the bar, the refresh does not read the repository at all.
 - `extensionStatuses`: controls third-party statuses published by other Pi extensions through `ctx.ui.setStatus()`. `defaultPlacement` and each `placements` value can be `off`, `left`, `middle`, or `right`. The `Extension segments` tab in `/starline` lists only statuses that are currently active. `editor`, which placed a status on the editor's metadata row until 0.9, is read as `right`. Publishing extensions can also make their pill clickable and open a bubble with their own detail through the pill API — see [Clickable pills for other extensions](pill-api.md).
 - The shown `editor*` values match the default `theme` source. Omit those keys to keep Starline's source-aware defaults when switching between `theme` and `terminal`.
 - `editorAccent` styles the editor rail when `features.copyFriendly` is disabled.
@@ -290,6 +300,7 @@ Notes:
 
 - **The `queue` pill is clickable.** It exists only while messages are waiting for the current turn to end, so it costs no space the rest of the time. Clicking it, or running `/starline queue`, opens a bubble on the pill that says how many messages are queued and shows their first lines. The pill shows an inbox icon and the count (`icons.queue`); when Pi does not let the count be read it says `queued` instead, and with icons off it reads `3 queued`. Clicking the pill again closes the bubble. While the queue pill is enabled, Pi's own `Steering: …` rows above the editor are hidden, so the queue is shown once rather than twice; remove `queue` from `pill.segments` (or switch the status line off) and Pi's rows come back. `colors.queue` (default `bold yellow`) colours the pill and the bubble
 - **The `model` pill is clickable.** A click lists the session's scoped models — the ones ctrl+p cycles, from `enabledModels` or `--models` — with the current one marked; click another to switch. A scoped model that pins a thinking level (`provider/model:high`) brings it along, as ctrl+p does. Without a scope it lists up to eight available models and points at `/model` for the rest. `/starline model` steps to the next one from the keyboard. While the agent works its icon slot becomes a spinner and the run's elapsed time joins the name; see [The model pill](#the-model-pill).
+- **The `gitPr` pill is clickable.** It shows the number with the forge's marker (`#123` on GitHub, `!123` on GitLab), coloured by state (open, draft, merged, closed) and followed by the checks mark (`✓` passing, `✗` failing, `⋯` running). With no pull on the branch it shows how many pulls the repository has open instead (`12` in the branch pill's purple, `0` included). Clicking it lists the current user's open pulls in three groups (yours, waiting on your review, the rest you are involved in); clicking a row opens it in the browser. The list is read when the bubble opens, not on the refresh timer. See [Pull requests](#pull-requests).
 - **The `subagents` pill is clickable.** With [`pi-subagents`](https://github.com/nicobailon/pi-subagents) installed, it appears while subagents are running and says how many (`2 agents`); it disappears when they finish, and without pi-subagents it never appears. Clicking it, or running `/starline subagents`, opens the bubble with one line per run: agent (and step label), model, time running and tokens so far. `/subagents-fleet` still opens pi-subagents' own inspector for steering and stopping. The numbers come from pi-subagents' public in-process RPC, refreshed when a run starts or ends rather than on a timer. If the pill replaces pi-subagents' FleetView and async widget for you, turn those off in `~/.pi/agent/extensions/subagent/config.json` with `"fleetView": false` and `"asyncWidget": false`. `colors.subagents` (default `bold green`) colours the pill and the bubble
 - **The `thinking` pill is clickable.** A click opens the same bubble with every thinking level the model supports, the current one marked; click another level to switch. Opening it changes nothing. `off` is not offered, so the pill stays on screen. `/starline thinking` steps to the next level from the keyboard and reports the step (`medium → high`).
 - **Colours need no extra configuration.** A segment's existing `colors.*` entry becomes the pill background. Text colour is picked automatically for legibility unless you set `fg:` yourself.
@@ -430,6 +441,40 @@ clickable: there is nothing behind it beyond the number.
 
 The numstat diff is the Starship “total dirty” view: staged and unstaged combined. It piggybacks on the git refresh with a hard 2 s timeout; a metrics-only failure degrades silently without discarding fresh branch/status data. On very large monorepos the diff may lag or be omitted on timeout.
 
+### Pull requests
+
+`gitPr` is the one git segment that reads the forge instead of the repository. Add it
+next to `git`:
+
+```json
+{
+	"pill": {
+		"segments": ["cwd", "git", "gitPr", "context"]
+	}
+}
+```
+
+It asks `gh` on GitHub and `glab` on GitLab, in the repository directory, so it uses
+the login and the host configuration those CLIs already have. A pull is read for the
+current branch; when the branch has none, the repository's open count takes its place
+(`12` rather than `#12`, and `0` when nothing is open). The answer is kept for a minute
+and a failed read keeps the last good one and backs off (two minutes, doubling to ten),
+so a forge that is down or a laptop off the network costs one process occasionally
+instead of two a minute. With no `gh`/`glab`, or a forge the CLIs do not cover, there
+is nothing to show and no pill.
+
+| Key                                                                                                      | What it does                                                                                                     |
+| -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `colors.gitPrOpen`                                                                                       | The pull is open (default `bold green`).                                                                         |
+| `colors.gitPrDraft` (default `bold lavender`), `gitPrMerged` (`bold purple`), `gitPrClosed` (`bold red`) | Same, per state.                                                                                                 |
+| `colors.gitPrCount`                                                                                      | The bare open count. Defaults to `bold purple`, the same as `gitBranch`, so the two git pills read as one group. |
+| `icons.gitPrOpen` / `gitPrDraft` / `gitPrMerged` / `gitPrClosed`                                         | octicons for the four states.                                                                                    |
+| `icons.gitPrList`                                                                                        | The glyph in front of the open count.                                                                            |
+
+Review state is not on the pill: a second `✓`/`✗` next to the checks mark would be
+ambiguous at one character each. The bubble lists each pull's state, and the checks
+mark on the pill already turns red when a check fails.
+
 ## Box height
 
 The editor box is its two rules, a blank row above and below the text, and the
@@ -452,7 +497,12 @@ second line. `1` (the default) is the height of the text alone; up to `10`. A
 click on one of those blank rows puts the caret at the end of the draft.
 
 The box has no row of its own for the model or the hints: the model is in the
-pill footer, and the hints ride the top rule (see below).
+pill footer, and the hints ride the top rule (see below). It also sits directly
+under the transcript: Pi keeps one blank row in its above-editor widget slot when
+nothing fills it, and the box draws its own edges, so Starline drops that row. An
+extension widget that really uses the slot (pi-subagents' fleet status,
+pi-processes' dock) still gets Pi's separating row above it, and turning
+`features.editor` off gives the blank row back.
 
 ## Paste collapse threshold
 

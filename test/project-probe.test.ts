@@ -29,13 +29,22 @@ function readers(git: GitReadResult = branchStatus) {
 		kind: "ok" as const,
 		result: { version: "1.2.3", ecosystem: "node" },
 	}));
+	const readPullSnapshot = vi.fn(async () => undefined);
 	const deps: ProjectProbeReaders = {
 		readGitStatus,
 		readGitHost,
+		readPullSnapshot,
 		readRuntimeInfo,
 		readPackageVersion,
 	};
-	return { deps, readGitStatus, readGitHost, readRuntimeInfo, readPackageVersion };
+	return {
+		deps,
+		readGitStatus,
+		readGitHost,
+		readPullSnapshot,
+		readRuntimeInfo,
+		readPackageVersion,
+	};
 }
 
 describe("probeProject", () => {
@@ -102,6 +111,27 @@ describe("probeProject", () => {
 		const withoutGit = readers();
 		await probeProject("/tmp/project", configWith(["cwd"], withIcon), withoutGit.deps);
 		expect(withoutGit.readGitHost).not.toHaveBeenCalled();
+	});
+
+	it("asks the forge for a pull only when its pill is on the bar", async () => {
+		const without = readers();
+		await probeProject("/tmp/project", configWith(["git"]), without.deps);
+		expect(without.readPullSnapshot).not.toHaveBeenCalled();
+
+		const withPill = readers();
+		const probe = await probeProject("/tmp/project", configWith(["git", "gitPr"]), withPill.deps);
+		expect(withPill.readPullSnapshot).toHaveBeenCalledWith("/tmp/project", "main");
+		expect(probe.pull).toEqual({ snapshot: undefined });
+	});
+
+	it("has no pull to ask about on a detached HEAD", async () => {
+		const detached: GitReadResult = { kind: "ok", status: emptyGitStatus() };
+		const { deps, readPullSnapshot } = readers(detached);
+
+		const probe = await probeProject("/tmp/project", configWith(["git", "gitPr"]), deps);
+
+		expect(readPullSnapshot).not.toHaveBeenCalled();
+		expect(probe.pull).toEqual({ snapshot: undefined });
 	});
 
 	it("reads the project version only when its pill is on the bar", async () => {
