@@ -45,6 +45,7 @@ export const PILL_SEGMENT_VARIABLES: Record<string, string> = {
 	gitCommit: "git_commit",
 	gitTag: "git_tag",
 	gitMetrics: "git_metrics",
+	gitPr: "git_pr",
 	runtime: "runtime",
 	context: "context",
 	tps: "tps",

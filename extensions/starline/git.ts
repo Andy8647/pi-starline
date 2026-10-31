@@ -354,8 +354,10 @@ export type ReadGitStatusOptions = {
 	/** Run `git describe --tags --exact-match HEAD` for the git_commit segment. */
 	readExactTag?: boolean;
 	/**
-	 * Run `git diff HEAD --numstat` for the git_metrics segment. Uses the
-	 * Starship-like “total dirty” view (staged + unstaged combined).
+	 * Run the tree-vs-worktree numstat for the git_metrics segment. Uses the
+	 * Starship-like “total dirty” view (staged + unstaged combined), read with
+	 * plumbing: `git diff HEAD --numstat` answers the same question but refreshes
+	 * the index as a side effect, and `GIT_OPTIONAL_LOCKS=0` does not stop that one.
 	 */
 	readMetrics?: boolean;
 	/** Add `--ignore-submodules=all` to the metrics diff when requested. */
@@ -369,8 +371,25 @@ export async function readGitStatus(
 	const readExactTag = options.readExactTag === true;
 	const readMetrics = options.readMetrics === true;
 	try {
-		const numstatArgs = ["diff", "HEAD", "--numstat"];
-		if (options.ignoreSubmodules) numstatArgs.push("--ignore-submodules=all");
+		const numstatSuffix = options.ignoreSubmodules ? ["--ignore-submodules=all"] : [];
+		// HEAD vs the index (staged) and the index vs the worktree (unstaged): the
+		// two halves of `git diff HEAD`, from commands that do not take the index
+		// lock. The counts are summed, which matches the combined diff except where
+		// the same line was staged and then edited again.
+		const stagedNumstatArgs = ["diff-index", "--numstat", "HEAD", ...numstatSuffix];
+		const unstagedNumstatArgs = ["diff-files", "--numstat", ...numstatSuffix];
+		const readNumstat = (args: string[]) =>
+			execFileAsync("git", args, {
+				cwd,
+				env: GIT_READ_ENV,
+				timeout: GIT_COMMAND_TIMEOUT_MS,
+			}).then(
+				(r) => ({
+					stdout: typeof r.stdout === "string" ? r.stdout : String(r.stdout),
+					failed: false as const,
+				}),
+				() => ({ stdout: "", failed: true as const }),
+			);
 		const [{ stdout: statusStdout }, stashResult, tagResult, metricsResult] = await Promise.all([
 			execFileAsync("git", ["status", "--porcelain=2", "--branch"], {
 				cwd,
@@ -393,13 +412,11 @@ export async function readGitStatus(
 					)
 				: Promise.resolve({ stdout: "" }),
 			readMetrics
-				? execFileAsync("git", numstatArgs, {
-						cwd,
-						env: GIT_READ_ENV,
-						timeout: GIT_COMMAND_TIMEOUT_MS,
-					}).then(
-						(r) => ({ stdout: typeof r.stdout === "string" ? r.stdout : String(r.stdout) }),
-						() => ({ stdout: "", failed: true as const }),
+				? Promise.all([readNumstat(stagedNumstatArgs), readNumstat(unstagedNumstatArgs)]).then(
+						(parts) => ({
+							stdout: parts.map((part) => part.stdout).join("\n"),
+							failed: parts.every((part) => part.failed),
+						}),
 					)
 				: Promise.resolve({ stdout: "", failed: true as const }),
 		]);
@@ -459,29 +476,28 @@ export async function readGitStatus(
  */
 export type GitHost = "github" | "gitlab" | "bitbucket" | "generic";
 
+/**
+ * An `origin` remote split the way a forge API wants it.
+ *
+ * `namespace` is the owner on GitHub and can be several segments deep on GitLab
+ * (`group/subgroup`), so the two are kept apart rather than joined into one path
+ * every caller would have to split again.
+ */
+export type GitRemote = {
+	host: GitHost;
+	/** Everything before the repository name: `owner`, or `group/subgroup`. */
+	namespace: string;
+	/** Repository name, without the `.git` suffix. */
+	name: string;
+};
+
 /** Cached for minutes: a repo's origin remote effectively never changes mid-session. */
 const GIT_HOST_TTL_MS = 10 * 60_000;
 
-const gitHostCache = new Map<string, { host: GitHost | undefined; expiresAt: number }>();
+const gitHostCache = new Map<string, { remote: GitRemote | undefined; expiresAt: number }>();
 
-/** Classify a remote URL. Handles scp-style (`git@host:path`) and URL forms. */
-export function parseGitRemoteHost(url: string): GitHost | undefined {
-	const trimmed = url.trim();
-	if (!trimmed) return undefined;
-
-	let hostname: string | undefined;
-	const scpLike = /^[A-Za-z0-9._-]+@([^:/\s]+):/.exec(trimmed);
-	if (scpLike) {
-		hostname = scpLike[1];
-	} else {
-		try {
-			hostname = new URL(trimmed).hostname;
-		} catch {
-			return undefined;
-		}
-	}
-	if (!hostname) return undefined;
-
+/** Classify a remote's hostname. */
+export function classifyGitHost(hostname: string): GitHost {
 	const host = hostname.toLowerCase();
 	// Subdomain prefixes catch the usual self-hosted naming (gitlab.acme.com).
 	if (host === "github.com" || host.endsWith(".github.com") || host.startsWith("github."))
@@ -493,30 +509,87 @@ export function parseGitRemoteHost(url: string): GitHost | undefined {
 	return "generic";
 }
 
-/**
- * Resolve the forge behind `origin`, or undefined when there is no origin
- * remote or git is unavailable. Cached so the icon costs nothing per frame.
- */
-export async function readGitHost(cwd: string): Promise<GitHost | undefined> {
-	const cached = gitHostCache.get(cwd);
-	if (cached && cached.expiresAt > Date.now()) return cached.host;
+function splitRemotePath(pathname: string): { namespace: string; name: string } | undefined {
+	let path = pathname.replace(/^\/+/, "").replace(/\/+$/, "");
+	if (path.endsWith(".git")) path = path.slice(0, -".git".length);
+	if (!path) return undefined;
+	let decoded: string;
+	try {
+		decoded = decodeURIComponent(path);
+	} catch {
+		decoded = path;
+	}
+	const segments = decoded.split("/").filter(Boolean);
+	if (segments.length < 2) return undefined;
+	const name = segments[segments.length - 1];
+	if (!name) return undefined;
+	return { namespace: segments.slice(0, -1).join("/"), name };
+}
 
-	let host: GitHost | undefined;
+/**
+ * Split a remote URL into its forge and repository. Handles scp-style
+ * (`git@host:path`), URL forms, and the nested namespaces GitLab allows.
+ */
+export function parseGitRemote(url: string): GitRemote | undefined {
+	const trimmed = url.trim();
+	if (!trimmed) return undefined;
+
+	let hostname: string | undefined;
+	let pathname: string | undefined;
+	const scpLike = /^[A-Za-z0-9._-]+@([^:/\s]+):(.*)$/.exec(trimmed);
+	if (scpLike) {
+		hostname = scpLike[1];
+		pathname = scpLike[2];
+	} else {
+		try {
+			const parsed = new URL(trimmed);
+			hostname = parsed.hostname;
+			pathname = parsed.pathname;
+		} catch {
+			return undefined;
+		}
+	}
+	if (!hostname || !pathname) return undefined;
+
+	const split = splitRemotePath(pathname);
+	if (!split) return undefined;
+	return { host: classifyGitHost(hostname), namespace: split.namespace, name: split.name };
+}
+
+/** Classify a remote URL. Kept for the branch icon, which wants only the host. */
+export function parseGitRemoteHost(url: string): GitHost | undefined {
+	return parseGitRemote(url)?.host;
+}
+
+/**
+ * Resolve `origin`, or undefined when there is no origin remote or git is
+ * unavailable. Cached so the icon and the pull lookups cost nothing per frame.
+ */
+export async function readGitRemote(cwd: string): Promise<GitRemote | undefined> {
+	const cached = gitHostCache.get(cwd);
+	if (cached && cached.expiresAt > Date.now()) return cached.remote;
+
+	let remote: GitRemote | undefined;
 	try {
 		const { stdout } = await execFileAsync("git", ["remote", "get-url", "origin"], {
 			cwd,
 			env: GIT_READ_ENV,
 			timeout: GIT_COMMAND_TIMEOUT_MS,
 		});
-		host = parseGitRemoteHost(typeof stdout === "string" ? stdout : String(stdout));
+		remote = parseGitRemote(typeof stdout === "string" ? stdout : String(stdout));
 	} catch {
-		host = undefined;
+		remote = undefined;
 	}
 
-	gitHostCache.set(cwd, { host, expiresAt: Date.now() + GIT_HOST_TTL_MS });
-	return host;
+	gitHostCache.set(cwd, { remote, expiresAt: Date.now() + GIT_HOST_TTL_MS });
+	return remote;
 }
 
+export async function readGitHost(cwd: string): Promise<GitHost | undefined> {
+	return (await readGitRemote(cwd))?.host;
+}
+
+/** Forget the cached remotes, for tests that start from an empty cache. */
 export function __resetGitHostCacheForTests(): void {
 	gitHostCache.clear();
 }

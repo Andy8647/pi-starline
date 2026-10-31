@@ -22,7 +22,7 @@ export type GitProbeOptions = {
 };
 
 /** Pills whose content comes from a git read. */
-const GIT_SEGMENTS = ["git", "gitCommit", "gitTag", "gitMetrics"] as const;
+const GIT_SEGMENTS = ["git", "gitCommit", "gitTag", "gitMetrics", "gitPr"] as const;
 
 /** Read options for `readGitStatus` plus the host lookup, from one segment list. */
 export function gitProbeOptions(

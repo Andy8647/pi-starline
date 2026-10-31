@@ -49,6 +49,12 @@ export type IconGlyphs = {
 	gitHostGitlab: string;
 	gitHostBitbucket: string;
 	gitHostGeneric: string;
+	/** The pull pill: one glyph per pull state, plus the repository open count. */
+	gitPrOpen: string;
+	gitPrDraft: string;
+	gitPrMerged: string;
+	gitPrClosed: string;
+	gitPrList: string;
 };
 
 export type ResolvedIcons = IconGlyphs & { mode: IconMode };
@@ -86,6 +92,11 @@ export const ICON_GLYPH_KEYS = [
 	"gitHostGitlab",
 	"gitHostBitbucket",
 	"gitHostGeneric",
+	"gitPrOpen",
+	"gitPrDraft",
+	"gitPrMerged",
+	"gitPrClosed",
+	"gitPrList",
 ] as const satisfies readonly (keyof IconGlyphs)[];
 
 /**
@@ -132,6 +143,13 @@ export const NERD_DEFAULT_ICONS: IconGlyphs = {
 	gitHostGitlab: "",
 	gitHostBitbucket: "",
 	gitHostGeneric: "",
+	// oct-git_pull_request, oct-git_pull_request_draft, oct-git_merge,
+	// oct-git_pull_request_closed, oct-list_unordered.
+	gitPrOpen: "",
+	gitPrDraft: "",
+	gitPrMerged: "",
+	gitPrClosed: "",
+	gitPrList: "",
 };
 
 export const ASCII_DEFAULT_ICONS: IconGlyphs = {
@@ -168,6 +186,12 @@ export const ASCII_DEFAULT_ICONS: IconGlyphs = {
 	gitHostGitlab: "",
 	gitHostBitbucket: "",
 	gitHostGeneric: "",
+	// The pull pill's own marker (#123 / !123) carries the meaning here.
+	gitPrOpen: "",
+	gitPrDraft: "",
+	gitPrMerged: "",
+	gitPrClosed: "",
+	gitPrList: "",
 };
 
 export const OS_PLATFORM_ICONS_NERD: Record<string, string> = {

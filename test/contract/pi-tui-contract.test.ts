@@ -94,9 +94,10 @@ function expectReplaceable(target: object, owner: string, name: string): void {
 
 /**
  * The coding-agent side the pills reach into. Wrapped: `prompt` and
- * `getContextUsage` record the live session (live-session.ts), and
- * `updatePendingMessagesDisplay` is what hides Pi's queue rows (queue-rows.ts).
- * Read: what the queue and thinking pills call on that session.
+ * `getContextUsage` record the live session (live-session.ts),
+ * `updatePendingMessagesDisplay` is what hides Pi's queue rows (queue-rows.ts),
+ * and `renderWidgetContainer` is what drops the blank row above the editor
+ * (dock-gap.ts). Read: what the queue and thinking pills call on that session.
  */
 describe("coding-agent contract", () => {
 	it.each(["prompt", "getContextUsage"])(
@@ -117,5 +118,9 @@ describe("coding-agent contract", () => {
 
 	it("InteractiveMode exposes updatePendingMessagesDisplay as a replaceable method", () => {
 		expectReplaceable(InteractiveMode.prototype, "InteractiveMode", "updatePendingMessagesDisplay");
+	});
+
+	it("InteractiveMode exposes renderWidgetContainer as a replaceable method", () => {
+		expectReplaceable(InteractiveMode.prototype, "InteractiveMode", "renderWidgetContainer");
 	});
 });

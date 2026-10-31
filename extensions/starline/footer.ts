@@ -31,6 +31,7 @@ import { collectPillInputs, type PillSpan, renderPillBar } from "./pill";
 import { pillActionFor, queuedSegmentText, runPillAction } from "./pill-actions";
 import { clearPillAnchors, setPillAnchors } from "./pill-anchors";
 import { closePillBubble, isPillBubbleOpenFor, type PillAnchor } from "./pill-bubble";
+import { pullColorSpec, pullSegmentText } from "./pull";
 import type { FooterState } from "./state";
 import { renderStyleForSource } from "./style";
 import { subagentsSegmentText } from "./subagent-fleet";
@@ -453,6 +454,13 @@ export function installFooter(
 							return git.tag;
 						case "git_metrics":
 							return git.metrics;
+						case "git_pr":
+							return renderStyleForSource(
+								theme,
+								colorSource,
+								pullColorSpec(state.pull, config.colors),
+								pullSegmentText(state.pull, config.icons),
+							);
 						default:
 							return "";
 					}
@@ -486,6 +494,8 @@ export function installFooter(
 							return config.colors.gitCommit;
 						case "gitMetrics":
 							return config.colors.gitMetricsAdded;
+						case "gitPr":
+							return pullColorSpec(state.pull, config.colors);
 						case "runtime":
 							return state.runtime?.style ?? config.colors.runtimePrefix;
 						case "context":

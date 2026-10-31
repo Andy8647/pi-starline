@@ -31,6 +31,7 @@ import {
 } from "./config";
 import { setContextApi } from "./context-breakdown";
 import { setActiveContextSnapshot } from "./context-live";
+import { installAboveEditorGapHiding, rebuildWidgetSlots } from "./dock-gap";
 import {
 	getStarlineEditorBaseFactory,
 	isStarlineEditorFactory,
@@ -62,6 +63,7 @@ import {
 	startProjectRefreshInterval,
 } from "./project-refresh";
 import { applyProjectRefreshToState } from "./project-state";
+import { setActivePull } from "./pull-live";
 import { installNativeQueueRowHiding } from "./queue-rows";
 import { installSelectorBorderStyle } from "./selector-border";
 import { SessionLifecycle } from "./session-lifecycle";
@@ -156,6 +158,7 @@ export default function (pi: ExtensionAPI) {
 	let disposeMouse: (() => void) | undefined;
 	let cleanupSessionCapture: (() => void) | undefined;
 	let cleanupQueueRows: (() => void) | undefined;
+	let cleanupDockGap: () => void = () => {};
 
 	const refresh = () => {
 		if (sessionLifecycle.isCurrent()) requestFooterRender?.();
@@ -206,6 +209,8 @@ export default function (pi: ExtensionAPI) {
 			previousCwd: lastProjectCwd,
 			...probe,
 		});
+		// The pull bubble reads the same snapshot the pill draws from.
+		setActivePull(state.pull);
 	};
 
 	const projectRefreshScheduler = createProjectRefreshScheduler(refreshProjectState, refresh);
@@ -258,16 +263,24 @@ export default function (pi: ExtensionAPI) {
 		};
 	};
 
-	const installPrototypePatches = () => {
+	const installPrototypePatches = (ctx: ExtensionContext) => {
 		if (prototypePatchesInstalled) return;
 		cleanupPrototypePatches = installSelectorBorderStyle(getActiveTheme, getCurrentConfig);
+		// Starline draws the box, so Pi's blank separator row above it is a gap with
+		// nothing to separate. See `dock-gap.ts`.
+		cleanupDockGap = installAboveEditorGapHiding(() => getCurrentConfig().features.editor);
 		prototypePatchesInstalled = true;
+		// Pi filled the slot once at startup, before this patch existed.
+		rebuildWidgetSlots(ctx);
 	};
 
-	const uninstallPrototypePatches = () => {
+	const uninstallPrototypePatches = (ctx: ExtensionContext) => {
 		cleanupPrototypePatches();
 		cleanupPrototypePatches = () => {};
+		cleanupDockGap();
+		cleanupDockGap = () => {};
 		prototypePatchesInstalled = false;
+		rebuildWidgetSlots(ctx);
 	};
 
 	const uninstallMouse = () => {
@@ -455,7 +468,7 @@ export default function (pi: ExtensionAPI) {
 			return true;
 		}
 
-		installPrototypePatches();
+		installPrototypePatches(ctx);
 		const currentStarlineBaseFactory = getStarlineEditorBaseFactory<EditorFactory>(currentFactory);
 		if (currentFactory && isStarlineEditorFactory(currentFactory)) {
 			wrappedEditorFactory = currentStarlineBaseFactory;
@@ -486,7 +499,7 @@ export default function (pi: ExtensionAPI) {
 		const currentFactory = ctx.ui.getEditorComponent();
 		if (currentFactory && !isStarlineEditorFactory(currentFactory)) return false;
 
-		uninstallPrototypePatches();
+		uninstallPrototypePatches(ctx);
 		ctx.ui.setEditorComponent(
 			editorInstallMode === "wrapper" && wrappedEditorFactory ? wrappedEditorFactory : undefined,
 		);
@@ -562,7 +575,7 @@ export default function (pi: ExtensionAPI) {
 	const installUi = (ctx: ExtensionContext) => {
 		if (!isTuiContext(ctx)) return;
 		activeTheme = ctx.ui.theme;
-		uninstallPrototypePatches();
+		uninstallPrototypePatches(ctx);
 		footerInstalled = false;
 		editorInstalled = false;
 		installedEditorFactory = undefined;
@@ -600,9 +613,10 @@ export default function (pi: ExtensionAPI) {
 			uninstallQueueRowHiding();
 			setActiveSubagentFleet(undefined);
 			setActiveGitStatus(undefined);
+			setActivePull(undefined);
 			setActiveContextSnapshot(undefined);
 			setModelSwitcher(undefined);
-			uninstallPrototypePatches();
+			uninstallPrototypePatches(ctx);
 			setWorkingIndicator(undefined);
 			stopSessionTimer();
 			stopProjectRefresh();

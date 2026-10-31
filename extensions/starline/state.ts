@@ -10,6 +10,7 @@ import {
 } from "./format";
 import type { GitHost, GitStatusSummary } from "./git";
 import type { PackageVersionResult } from "./package-version";
+import type { PullSnapshot } from "./pull";
 import type { RuntimeInfo } from "./runtime";
 
 export type FooterState = GitStatusSummary & {
@@ -24,6 +25,8 @@ export type FooterState = GitStatusSummary & {
 	runtime?: RuntimeInfo;
 	gitHost?: GitHost;
 	packageVersion?: PackageVersionResult;
+	/** The branch's pull, or the repository's open count, as last read. */
+	pull?: PullSnapshot;
 	sessionStartEpoch?: number;
 };
 
@@ -40,6 +43,7 @@ export function createInitialState(gitDefaults: GitStatusSummary): FooterState {
 		runtime: undefined,
 		gitHost: undefined,
 		packageVersion: undefined,
+		pull: undefined,
 		sessionStartEpoch: Date.now(),
 		...gitDefaults,
 	};

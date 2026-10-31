@@ -123,6 +123,7 @@ const pillSegmentLabels: Record<string, string> = {
 	gitCommit: "Git commit",
 	gitTag: "Git tag",
 	gitMetrics: "Git line metrics",
+	gitPr: "Pull request",
 	runtime: "Runtime",
 	context: "Context",
 	cost: "Cost",
