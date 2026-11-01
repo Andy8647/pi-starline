@@ -27,6 +27,8 @@ export type FooterState = GitStatusSummary & {
 	runtime?: RuntimeInfo;
 	gitHost?: GitHost;
 	packageVersion?: PackageVersionResult;
+	/** The newest tag, for the mark that says the version above is unreleased. */
+	packageTag?: string;
 	/** The branch's pull, or the repository's open count, as last read. */
 	pull?: PullSnapshot;
 	sessionStartEpoch?: number;

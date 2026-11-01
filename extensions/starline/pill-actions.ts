@@ -23,6 +23,7 @@ import {
 	readThinkingLevels,
 	setThinkingLevel,
 } from "./live-session";
+import { type PackageSummary, packageBubbleContent, readPackageSummary } from "./package-summary";
 import { externalPillAction } from "./pill-api";
 import {
 	type PillAnchor,
@@ -427,6 +428,33 @@ function showContext({ ctx, pill }: PillActionContext): void {
 	whileOpen(handle, () => handle.refresh());
 }
 
+/**
+ * The package bubble: what the version on the pill is measured against.
+ *
+ * The reads are async (two git processes) so the bubble opens on the last answer
+ * and fills in, rather than delaying the click. Reopening in the same directory
+ * starts from that answer instead of an empty bubble.
+ */
+let cachedSummary: { cwd: string; summary: PackageSummary } | undefined;
+
+function showPackage({ ctx, pill }: PillActionContext): void {
+	const theme = ctx.ui.theme as unknown as ThemeLike;
+	let summary = cachedSummary?.cwd === ctx.cwd ? cachedSummary.summary : undefined;
+	const handle = showPillBubble(
+		ctx,
+		() =>
+			summary
+				? packageBubbleContent(summary, theme)
+				: { title: "Package", body: ["Reading the manifest…"], hint: "esc closes" },
+		pill,
+	);
+	void readPackageSummary(ctx.cwd).then((next) => {
+		cachedSummary = { cwd: ctx.cwd, summary: next };
+		summary = next;
+		handle.refresh();
+	});
+}
+
 function showTps({ ctx, pill }: PillActionContext): void {
 	if ((activeTpsHistory()?.all().length ?? 0) === 0) {
 		if (ctx.hasUI) ctx.ui.notify("No throughput measured yet", "info");
@@ -531,6 +559,7 @@ export const PILL_ACTIONS: Readonly<Partial<Record<string, PillAction>>> = {
 		showPulls(ctx, pill);
 	},
 	model: showModels,
+	packageVersion: showPackage,
 	queue: showQueuedMessages,
 	subagents: showSubagents,
 	thinking: showThinkingLevel,

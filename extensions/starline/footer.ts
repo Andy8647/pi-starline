@@ -21,6 +21,7 @@ import {
 	contextColorTier,
 	formatCwdLabel,
 	formatOsLabel,
+	formatPackagePillLabel,
 	formatTimeLabel,
 	formatUsernameHostLabel,
 } from "./format";
@@ -465,12 +466,17 @@ export function installFooter(
 						case "tps":
 							return renderStyleForSource(theme, colorSource, config.colors.tps, tpsDisplay);
 						case "package_version":
-							return state.packageVersion?.version
+							return state.packageVersion
 								? renderStyleForSource(
 										theme,
 										colorSource,
 										config.colors.packageVersion,
-										state.packageVersion.version,
+										formatPackagePillLabel(
+											state.packageVersion,
+											state.packageTag,
+											iconMode,
+											config.icons.package,
+										),
 									)
 								: "";
 						case "git_commit":

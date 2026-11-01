@@ -924,7 +924,9 @@ describe("Pi docs compliance", () => {
 
 		const renderWithPackage = (enabled: boolean) => {
 			const state = createInitialState(emptyGitStatus());
-			state.packageVersion = enabled ? { ecosystem: "nodejs", version: "1.2.3" } : undefined;
+			state.packageVersion = enabled
+				? { ecosystem: "nodejs", version: "1.2.3", file: "package.json" }
+				: undefined;
 			const config: PolishedTuiConfig = {
 				...defaultConfig,
 				pill: {

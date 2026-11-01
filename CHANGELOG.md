@@ -17,6 +17,16 @@ context pill stops reading `0%` on a fresh session.
 
 **Added**
 
+- **A package pill that answers "what version is this, and what was released?"**
+  The `packageVersion` segment now carries the package glyph and, when the
+  newest git tag names a different release, a `*`. Clicking it opens the
+  summary: the ecosystem, whether the manifest publishes anything, the version,
+  the tag HEAD is measured against and how far ahead it is. A workspace
+  (`pnpm-workspace.yaml`, `package.json#workspaces`, Cargo members, `go.work`,
+  `deno.json`, `[tool.uv.workspace]`) is listed package by package, each row
+  marked `changed` when the diff since the tag touched it. Nothing on that list
+  is inferred: a version comes from a manifest, "released" from a tag, and
+  "changed" from the two compared.
 - **A way into the repository from the pull bubble.** The bubble now ends with
   `↗ Open repository`, which opens the remote's own page. The URL is built from
   the remote the way GitHub and GitLab resolve it, so a self-hosted forge keeps
