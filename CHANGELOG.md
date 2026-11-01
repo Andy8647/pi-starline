@@ -10,6 +10,24 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [0.10.1] - 2026-11-01
+
+Copying a right-aligned user message leaves its frame behind.
+
+**Fixed**
+
+- **Copied text from an indented box.** With `tidy.userMessageAlign: "right"`,
+  pi-tidy indents the whole user message and sets the icon and clock into the
+  top border's right edge. The copier only recognised a left-aligned label on a
+  box at column 0, so it found no frame at all and fell back to Pi's verbatim
+  copy: the indentation, both `│` columns and the labelled border row all
+  reached the clipboard. Frame edges now have to sit in the same column as well
+  as be the same width, and a frame's content is trimmed at the column its own
+  left edge sits in, so an indented box copies as its text.
+- **Equal-width edges at different indents are not one box.** An indented
+  rounded edge no longer pairs with a flush one, so a box nested inside a
+  selection cannot take the rows of the box around it with it.
+
 ## [0.10.0] - 2026-10-31
 
 A pull request pill, and one blank row less above the input box.
