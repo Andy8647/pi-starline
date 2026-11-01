@@ -75,7 +75,7 @@ const RULE_ROW_RE = /^─+$/;
  * pi-tidy's rounded frame edges; the top one may carry a label (`╭─  ─╮`,
  * a "frame" user message). Square corners are content (tables).
  */
-const FRAME_OPEN_RE = /^╭(?:─ [^─]+ )?─*╮$/;
+const FRAME_OPEN_RE = /^╭─*(?: [^─]+ ─+)?╮$/;
 const FRAME_CLOSE_RE = /^╰─*╯$/;
 
 function strippedRow(lines: readonly string[], cache: string[], row: number): string {
@@ -134,31 +134,33 @@ export function cleanTranscriptRows(
 	/** Rows to drop: paired frame edges and paired border rules. */
 	const dropped = new Set<number>();
 	/** pi-toolbox frame content rows: strip one `│` from each side. */
-	const frameContent = new Set<number>();
+	const frameContent = new Map<number, number>();
 	/** Rail user message rows, and the prefix each one sheds. */
 	const railContent = new Map<number, string>();
 
 	// Pass 1 — rounded frames. Edges pair strictly by equal width, inner rows
 	// are content. A rounded box drawn inside bash output can mis-pair, but the
 	// rows it would swallow are inside a real frame and get cleaned anyway.
-	const openEdges: Array<{ row: number; width: number }> = [];
-	const framePairs: Array<[number, number]> = [];
+	const openEdges: Array<{ row: number; width: number; left: number }> = [];
+	const framePairs: Array<[number, number, number]> = [];
 	for (let row = 0; row < lines.length; row++) {
-		const text = strippedRow(lines, cache, row);
+		const raw = strippedRow(lines, cache, row);
+		const left = raw.length - raw.trimStart().length;
+		const text = raw.trim();
 		if (FRAME_OPEN_RE.test(text)) {
-			openEdges.push({ row, width: visibleWidth(text) });
+			openEdges.push({ row, width: visibleWidth(text), left });
 		} else if (FRAME_CLOSE_RE.test(text)) {
 			const open = openEdges[openEdges.length - 1];
-			if (open && open.width === visibleWidth(text)) {
+			if (open && open.width === visibleWidth(text) && open.left === left) {
 				openEdges.pop();
-				framePairs.push([open.row, row]);
+				framePairs.push([open.row, row, left]);
 			}
 		}
 	}
-	for (const [open, close] of framePairs) {
+	for (const [open, close, left] of framePairs) {
 		dropped.add(open);
 		dropped.add(close);
-		for (let row = open + 1; row < close; row++) frameContent.add(row);
+		for (let row = open + 1; row < close; row++) frameContent.set(row, left);
 	}
 
 	// Pass 2 — full-width rule pairs. Two rules of equal width with at least
@@ -192,8 +194,15 @@ export function cleanTranscriptRows(
 			continue;
 		}
 		const text = strippedRow(lines, cache, row);
-		if (frameContent.has(row) && text.startsWith("│") && text.endsWith("│") && text.length >= 2) {
-			rows.push({ text: text.slice(1, -1), leftTrim: 1 });
+		const left = frameContent.get(row);
+		const framed = left === undefined ? "" : text.slice(left).trimEnd();
+		if (
+			left !== undefined &&
+			framed.startsWith("│") &&
+			framed.endsWith("│") &&
+			framed.length >= 2
+		) {
+			rows.push({ text: framed.slice(1, -1), leftTrim: left + 1 });
 			changed = true;
 			continue;
 		}
