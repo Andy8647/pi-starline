@@ -26,6 +26,8 @@ import { activePull } from "./pull-live";
 
 const LIST_TTL_MS = 60_000;
 const MAX_TITLE_COLUMNS = 44;
+/** Always the last row: the way out of the list and into the repository. */
+const REPO_ROW_TEXT = "↗ Open repository";
 
 /** The groups in the order the bubble lists them, with the heading each gets. */
 const GROUPS: Array<{ group: PullGroup; heading: string }> = [
@@ -41,9 +43,11 @@ const STATE_WORDS: Record<PullState, string> = {
 	closed: "closed",
 };
 
-type ListCache = { cwd: string; lists: PullLists; readAt: number };
+type ListCache = { cwd: string; lists: PullLists; readAt: number; webUrl?: string };
 
 let cached: ListCache | undefined;
+/** Kept apart from the lists so a failed read still leaves the repository row. */
+let cachedWebUrl: string | undefined;
 let inFlight: { cwd: string; pending: Promise<PullLists | undefined> } | undefined;
 
 function relativeAge(readAt: number, now: number): string {
@@ -61,6 +65,35 @@ function pullRow(pull: Pull, marker: string): PillBubbleLine {
 	};
 }
 
+/** The repository's own page, as a row whose URL stays out of the bubble. */
+function repoRow(webUrl: string | undefined): PillBubbleLine[] {
+	return webUrl ? [{ text: REPO_ROW_TEXT, onSelect: () => openExternalUrl(webUrl) }] : [];
+}
+
+/**
+ * The rows for one answer: the three groups when there is an answer, the
+ * reading line when there is not, and the repository row either way.
+ */
+export function pullBubbleBody(
+	lists: PullLists | undefined,
+	marker: string,
+	webUrl: string | undefined,
+): PillBubbleLine[] {
+	if (!lists) return ["Reading from the forge…", ...repoRow(webUrl)];
+
+	const body: PillBubbleLine[] = [];
+	let total = 0;
+	for (const { group, heading } of GROUPS) {
+		const pulls = lists[group];
+		if (pulls.length === 0) continue;
+		total += pulls.length;
+		body.push(`${heading} · ${pulls.length}`);
+		for (const pull of pulls) body.push(pullRow(pull, marker));
+	}
+	if (total === 0) body.push("Nothing authored, requested for review, or involved.");
+	return [...body, ...repoRow(webUrl)];
+}
+
 /**
  * The bubble's content, from whatever the last read left behind.
  *
@@ -72,31 +105,19 @@ export function pullBubbleContent(now = Date.now()): PillBubbleContent {
 	const marker = pullMarker(snapshot?.host ?? "github");
 
 	if (!cached) {
+		const body = pullBubbleBody(undefined, marker, cachedWebUrl);
 		return {
 			title: "Pull requests",
-			body: ["Reading from the forge…"],
-			hint: "esc closes",
+			body,
+			hint: cachedWebUrl ? "enter opens · esc closes" : "esc closes",
 		};
 	}
 
-	const body: PillBubbleLine[] = [];
-	let total = 0;
-	for (const { group, heading } of GROUPS) {
-		const pulls = cached.lists[group];
-		if (pulls.length === 0) continue;
-		total += pulls.length;
-		body.push(`${heading} · ${pulls.length}`);
-		for (const pull of pulls) body.push(pullRow(pull, marker));
-	}
-
-	if (total === 0) {
-		return {
-			title: "Pull requests",
-			body: ["Nothing authored, requested for review, or involved."],
-			hint: `read ${relativeAge(cached.readAt, now)}`,
-		};
-	}
-	return { title: "Pull requests", body, hint: `enter opens · ${relativeAge(cached.readAt, now)}` };
+	return {
+		title: "Pull requests",
+		body: pullBubbleBody(cached.lists, marker, cached.webUrl ?? cachedWebUrl),
+		hint: `enter opens · ${relativeAge(cached.readAt, now)}`,
+	};
 }
 
 /**
@@ -109,11 +130,12 @@ async function refreshPullLists(cwd: string, now = Date.now()): Promise<PullList
 	if (inFlight && inFlight.cwd === cwd) return inFlight.pending;
 
 	const remote = await readGitRemote(cwd);
+	if (remote) cachedWebUrl = remote.webUrl;
 	const pending = remote ? readUserPulls(cwd, remote) : Promise.resolve(undefined);
 	inFlight = { cwd, pending };
 	try {
 		const lists = await pending;
-		if (lists) cached = { cwd, lists, readAt: Date.now() };
+		if (lists) cached = { cwd, lists, readAt: Date.now(), webUrl: remote?.webUrl };
 		return lists;
 	} finally {
 		if (inFlight?.pending === pending) inFlight = undefined;

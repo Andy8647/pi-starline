@@ -14,7 +14,14 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { GitRemote } from "./git";
-import type { Pull, PullChecks, PullLists, PullReview, PullState } from "./pull";
+import {
+	PULL_GROUPS,
+	type Pull,
+	type PullChecks,
+	type PullLists,
+	type PullReview,
+	type PullState,
+} from "./pull";
 
 const execFileAsync = promisify(execFile);
 
@@ -337,6 +344,27 @@ function isOpenPull(pull: Pull | undefined): pull is Pull {
 }
 
 /**
+ * List each pull once, under its strongest claim.
+ *
+ * The searches are not disjoint in practice: GitLab's reviewer and assignee
+ * lists overlap, and GitHub's `-author:@me -review-requested:@me` can be ignored
+ * by the search. A pull in two groups reads as two pulls and inflates both
+ * headings, so the first group to claim a URL keeps it.
+ */
+export function dedupePullLists(lists: PullLists): PullLists {
+	const seen = new Set<string>();
+	const out = {} as PullLists;
+	for (const group of PULL_GROUPS) {
+		out[group] = lists[group].filter((pull) => {
+			if (seen.has(pull.url)) return false;
+			seen.add(pull.url);
+			return true;
+		});
+	}
+	return out;
+}
+
+/**
  * The current user's pulls, in the three groups the bubble lists. One request on
  * GitHub (three search aliases) and three on GitLab, which has no combined search.
  * Only open pulls are listed on either host.
@@ -373,7 +401,9 @@ export async function readUserPulls(
 		// Every call failed: the bubble keeps its last answer instead of showing
 		// three empty groups, which would read as "you have nothing" .
 		if (groups.every(([, , succeeded]) => !succeeded)) return undefined;
-		return Object.fromEntries(groups.map(([group, pulls]) => [group, pulls])) as PullLists;
+		return dedupePullLists(
+			Object.fromEntries(groups.map(([group, pulls]) => [group, pulls])) as PullLists,
+		);
 	}
 
 	const output = await run(
@@ -386,9 +416,9 @@ export async function readUserPulls(
 	const lists = pullListsFromGithubGraphql(parsed);
 	// The search already asks for open pulls; this keeps one the forge returned
 	// anyway (a state that changed mid-request) off the list.
-	return {
+	return dedupePullLists({
 		authored: lists.authored.filter(isOpenPull),
 		reviewing: lists.reviewing.filter(isOpenPull),
 		involved: lists.involved.filter(isOpenPull),
-	};
+	});
 }

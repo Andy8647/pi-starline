@@ -489,6 +489,11 @@ export type GitRemote = {
 	namespace: string;
 	/** Repository name, without the `.git` suffix. */
 	name: string;
+	/**
+	 * The repository's page in a browser, on the host the remote actually lives
+	 * on (a self-hosted GitLab keeps its own hostname, port included).
+	 */
+	webUrl: string;
 };
 
 /** Cached for minutes: a repo's origin remote effectively never changes mid-session. */
@@ -535,25 +540,34 @@ export function parseGitRemote(url: string): GitRemote | undefined {
 	if (!trimmed) return undefined;
 
 	let hostname: string | undefined;
+	let webHost: string | undefined;
 	let pathname: string | undefined;
 	const scpLike = /^[A-Za-z0-9._-]+@([^:/\s]+):(.*)$/.exec(trimmed);
 	if (scpLike) {
 		hostname = scpLike[1];
+		webHost = scpLike[1];
 		pathname = scpLike[2];
 	} else {
 		try {
 			const parsed = new URL(trimmed);
 			hostname = parsed.hostname;
+			// `host` keeps a non-default port, which a self-hosted forge needs.
+			webHost = parsed.host || parsed.hostname;
 			pathname = parsed.pathname;
 		} catch {
 			return undefined;
 		}
 	}
-	if (!hostname || !pathname) return undefined;
+	if (!hostname || !webHost || !pathname) return undefined;
 
 	const split = splitRemotePath(pathname);
 	if (!split) return undefined;
-	return { host: classifyGitHost(hostname), namespace: split.namespace, name: split.name };
+	return {
+		host: classifyGitHost(hostname),
+		namespace: split.namespace,
+		name: split.name,
+		webUrl: `https://${webHost}/${split.namespace}/${split.name}`,
+	};
 }
 
 /** Classify a remote URL. Kept for the branch icon, which wants only the host. */

@@ -3,7 +3,8 @@ import { parseGitRemote } from "../extensions/starline/git";
 
 /**
  * The remote split every forge read starts from: owner (or GitLab's nested
- * namespace) and repository, with the `.git` suffix and any transport noise gone.
+ * namespace) and repository, with the `.git` suffix, any transport noise and a
+ * browser URL that keeps the host the remote actually lives on.
  */
 describe("parseGitRemote", () => {
 	it("splits the scp-style form git writes for ssh clones", () => {
@@ -11,6 +12,7 @@ describe("parseGitRemote", () => {
 			host: "github",
 			namespace: "Andy8647",
 			name: "pi-starline",
+			webUrl: "https://github.com/Andy8647/pi-starline",
 		});
 	});
 
@@ -19,11 +21,13 @@ describe("parseGitRemote", () => {
 			host: "github",
 			namespace: "owner",
 			name: "repo",
+			webUrl: "https://github.com/owner/repo",
 		});
 		expect(parseGitRemote("ssh://git@github.com/owner/repo.git")).toEqual({
 			host: "github",
 			namespace: "owner",
 			name: "repo",
+			webUrl: "https://github.com/owner/repo",
 		});
 	});
 
@@ -32,14 +36,16 @@ describe("parseGitRemote", () => {
 			host: "gitlab",
 			namespace: "group/sub",
 			name: "repo",
+			webUrl: "https://gitlab.com/group/sub/repo",
 		});
 	});
 
-	it("tolerates a trailing slash, a port and a self-hosted host", () => {
+	it("tolerates a trailing slash and keeps a self-hosted host's port", () => {
 		expect(parseGitRemote("https://gitlab.acme.com:8443/team/repo/")).toEqual({
 			host: "gitlab",
 			namespace: "team",
 			name: "repo",
+			webUrl: "https://gitlab.acme.com:8443/team/repo",
 		});
 	});
 

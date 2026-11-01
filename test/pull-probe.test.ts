@@ -3,7 +3,12 @@ import type { ForgeRun } from "../extensions/starline/forge-cli";
 import type { GitRemote } from "../extensions/starline/git";
 import { __resetPullCacheForTests, readPullSnapshot } from "../extensions/starline/pull-probe";
 
-const github: GitRemote = { host: "github", namespace: "owner", name: "repo" };
+const github: GitRemote = {
+	host: "github",
+	namespace: "owner",
+	name: "repo",
+	webUrl: "https://github.com/owner/repo",
+};
 
 function remote(host: GitRemote["host"] = "github") {
 	return vi.fn(async () => ({ ...github, host }));

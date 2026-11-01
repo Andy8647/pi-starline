@@ -34,6 +34,12 @@ export type Pull = {
 /** The groups the bubble lists, in the order it lists them. */
 export type PullGroup = "authored" | "reviewing" | "involved";
 
+/**
+ * The groups in the order the bubble lists them, strongest claim first. A pull
+ * that answers more than one search belongs to the first of these.
+ */
+export const PULL_GROUPS: readonly PullGroup[] = ["authored", "reviewing", "involved"];
+
 export type PullLists = Record<PullGroup, Pull[]>;
 
 /** One refresh's answer about the current branch. */
