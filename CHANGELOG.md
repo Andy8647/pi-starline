@@ -12,8 +12,9 @@ npm.
 
 ## [0.10.3] - 2026-11-02
 
-The pull list lists each pull once and can take you to the repository, and the
-context pill stops reading `0%` on a fresh session.
+The pull list lists each pull once and can take you to the repository, there is
+a package pill for the version and what was released, and the context pill stops
+reading `0%` on a fresh session.
 
 **Added**
 
