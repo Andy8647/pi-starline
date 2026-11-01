@@ -20,6 +20,8 @@ export type FooterState = GitStatusSummary & {
 	providerLabel: string;
 	contextLabel: string;
 	tokenLabel: string;
+	/** True once a turn's usage has been recorded, so the session has run something. */
+	hasUsage: boolean;
 	cacheHitLabel: string;
 	costLabel: string;
 	runtime?: RuntimeInfo;
@@ -38,6 +40,7 @@ export function createInitialState(gitDefaults: GitStatusSummary): FooterState {
 		providerLabel: "Unknown",
 		contextLabel: "--",
 		tokenLabel: "↑0 ↓0",
+		hasUsage: false,
 		cacheHitLabel: "",
 		costLabel: "$0.000",
 		runtime: undefined,
@@ -64,6 +67,7 @@ export function syncState(
 	state.providerLabel = formatProviderLabel(ctx.model?.provider);
 	state.contextLabel = buildContextLabel(ctx);
 	state.tokenLabel = buildTokenLabel(totals, cacheHitIcon, tokensCache);
+	state.hasUsage = totals.input + totals.output + totals.cacheRead + totals.cacheWrite > 0;
 	state.cacheHitLabel = buildCacheHitLabel(totals, cacheHitIcon);
 	state.costLabel = buildCostLabel(totals);
 }

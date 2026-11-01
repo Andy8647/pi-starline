@@ -50,4 +50,9 @@ describe("context pill", () => {
 		expect(content.title).toBe("Context");
 		expect(content.body).toEqual(["window 200k"]);
 	});
+
+	it("marks the title while the percentage is only estimated", () => {
+		setActiveContextSnapshot({ percent: 1.4, estimated: true, contextWindow: 1_000_000 });
+		expect(contextBubbleContent().title).toBe("~1% context");
+	});
 });

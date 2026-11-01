@@ -554,7 +554,8 @@ export function contextBubbleContent(
 	}
 
 	return {
-		title: rounded === undefined ? "Context" : `${rounded}% context`,
+		title:
+			rounded === undefined ? "Context" : `${snapshot?.estimated ? "~" : ""}${rounded}% context`,
 		body: body.length > 0 ? body : ["No usage yet."],
 	};
 }

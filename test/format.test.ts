@@ -326,6 +326,32 @@ describe("context helpers", () => {
 		).toMatch(/^\[.{10}\] 42%\/128k$/);
 		expect(buildContextDisplayLabel({ percent: null, contextWindow: undefined })).toBe("--");
 	});
+
+	it("marks an estimated figure with a tilde and leaves the gauge alone", () => {
+		expect(
+			buildContextDisplayLabel({ percent: 1.4, contextWindow: 1_000_000, estimated: true }),
+		).toBe("~1%/1.0M");
+		expect(
+			buildContextDisplayLabel({
+				percent: 1.4,
+				contextWindow: 1_000_000,
+				format: "percent",
+				estimated: true,
+			}),
+		).toBe("~1%");
+		expect(
+			buildContextDisplayLabel({
+				percent: 1.4,
+				contextWindow: 1_000_000,
+				style: "text+gauge",
+				estimated: true,
+			}),
+		).toMatch(/^\[.{10}\] ~1%\/1\.0M$/);
+		// An unknown figure stays bare: `~?` would read like a value that was worked out.
+		expect(
+			buildContextDisplayLabel({ percent: null, contextWindow: 128_000, estimated: true }),
+		).toBe("?/128k");
+	});
 });
 
 describe("getUsageTotals memoization", () => {
