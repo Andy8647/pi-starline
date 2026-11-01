@@ -127,12 +127,18 @@ function createHarness(
 	options: {
 		model?: { id: string; provider: string; contextWindow: number };
 		contextUsage?: { tokens: number; contextWindow: number; percent: number } | null;
+		/** What pi hands back as the system prompt; the pre-first-turn estimate reads it. */
+		systemPrompt?: string;
+		/** Session entries; a fresh session has none, so nothing has run yet. */
+		entries?: unknown[];
 	} = {},
 ) {
 	let footerFactory: FooterFactory | undefined;
 	let editorFactory: unknown;
 	const requestRender = vi.fn();
-	const entries = [persistedEntry("old", 5, 6, 0.123)];
+	const entries = (options.entries ?? [persistedEntry("old", 5, 6, 0.123)]) as ReturnType<
+		typeof persistedEntry
+	>[];
 	const state = {
 		model:
 			"model" in options
@@ -157,6 +163,7 @@ function createHarness(
 			getSessionName: () => undefined,
 		},
 		getContextUsage: () => state.contextUsage,
+		getSystemPrompt: () => options.systemPrompt,
 		ui: {
 			theme,
 			setFooter(factory: FooterFactory | undefined) {
@@ -201,6 +208,37 @@ afterEach(() => {
 });
 
 describe("live streaming context event integration", () => {
+	it("estimates the window with a tilde before the first turn and drops it after", async () => {
+		vi.useFakeTimers();
+		const handlers = loadExtension();
+		// 3500 chars at pi's ~3.5 chars per token is 1000 tokens of the 10k window.
+		const harness = createHarness({
+			contextUsage: null,
+			entries: [],
+			systemPrompt: "x".repeat(3_500),
+		});
+		await emit(handlers, "session_start", harness.ctx);
+		await settleProjectRefresh();
+		const footer = harness.createFooter();
+
+		expect(rendered(footer)).toContain("~10%/10k");
+
+		await emit(handlers, "message_update", harness.ctx, { message: assistant(1_100) });
+		vi.advanceTimersByTime(250);
+		expect(rendered(footer)).toContain("11%/10k");
+		expect(rendered(footer)).not.toContain("~10%");
+
+		// Compaction can leave pi with nothing measured again; a session that has
+		// already run says `?` rather than passing the static floor off as the window.
+		harness.entries.push(persistedEntry("new", 7, 8, 0.2));
+		harness.state.contextUsage = null;
+		await emit(handlers, "session_compact", harness.ctx);
+		expect(rendered(footer)).toContain("?/10k");
+
+		footer.dispose?.();
+		await emit(handlers, "session_shutdown", harness.ctx);
+	});
+
 	it("coalesces registered updates, uses the newest cumulative total, and finalizes canonically", async () => {
 		vi.useFakeTimers();
 		const handlers = loadExtension();

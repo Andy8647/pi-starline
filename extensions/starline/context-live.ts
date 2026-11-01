@@ -13,6 +13,12 @@
 export type ContextSnapshot = {
 	/** Usage as a percentage of the window, when a window is known. */
 	percent?: number;
+	/**
+	 * True while `percent` is derived from the system prompt and the tool schemas
+	 * rather than measured: before the first turn pi has reported nothing, but
+	 * those tokens are already committed. Shown as `~`, dropped once measured.
+	 */
+	estimated?: boolean;
 	contextWindow?: number;
 	/** Tokens used, when known. */
 	tokens?: number;

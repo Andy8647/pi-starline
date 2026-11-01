@@ -11,6 +11,7 @@ import {
 	getExtensionStatusIcon,
 	type PolishedTuiConfig,
 } from "./config";
+import { collectContextBreakdown, probeFor } from "./context-breakdown";
 import { setActiveContextSnapshot } from "./context-live";
 import { collectExtensionStatusSegments, sanitizeExtensionStatusText } from "./extension-status";
 import {
@@ -332,15 +333,38 @@ export function installFooter(
 				const contextWindow = ctx.model?.contextWindow ?? contextUsage?.contextWindow;
 				const useLiveContext =
 					liveContext !== undefined && contextWindow !== undefined && contextWindow > 0;
+				const measuredTokens = contextUsage?.tokens;
+				const hasMeasuredContext =
+					useLiveContext || (typeof measuredTokens === "number" && measuredTokens > 0);
+				// Before the first turn pi has nothing measured to report, and the pill used
+				// to read 0% while the system prompt and the tool schemas were already paid
+				// for. The estimate is the bubble's, so both say the same number; it carries
+				// a `~` until a turn lands and drops it after.
+				//
+				// Only a session that has not run anything yet: after a compaction pi can be
+				// back to "nothing measured", and the static floor would then read as the
+				// whole window while a summary sits in it.
+				const nothingRanYet = !hasMeasuredContext && !state.hasUsage;
+				const estimatedTokens = nothingRanYet
+					? collectContextBreakdown(probeFor(ctx)).total
+					: undefined;
+				const estimatedPercent =
+					estimatedTokens !== undefined &&
+					estimatedTokens > 0 &&
+					contextWindow !== undefined &&
+					contextWindow > 0
+						? (estimatedTokens / contextWindow) * 100
+						: undefined;
 				const contextPercent = useLiveContext
 					? (liveContext.tokens / contextWindow) * 100
-					: contextUsage?.percent;
+					: (estimatedPercent ?? contextUsage?.percent);
 				const contextLabel = buildContextDisplayLabel({
 					percent: contextPercent,
 					contextWindow,
 					style: config.contextStyle,
 					asciiGauge: iconMode === "ascii",
 					format: config.segmentOptions.context.format,
+					estimated: estimatedPercent !== undefined,
 				});
 				const tier = contextColorTier(contextPercent, config.contextThresholds);
 				const contextColor =
@@ -358,6 +382,7 @@ export function installFooter(
 				const contextTabTokens = useLiveContext ? liveContext.tokens : undefined;
 				setActiveContextSnapshot({
 					percent: contextPercent ?? undefined,
+					estimated: estimatedPercent !== undefined,
 					contextWindow,
 					tokens: contextTabTokens,
 					tokenLabel: state.tokenLabel,

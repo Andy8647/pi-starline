@@ -393,22 +393,40 @@ export function buildContextGauge(percent: number, width = 10, ascii = false): s
 	return `${on.repeat(filled)}${off.repeat(Math.max(0, width - filled))}`;
 }
 
+/**
+ * `~` in front of a figure that is estimated rather than measured.
+ *
+ * An unknown figure keeps the bare `?`: `~?` would read like a value that was
+ * worked out.
+ */
+function approximate(
+	label: string,
+	estimated: boolean,
+	percent: number | null | undefined,
+): string {
+	return estimated && percent !== null && percent !== undefined ? `~${label}` : label;
+}
+
 export function formatContextPercentLabel(
 	percent: number | null | undefined,
 	contextWindow: number | undefined,
+	estimated = false,
 ): string {
 	if (!contextWindow || contextWindow <= 0) return "--";
 	const percentLabel =
 		percent === null || percent === undefined
 			? "?"
 			: `${Math.max(0, Math.min(999, Math.round(percent)))}%`;
-	return `${percentLabel}/${formatCount(contextWindow)}`;
+	return `${approximate(percentLabel, estimated, percent)}/${formatCount(contextWindow)}`;
 }
 
 /** Just the rounded percentage, for `segmentOptions.context.format: "percent"`. */
-export function formatBareContextPercent(percent: number | null | undefined): string {
+export function formatBareContextPercent(
+	percent: number | null | undefined,
+	estimated = false,
+): string {
 	if (percent === null || percent === undefined || !Number.isFinite(percent)) return "?";
-	return `${Math.max(0, Math.min(999, Math.round(percent)))}%`;
+	return approximate(`${Math.max(0, Math.min(999, Math.round(percent)))}%`, estimated, percent);
 }
 
 export function buildContextDisplayLabel(options: {
@@ -417,16 +435,29 @@ export function buildContextDisplayLabel(options: {
 	style?: ContextStyle;
 	asciiGauge?: boolean;
 	format?: ContextFormat;
+	/**
+	 * The figure came from the system prompt and the tool schemas, not from a
+	 * turn pi measured, so it is marked `~`. The gauge is left alone: a bar that
+	 * is one cell long says the same thing whether or not the number is exact.
+	 */
+	estimated?: boolean;
 }): string {
-	const { percent, contextWindow, style = "text", asciiGauge = false, format = "full" } = options;
+	const {
+		percent,
+		contextWindow,
+		style = "text",
+		asciiGauge = false,
+		format = "full",
+		estimated = false,
+	} = options;
 	if (!contextWindow || contextWindow <= 0) return "--";
 
 	// "percent" drops the context window, leaving a bare threshold-coloured
 	// figure for minimal layouts. It composes with contextStyle unchanged.
 	const text =
 		format === "percent"
-			? formatBareContextPercent(percent)
-			: formatContextPercentLabel(percent, contextWindow);
+			? formatBareContextPercent(percent, estimated)
+			: formatContextPercentLabel(percent, contextWindow, estimated);
 	const numericPercent =
 		percent === null || percent === undefined || !Number.isFinite(percent)
 			? 0
