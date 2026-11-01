@@ -10,6 +10,20 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [0.10.2] - 2026-11-01
+
+`!` colours the input box again.
+
+**Fixed**
+
+- **Bash mode had no border cue.** Pi colours the editor border from the mode it
+  is in (`bashMode` while the draft starts with `!`, a `thinking*` colour
+  otherwise), and Starline replaces those rows with its own in
+  `colors.editorBorder`. The frame now paints through Pi's painter while bash
+  mode is on, so `!` turns both rules the theme's `bashMode` colour. An explicit
+  `colors.editorBorder` still wins, and the thinking level keeps Starline's
+  border rather than recolouring the box.
+
 ## [0.10.1] - 2026-11-01
 
 Copying a right-aligned user message leaves its frame behind.

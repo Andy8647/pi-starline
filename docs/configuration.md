@@ -198,7 +198,7 @@ Default config values — copy this and change any value you want:
 - The shown `editor*` values match the default `theme` source. Omit those keys to keep Starline's source-aware defaults when switching between `theme` and `terminal`.
 - `editorAccent` styles the editor rail when `features.copyFriendly` is disabled.
 - `editorPrompt` styles the copy-friendly editor prompt glyph. Omit it to use `editorAccent`, then the default accent fallback.
-- `editorBorder` styles the editor's top/bottom border color only; the border glyph stays `─`.
+- `editorBorder` styles the editor's top/bottom border color only; the border glyph stays `─`. Omit it and the box takes Pi's `bashMode` colour while the draft is a bash command (`!`), keeping Starline's own border the rest of the time; set it to pin one colour and give the mode hint up. The thinking level never recolours the border.
 - User messages in the transcript are styled by [pi-tidy](https://github.com/Andy8647/pi-tidy) since 0.9: its `userMessageStyle`, `userMessagePaddingY` and `userMessageColors`. Starline's former `userMessagePaddingY`, `colors.userMessageBorder`, `colors.userMessageText` and `colorSources.userMessages` are ignored, with a one-time warning.
 - `model` styles the `model` footer segment; `thinking` styles the `thinking` segment. Omit `thinking` to colour it by level from the theme's `thinkingOff`/`thinkingMinimal`/`thinkingLow`/`thinkingMedium`/`thinkingHigh`/`thinkingXhigh` keys.
 
