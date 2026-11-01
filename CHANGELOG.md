@@ -10,6 +10,34 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [0.10.3] - 2026-11-02
+
+The pull list lists each pull once and can take you to the repository, and the
+context pill stops reading `0%` on a fresh session.
+
+**Added**
+
+- **A way into the repository from the pull bubble.** The bubble now ends with
+  `↗ Open repository`, which opens the remote's own page. The URL is built from
+  the remote the way GitHub and GitLab resolve it, so a self-hosted forge keeps
+  its own hostname and port rather than being sent to github.com.
+
+**Fixed**
+
+- **The same pull, listed twice.** The three searches are not disjoint: GitLab's
+  reviewer and assignee lists overlap, and GitHub can ignore the second half of
+  an `-author:@me -review-requested:@me` query. A pull that answered more than
+  one search was printed under both headings and counted twice. Each one now
+  appears once, under the strongest claim on it (authored, then review
+  requested, then involved).
+- **The context pill read `0%` on a fresh session** while the system prompt and
+  the tool schemas were already committed. The bubble had the number all along —
+  it estimates those tokens from the rendered prompt and the tool schemas. The
+  footer now uses the same estimate and marks it `~` (`~1%/1.0M`) until a turn
+  reports usage, then drops the mark. An unknown figure keeps the bare `?`, and
+  so does a session that has already run and is only waiting on pi to report
+  again (a compaction), where the estimate would read as the whole window.
+
 ## [0.10.2] - 2026-11-01
 
 `!` colours the input box again.

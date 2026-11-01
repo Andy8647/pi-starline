@@ -16,8 +16,18 @@ import {
 import type { GitRemote } from "../extensions/starline/git";
 import type { Pull } from "../extensions/starline/pull";
 
-const github: GitRemote = { host: "github", namespace: "owner", name: "repo" };
-const gitlab: GitRemote = { host: "gitlab", namespace: "group/sub", name: "repo" };
+const github: GitRemote = {
+	host: "github",
+	namespace: "owner",
+	name: "repo",
+	webUrl: "https://github.com/owner/repo",
+};
+const gitlab: GitRemote = {
+	host: "gitlab",
+	namespace: "group/sub",
+	name: "repo",
+	webUrl: "https://gitlab.com/group/sub/repo",
+};
 
 function runner(answers: Array<string | undefined>) {
 	const calls: Array<{ command: string; args: string[] }> = [];
@@ -168,7 +178,12 @@ describe("readBranchPull", () => {
 		const { run, calls } = runner([]);
 
 		expect(
-			await readBranchPull("/repo", { host: "generic", namespace: "a", name: "b" }, "main", run),
+			await readBranchPull(
+				"/repo",
+				{ host: "generic", namespace: "a", name: "b", webUrl: "https://git.example.test/a/b" },
+				"main",
+				run,
+			),
 		).toBeUndefined();
 		expect(calls).toEqual([]);
 	});
@@ -249,5 +264,37 @@ describe("readUserPulls", () => {
 		const { run } = runner([undefined, undefined, undefined]);
 
 		expect(await readUserPulls("/repo", gitlab, run)).toBeUndefined();
+	});
+
+	it("lists a pull once when GitHub's searches overlap", async () => {
+		// The search excludes authored and review-requested pulls from `involves`,
+		// but it does not always honour its own exclusions.
+		const { run } = runner([
+			JSON.stringify({
+				data: {
+					authored: { nodes: [{ number: 7, state: "OPEN", url: "same" }] },
+					reviewing: { nodes: [] },
+					involved: { nodes: [{ number: 7, state: "OPEN", url: "same" }] },
+				},
+			}),
+		]);
+
+		const lists = await readUserPulls("/repo", github, run);
+
+		expect(lists?.authored.map((pull) => pull.number)).toEqual([7]);
+		expect(lists?.involved).toEqual([]);
+	});
+
+	it("lists a merge request once when GitLab's reviewer and assignee lists overlap", async () => {
+		const { run } = runner([
+			JSON.stringify([]),
+			JSON.stringify([{ iid: 7, state: "opened", web_url: "same" }]),
+			JSON.stringify([{ iid: 7, state: "opened", web_url: "same" }]),
+		]);
+
+		const lists = await readUserPulls("/repo", gitlab, run);
+
+		expect(lists?.reviewing.map((pull) => pull.number)).toEqual([7]);
+		expect(lists?.involved).toEqual([]);
 	});
 });
