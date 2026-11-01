@@ -512,6 +512,35 @@ export function formatPackageVersionSegment(
 	return `${renderStyleForSource(theme, colorSource, "", "is")} ${renderStyleForSource(theme, colorSource, versionStyle, label)}`;
 }
 
+/**
+ * The package pill: the manifest version behind the package glyph.
+ *
+ * A `*` means the newest tag says something else was the last thing released.
+ * A repository with no tags gets no mark: there is nothing to compare against,
+ * and a mark on every version would stop meaning anything.
+ */
+export function formatPackagePillLabel(
+	pkg: PackageVersionResult | undefined,
+	tag: string | undefined,
+	mode: IconMode = "auto",
+	configuredIcon: string = "",
+): string {
+	if (!pkg) return "";
+	const icon = resolvePackageIcon(configuredIcon, mode);
+	const unreleased = tag !== undefined && !tagMatchesVersion(tag, pkg.version);
+	return `${icon} ${pkg.version}${unreleased ? "*" : ""}`;
+}
+
+/** `v1.2.3`, `release-1.2.3` and `@scope/pkg@1.2.3` all end in the version. */
+function tagMatchesVersion(tag: string, version: string): boolean {
+	const text = tag.trim();
+	if (text === version) return true;
+	for (const prefix of ["v", "V", "-", "/", "@", "_"]) {
+		if (text.endsWith(`${prefix}${version}`)) return true;
+	}
+	return false;
+}
+
 export type FormatCwdOptions = {
 	mode?: PathDisplayMode;
 	/** Trailing directory components to keep in full mode. 0 = unlimited. */

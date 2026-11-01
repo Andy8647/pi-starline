@@ -603,6 +603,74 @@ export async function readGitHost(cwd: string): Promise<GitHost | undefined> {
 	return (await readGitRemote(cwd))?.host;
 }
 
+/**
+ * The newest tag reachable from HEAD: what a package's "released" line means.
+ *
+ * `describe --tags --abbrev=0` picks the closest tag, annotated or not, and
+ * exits non-zero when the repository has none — the caller has to tell "no
+ * release yet" from "git could not answer" itself, so both come back as
+ * `undefined` and the bubble simply leaves the line out.
+ */
+export async function readLatestTag(cwd: string): Promise<string | undefined> {
+	try {
+		const { stdout } = await execFileAsync("git", ["describe", "--tags", "--abbrev=0"], {
+			cwd,
+			env: GIT_READ_ENV,
+			timeout: GIT_COMMAND_TIMEOUT_MS,
+		});
+		const tag = (typeof stdout === "string" ? stdout : String(stdout)).trim();
+		return tag || undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+export type TagDelta = {
+	/** Commits between the tag and HEAD. */
+	commits: number;
+	/** Every path those commits touched, relative to the repository root. */
+	paths: string[];
+};
+
+/**
+ * What happened since a tag: how many commits, and which files they touched.
+ *
+ * The paths are what lets a workspace say which of its packages moved, which is
+ * the only question a release is actually about. One `diff` covers every
+ * package: attributing per package with its own `git log` would be one process
+ * per row.
+ */
+export async function readTagDelta(cwd: string, tag: string): Promise<TagDelta | undefined> {
+	try {
+		const [count, names] = await Promise.all([
+			execFileAsync("git", ["rev-list", "--count", `${tag}..HEAD`], {
+				cwd,
+				env: GIT_READ_ENV,
+				timeout: GIT_COMMAND_TIMEOUT_MS,
+			}),
+			execFileAsync("git", ["diff", "--name-only", `${tag}..HEAD`], {
+				cwd,
+				env: GIT_READ_ENV,
+				timeout: GIT_COMMAND_TIMEOUT_MS,
+			}),
+		]);
+		const commits = Number.parseInt(
+			(typeof count.stdout === "string" ? count.stdout : String(count.stdout)).trim(),
+			10,
+		);
+		const paths = (typeof names.stdout === "string" ? names.stdout : String(names.stdout))
+			.split("\n")
+			.map((line) => line.trim())
+			.filter((line) => line.length > 0);
+		return {
+			commits: Number.isFinite(commits) && commits > 0 ? commits : 0,
+			paths,
+		};
+	} catch {
+		return undefined;
+	}
+}
+
 /** Forget the cached remotes, for tests that start from an empty cache. */
 export function __resetGitHostCacheForTests(): void {
 	gitHostCache.clear();

@@ -38,6 +38,8 @@ export type PackageVersionResult = {
 	ecosystem: string;
 	/** Raw version string as authored in the manifest. */
 	version: string;
+	/** The manifest the version came from (`package.json`, `pyproject.toml`, …). */
+	file: string;
 };
 
 export type PackageVersionReadResult =
@@ -584,7 +586,7 @@ export function readPackageVersion(cwd: string): PackageVersionResult | null {
 			} catch {
 				continue;
 			}
-			if (version) return { ecosystem: ecosystemFor(file), version };
+			if (version) return { ecosystem: ecosystemFor(file), version, file };
 		}
 	}
 
@@ -613,7 +615,7 @@ export function readPackageVersion(cwd: string): PackageVersionResult | null {
 			} catch {
 				continue;
 			}
-			if (version) return { ecosystem: ecosystemFor(entry), version };
+			if (version) return { ecosystem: ecosystemFor(entry), version, file: entry };
 		}
 	}
 

@@ -100,10 +100,14 @@ describe("applyProjectRefreshToState", () => {
 			runtime: { kind: "ok", runtime: undefined },
 			packageVersion: {
 				kind: "ok",
-				result: { ecosystem: "nodejs", version: "1.2.3" },
+				result: { ecosystem: "nodejs", version: "1.2.3", file: "package.json" },
 			},
 		});
-		expect(state.packageVersion).toEqual({ ecosystem: "nodejs", version: "1.2.3" });
+		expect(state.packageVersion).toEqual({
+			ecosystem: "nodejs",
+			version: "1.2.3",
+			file: "package.json",
+		});
 
 		applyProjectRefreshToState(state, {
 			cwd: "/repo",
@@ -117,7 +121,7 @@ describe("applyProjectRefreshToState", () => {
 
 	it("keeps last-good packageVersion on transient error", () => {
 		const state = createInitialState(emptyGitStatus());
-		state.packageVersion = { ecosystem: "rust", version: "0.4.2" };
+		state.packageVersion = { ecosystem: "rust", version: "0.4.2", file: "Cargo.toml" };
 
 		applyProjectRefreshToState(state, {
 			cwd: "/repo",
@@ -126,12 +130,16 @@ describe("applyProjectRefreshToState", () => {
 			runtime: { kind: "ok", runtime: undefined },
 			packageVersion: { kind: "error" },
 		});
-		expect(state.packageVersion).toEqual({ ecosystem: "rust", version: "0.4.2" });
+		expect(state.packageVersion).toEqual({
+			ecosystem: "rust",
+			version: "0.4.2",
+			file: "Cargo.toml",
+		});
 	});
 
 	it("clears packageVersion on cwd change even when no result is provided", () => {
 		const state = createInitialState(emptyGitStatus());
-		state.packageVersion = { ecosystem: "python", version: "2.0.0" };
+		state.packageVersion = { ecosystem: "python", version: "2.0.0", file: "pyproject.toml" };
 
 		applyProjectRefreshToState(state, {
 			cwd: "/new",
@@ -140,6 +148,27 @@ describe("applyProjectRefreshToState", () => {
 			runtime: { kind: "error" },
 		});
 		expect(state.packageVersion).toBeUndefined();
+	});
+
+	it("keeps the newest tag when a refresh did not ask for one, and clears it with the directory", () => {
+		const state = createInitialState(emptyGitStatus());
+		state.packageTag = "v1.2.3";
+
+		applyProjectRefreshToState(state, {
+			cwd: "/repo",
+			previousCwd: "/repo",
+			git: { kind: "ok", status: emptyGitStatus() },
+			runtime: { kind: "ok", runtime: undefined },
+		});
+		expect(state.packageTag).toBe("v1.2.3");
+
+		applyProjectRefreshToState(state, {
+			cwd: "/new",
+			previousCwd: "/repo",
+			git: { kind: "error" },
+			runtime: { kind: "error" },
+		});
+		expect(state.packageTag).toBeUndefined();
 	});
 
 	it("clears commit and metrics on cwd change", () => {

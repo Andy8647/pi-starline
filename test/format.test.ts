@@ -16,6 +16,7 @@ import {
 	formatGitCommitSegment,
 	formatGitMetricsSegment,
 	formatOsLabel,
+	formatPackagePillLabel,
 	formatPackageVersionSegment,
 	getUsageTotals,
 	invalidateUsageTotalsCache,
@@ -568,7 +569,7 @@ describe("formatPackageVersionSegment", () => {
 	it("renders the Starship `is <glyph> <version>` shape", () => {
 		const out = formatPackageVersionSegment(
 			makeTheme(),
-			{ ecosystem: "nodejs", version: "1.2.3" },
+			{ ecosystem: "nodejs", version: "1.2.3", file: "package.json" },
 			"terminal",
 			"nerd",
 			"",
@@ -584,7 +585,7 @@ describe("formatPackageVersionSegment", () => {
 	it("falls back to the ASCII package label in ASCII mode", () => {
 		const out = formatPackageVersionSegment(
 			makeTheme(),
-			{ ecosystem: "nodejs", version: "1.2.3" },
+			{ ecosystem: "nodejs", version: "1.2.3", file: "package.json" },
 			"terminal",
 			"ascii",
 			"",
@@ -598,7 +599,7 @@ describe("formatPackageVersionSegment", () => {
 	it("honors a configured package icon override", () => {
 		const out = formatPackageVersionSegment(
 			makeTheme(),
-			{ ecosystem: "nodejs", version: "1.2.3" },
+			{ ecosystem: "nodejs", version: "1.2.3", file: "package.json" },
 			"terminal",
 			"nerd",
 			"#", // custom override wins over mode default
@@ -606,6 +607,39 @@ describe("formatPackageVersionSegment", () => {
 		);
 		expect(out).toContain("#");
 		expect(out).not.toContain("\u{f487}");
+	});
+});
+
+describe("formatPackagePillLabel", () => {
+	const pkg = { ecosystem: "nodejs", version: "0.10.3", file: "package.json" };
+
+	it("puts the version behind the package glyph", () => {
+		expect(formatPackagePillLabel(pkg, "v0.10.3", "nerd")).toBe("\u{f487} 0.10.3");
+	});
+
+	it("marks a version the newest tag does not name", () => {
+		expect(formatPackagePillLabel(pkg, "v0.10.2", "nerd")).toBe("\u{f487} 0.10.3*");
+	});
+
+	it("reads the tag's prefix rather than requiring a bare version", () => {
+		expect(formatPackagePillLabel(pkg, "0.10.3", "nerd")).toBe("\u{f487} 0.10.3");
+		expect(formatPackagePillLabel(pkg, "release-0.10.3", "nerd")).toBe("\u{f487} 0.10.3");
+		expect(formatPackagePillLabel(pkg, "@scope/pkg@0.10.3", "nerd")).toBe("\u{f487} 0.10.3");
+	});
+
+	it("does not let a tag that merely ends in the same digits count as a match", () => {
+		// `11.2.3` ends with `2.3`; a version is a whole segment, not a suffix.
+		expect(formatPackagePillLabel({ ...pkg, version: "2.3" }, "v11.2.3", "nerd")).toBe(
+			"\u{f487} 2.3*",
+		);
+	});
+
+	it("leaves a repository with no tags unmarked", () => {
+		expect(formatPackagePillLabel(pkg, undefined, "nerd")).toBe("\u{f487} 0.10.3");
+	});
+
+	it("renders nothing without a manifest", () => {
+		expect(formatPackagePillLabel(undefined, "v0.10.3", "nerd")).toBe("");
 	});
 });
 

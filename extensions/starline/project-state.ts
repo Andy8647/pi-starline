@@ -20,6 +20,8 @@ export function applyProjectRefreshToState(
 		gitHost?: GitHost;
 		runtime: RuntimeReadResult;
 		packageVersion?: PackageVersionReadResult;
+		/** The newest tag, for the unreleased mark; undefined when not asked for. */
+		packageTag?: string;
 		/** Undefined when the bar does not show a pull: keep the last answer. */
 		pull?: { snapshot: PullSnapshot | undefined };
 	},
@@ -31,6 +33,7 @@ export function applyProjectRefreshToState(
 		state.runtime = undefined;
 		state.gitHost = undefined;
 		state.packageVersion = undefined;
+		state.packageTag = undefined;
 		state.pull = undefined;
 	}
 
@@ -67,6 +70,8 @@ export function applyProjectRefreshToState(
 			state.packageVersion = undefined;
 		}
 	}
+
+	if (args.packageTag !== undefined) state.packageTag = args.packageTag;
 
 	return args.cwd;
 }

@@ -27,15 +27,17 @@ function readers(git: GitReadResult = branchStatus) {
 	const readRuntimeInfo = vi.fn(async () => ({ kind: "ok" as const }));
 	const readPackageVersion = vi.fn(async () => ({
 		kind: "ok" as const,
-		result: { version: "1.2.3", ecosystem: "node" },
+		result: { version: "1.2.3", ecosystem: "node", file: "package.json" },
 	}));
 	const readPullSnapshot = vi.fn(async () => undefined);
+	const readLatestTag = vi.fn(async () => "v1.2.2" as string | undefined);
 	const deps: ProjectProbeReaders = {
 		readGitStatus,
 		readGitHost,
 		readPullSnapshot,
 		readRuntimeInfo,
 		readPackageVersion,
+		readLatestTag,
 	};
 	return {
 		deps,
@@ -44,6 +46,7 @@ function readers(git: GitReadResult = branchStatus) {
 		readPullSnapshot,
 		readRuntimeInfo,
 		readPackageVersion,
+		readLatestTag,
 	};
 }
 
@@ -101,6 +104,21 @@ describe("probeProject", () => {
 		);
 	});
 
+	it("reads the newest tag only when the version pill is on the bar", async () => {
+		const without = readers();
+		await probeProject("/tmp/project", configWith(["cwd"]), without.deps);
+		expect(without.readLatestTag).not.toHaveBeenCalled();
+
+		const withPackage = readers();
+		const probe = await probeProject(
+			"/tmp/project",
+			configWith(["packageVersion"]),
+			withPackage.deps,
+		);
+		expect(withPackage.readLatestTag).toHaveBeenCalledTimes(1);
+		expect(probe.packageTag).toBe("v1.2.2");
+	});
+
 	it("asks for a forge icon only when the git pill is on the bar", async () => {
 		const withIcon = { git: { ...defaultConfig.git, hostIcon: true } };
 
@@ -148,7 +166,7 @@ describe("probeProject", () => {
 		expect(withPill.readPackageVersion).toHaveBeenCalledTimes(1);
 		expect(probe.packageVersion).toEqual({
 			kind: "ok",
-			result: { version: "1.2.3", ecosystem: "node" },
+			result: { version: "1.2.3", ecosystem: "node", file: "package.json" },
 		});
 	});
 });
