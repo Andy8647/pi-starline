@@ -144,6 +144,19 @@ describe("cleanTranscriptRows", () => {
 		expect(rows).toEqual([null, { text: " hello there ", leftTrim: 1 }, null]);
 	});
 
+	it("cleans right-aligned frames, including a label at the right edge", () => {
+		const lines = ["    ╭───── \u{f007} ─╮", "    │ 你好    │", "    ╰─────────╯"];
+		const { rows, changed } = cleanTranscriptRows(lines, 0, 2);
+		expect(changed).toBe(true);
+		expect(rows).toEqual([null, { text: " 你好    ", leftTrim: 5 }, null]);
+		expect(cleanTranscriptRows(lines, 1, 1).rows).toEqual([{ text: " 你好    ", leftTrim: 5 }]);
+	});
+
+	it("does not pair equal-width edges in different columns", () => {
+		const lines = ["    ╭────╮", "    │ hi │", "  ╰────╯"];
+		expect(cleanTranscriptRows(lines, 0, 2).changed).toBe(false);
+	});
+
 	it("requires equal widths to pair rounded frame edges", () => {
 		const lines = ["╭────────╮", "│ inner  │", "╰──╯"];
 		const { rows, changed } = cleanTranscriptRows(lines, 0, 2);
