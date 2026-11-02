@@ -7,6 +7,7 @@ import {
 	detectRuntime,
 	readRuntimeInfo,
 	runtimeMetadata,
+	windowsVersionCommand,
 } from "../extensions/starline/runtime";
 
 function starshipRuntimeModules(): string[] {
@@ -26,6 +27,26 @@ function makeProject(entries: Array<{ path: string; dir?: boolean }>): {
 	}
 	return { cwd, names: entries.map((entry) => entry.path) };
 }
+
+describe("windowsVersionCommand", () => {
+	it("runs the command through the interpreter, which is what a .cmd shim needs", () => {
+		// `mvn` is `mvn.cmd` on Windows and `execFile` cannot start that without one.
+		expect(windowsVersionCommand("mvn", ["--version"], "C:\\Windows\\system32\\cmd.exe")).toEqual({
+			file: "C:\\Windows\\system32\\cmd.exe",
+			args: ["/d", "/s", "/c", "mvn --version"],
+		});
+	});
+
+	it("falls back to cmd.exe when ComSpec is not set", () => {
+		expect(windowsVersionCommand("gradle", ["--version"], undefined).file).toBe("cmd.exe");
+	});
+
+	it("quotes an argument that has a space in it", () => {
+		expect(windowsVersionCommand("tool", ["--path", "/a b/c"], undefined).args[3]).toBe(
+			'tool --path "/a b/c"',
+		);
+	});
+});
 
 describe("runtimeMetadata", () => {
 	it("covers Starship Nerd Font runtime and language modules with icons and Starship styles", () => {

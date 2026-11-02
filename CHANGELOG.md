@@ -49,6 +49,15 @@ to close them.
 - **A row that ended in padding.** The version column is width-matched across a
   section for the rows that carry a mark after it; the rows without one no longer
   end in spaces.
+- **Maven's version on Windows.** The runtime probe ran `execFile("mvn",
+  ["--version"])`, and on Windows `mvn` is `mvn.cmd`, which Node refuses to start
+  without a command interpreter — the lookup died with `spawn mvn ENOENT`, the
+  error was swallowed, and the pill showed the icon with no version beside it.
+  A lookup that cannot find its command on Windows is now retried through
+  `cmd.exe /d /s /c` (or `%ComSpec%`), so `.cmd` and `.bat` shims resolve. Every
+  other platform and every command that already resolved is untouched.
+  Thanks to [@suzumiy](https://github.com/suzumiy) for the report and for
+  tracing it to the shim ([#45](https://github.com/Andy8647/pi-starline/issues/45)).
 
 **Changed**
 
