@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { NERD_DEFAULT_ICONS } from "../extensions/starline/icons";
 import {
 	changedPackageDirs,
+	iconForEcosystem,
 	type PackageSummary,
 	packageBubbleContent,
 	readPackageSummary,
@@ -19,6 +20,14 @@ function member(
 }
 
 const PKG = NERD_DEFAULT_ICONS.package;
+const NPM = iconForEcosystem("nodejs");
+const PYTHON = iconForEcosystem("python");
+const CARGO = iconForEcosystem("rust");
+
+/** What a plain string row says; link rows are objects. */
+function textOf(line: unknown): string {
+	return typeof line === "string" ? line : ((line as { text: string }).text ?? "");
+}
 
 describe("package bubble", () => {
 	it("has an action, so the summary is a click away", () => {
@@ -34,10 +43,77 @@ describe("package bubble", () => {
 		};
 
 		const content = packageBubbleContent(summary);
-		expect(content.title).toBe("0.10.3 · pi-starline");
-		expect(content.body).toEqual([
-			`${PKG} npm 0.10.3 public · package.json`,
+		// No registry answer, so no claim about what is released: the title is just
+		// the name and the row just the manifest.
+		expect(content.title).toBe("pi-starline");
+		expect(content.body.map(textOf)).toEqual([
+			`${NPM} 0.10.3 · package.json`,
 			"󰓹 v0.10.2 · 3 commits ahead",
+		]);
+	});
+
+	it("says which version the registry has, and calls the local one unreleased", () => {
+		const content = packageBubbleContent({
+			manifests: [{ ecosystem: "nodejs", version: "0.10.4", file: "package.json" }],
+			name: "pi-starline",
+			published: { version: "0.10.3", url: "https://example.test/starline" },
+		});
+
+		expect(content.title).toBe("pi-starline · v0.10.3 on npm");
+		expect(content.body.map(textOf)).toEqual([
+			`${NPM} 0.10.3 published`,
+			`${NPM} 0.10.4 unreleased · package.json`,
+		]);
+	});
+
+	it("says one row when the manifest is what is published", () => {
+		const content = packageBubbleContent({
+			manifests: [{ ecosystem: "nodejs", version: "0.10.3", file: "package.json" }],
+			name: "pi-starline",
+			published: { version: "0.10.3", url: "https://example.test/starline" },
+		});
+
+		expect(content.body.map(textOf)).toEqual([`${NPM} 0.10.3 published · package.json`]);
+	});
+
+	it("makes the npm row a link to the package page", () => {
+		const opened: string[] = [];
+		const content = packageBubbleContent(
+			{
+				manifests: [{ ecosystem: "nodejs", version: "0.10.3", file: "package.json" }],
+				name: "pi-starline",
+				published: { version: "0.10.3", url: "https://example.test/starline" },
+			},
+			undefined,
+			(url) => opened.push(url),
+		);
+
+		const row = content.body[0] as { onSelect: () => void };
+		row.onSelect();
+		expect(opened).toEqual(["https://example.test/starline"]);
+	});
+
+	it("links only the row that claims something is published", () => {
+		const content = packageBubbleContent({
+			manifests: [{ ecosystem: "nodejs", version: "0.10.4", file: "package.json" }],
+			name: "pi-starline",
+			published: { version: "0.10.3", url: "https://www.npmjs.com/package/pi-starline" },
+		});
+
+		expect(content.body[0]).toMatchObject({ onSelect: expect.any(Function) });
+		expect(typeof content.body[1]).toBe("string");
+	});
+
+	it("says older than npm when the checkout is behind", () => {
+		const content = packageBubbleContent({
+			manifests: [{ ecosystem: "nodejs", version: "0.10.2", file: "package.json" }],
+			name: "pi-starline",
+			published: { version: "0.10.3", url: "https://www.npmjs.com/package/pi-starline" },
+		});
+
+		expect(content.body.map(textOf)).toEqual([
+			`${NPM} 0.10.3 published`,
+			`${NPM} 0.10.2 older than npm · package.json`,
 		]);
 	});
 
@@ -59,7 +135,7 @@ describe("package bubble", () => {
 			private: true,
 		});
 
-		expect(content.body).toEqual([`${PKG} npm 0.0.3 private · package.json`]);
+		expect(content.body.map(textOf)).toEqual([`${NPM} 0.0.3 private · package.json`]);
 	});
 
 	it("leaves the release line out when the repository has no tag", () => {
@@ -68,7 +144,7 @@ describe("package bubble", () => {
 			name: "acme",
 		});
 
-		expect(content.body).toEqual([`${PKG} cargo 0.4.2 · Cargo.toml`]);
+		expect(content.body.map(textOf)).toEqual([`${CARGO} cargo 0.4.2 · Cargo.toml`]);
 	});
 
 	it("names every manifest, so a mixed repository is not described as one ecosystem", () => {
@@ -81,10 +157,10 @@ describe("package bubble", () => {
 			private: true,
 		});
 
-		expect(content.title).toBe("0.1.0 · mwac-space-navigator");
-		expect(content.body).toEqual([
-			`${PKG} npm -- private · package.json`,
-			`${PKG} python 0.1.0 · pyproject.toml`,
+		expect(content.title).toBe("mwac-space-navigator");
+		expect(content.body.map(textOf)).toEqual([
+			`${NPM} -- private · package.json`,
+			`${PYTHON} python 0.1.0 · pyproject.toml`,
 		]);
 	});
 
@@ -109,8 +185,8 @@ describe("package bubble", () => {
 		};
 
 		const content = packageBubbleContent(summary);
-		expect(content.body).toEqual([
-			`${PKG} npm 0.0.3 private · package.json`,
+		expect(content.body.map(textOf)).toEqual([
+			`${NPM} 0.0.3 private · package.json`,
 			"󰓹 v0.99.0 · 12 commits ahead",
 			"pnpm workspace · 3 packages",
 			"  ai                       1.2.0  changed",
@@ -140,9 +216,9 @@ describe("package bubble", () => {
 		};
 
 		const content = packageBubbleContent(summary);
-		expect(content.body).toEqual([
-			`${PKG} npm -- private · package.json`,
-			`${PKG} python 0.1.0 · pyproject.toml`,
+		expect(content.body.map(textOf)).toEqual([
+			`${NPM} -- private · package.json`,
+			`${PYTHON} python 0.1.0 · pyproject.toml`,
 			"󰓹 v0.1.0 · 4 commits ahead",
 			"pnpm workspace · 1 package",
 			"  web                      0.1.0  changed · private",
@@ -162,7 +238,7 @@ describe("package bubble", () => {
 			],
 		};
 
-		expect(packageBubbleContent(summary).body).toContain("· not in a workspace");
+		expect(packageBubbleContent(summary).body.map(textOf)).toContain("· not in a workspace");
 	});
 
 	it("says a workspace matched nothing rather than drawing an empty list", () => {
@@ -172,7 +248,7 @@ describe("package bubble", () => {
 			workspace: { manager: "cargo", packages: [] },
 		});
 
-		expect(content.body).toEqual([
+		expect(content.body.map(textOf)).toEqual([
 			"cargo workspace · 0 packages",
 			"  no package matched the workspace globs",
 		]);
@@ -182,7 +258,7 @@ describe("package bubble", () => {
 		const content = packageBubbleContent({ manifests: [], name: "scratch" });
 
 		expect(content.title).toBe("scratch");
-		expect(content.body).toEqual(["No package manifest in this directory."]);
+		expect(content.body.map(textOf)).toEqual(["No package manifest in this directory."]);
 	});
 });
 

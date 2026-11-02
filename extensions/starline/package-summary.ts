@@ -16,9 +16,10 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { PillBubbleContent } from "../../types/pill-api";
+import type { PillBubbleContent, PillBubbleLine } from "../../types/pill-api";
 import { readLatestTag, readTagDelta, type TagDelta } from "./git";
 import { NERD_DEFAULT_ICONS } from "./icons";
+import { openExternalUrl } from "./open-url";
 import { type RootManifest, readRootManifests } from "./package-version";
 import type { ThemeLike } from "./style";
 import {
@@ -35,6 +36,8 @@ export type PackageSummary = {
 	name?: string;
 	/** `package.json#private`: nothing is published from here. */
 	private?: boolean;
+	/** What the registry reports, when this is a package the registry knows. */
+	published?: PublishedPackage;
 	/** The newest tag reachable from HEAD. */
 	tag?: string;
 	/** How far HEAD is past that tag, and what moved on the way. */
@@ -45,12 +48,28 @@ export type PackageSummary = {
 	loose?: WorkspacePackage[];
 };
 
+/**
+ * The registry's answer, never the manifest's guess.
+ *
+ * A manifest carries the version someone is about to release; only the registry
+ * knows what actually is released. Keeping them apart is the difference between
+ * `0.10.4 unreleased` and a bubble that reads as if 0.10.4 shipped.
+ */
+export type PublishedPackage = {
+	/** The `latest` dist-tag, when the registry has one. */
+	version?: string;
+	/** Where to open it: the package's page on the registry. */
+	url: string;
+};
+
 export type PackageSummaryReaders = {
 	readManifests: typeof readRootManifests;
 	readLatestTag: typeof readLatestTag;
 	readTagDelta: typeof readTagDelta;
 	readWorkspace: typeof readWorkspace;
 	readLoosePackages: typeof readLoosePackages;
+	/** Optional: tests that do not care about the registry leave it out. */
+	readPublished?: typeof readPublishedPackage;
 };
 
 const REAL_READERS: PackageSummaryReaders = {
@@ -59,6 +78,7 @@ const REAL_READERS: PackageSummaryReaders = {
 	readTagDelta,
 	readWorkspace,
 	readLoosePackages,
+	readPublished: readPublishedPackage,
 };
 
 /** Starship's ecosystem keys are its own; these are the names people use. */
@@ -95,12 +115,73 @@ function basename(path: string): string {
 	return stripped.slice(stripped.lastIndexOf("/") + 1);
 }
 
+/** Long enough for a warm registry, short enough that a bubble is never waiting. */
+const REGISTRY_TIMEOUT_MS = 1500;
+
+/**
+ * What `latest` says, or just the page when the registry cannot answer.
+ *
+ * The link is the package's npm page, not the `homepage` its manifest advertises:
+ * a row that says `published` should open the thing that published it, and that
+ * is what makes the two facts checkable against each other.
+ *
+ * A 404 means the package is not published yet, which is worth knowing and is
+ * still worth a clickable page. A network failure says nothing at all, so the
+ * version stays undefined and the bubble leaves the claim out.
+ */
+export async function readPublishedPackage(name: string): Promise<PublishedPackage> {
+	const page = `https://www.npmjs.com/package/${name}`;
+	try {
+		const response = await fetch(`https://registry.npmjs.org/${encodeURIComponent(name)}/latest`, {
+			headers: { accept: "application/json" },
+			signal: AbortSignal.timeout(REGISTRY_TIMEOUT_MS),
+		});
+		if (!response.ok) return { url: page };
+		const data = (await response.json()) as { version?: unknown };
+		const version = typeof data.version === "string" && data.version ? data.version : undefined;
+		return { version, url: page };
+	} catch {
+		return { url: page };
+	}
+}
+
+/**
+ * `latest` for this directory, cached for the pill.
+ *
+ * The footer renders on every message, so this is the cheap read: a hit is a map
+ * lookup, and only the first refresh of a directory touches the network. A failed
+ * answer is retried sooner than a good one, since the registry being down is a
+ * state worth leaving.
+ */
+const PUBLISHED_FRESH_MS = 10 * 60_000;
+const PUBLISHED_RETRY_MS = 30_000;
+const publishedByCwd = new Map<string, { published: PublishedPackage; at: number }>();
+
+export async function readPublishedVersionForCwd(
+	cwd: string,
+): Promise<PublishedPackage | undefined> {
+	const root = readRootPackageJson(cwd);
+	if (!root.name || root.private) return undefined;
+	const key = `${cwd}\u0000${root.name}`;
+	const cached = publishedByCwd.get(key);
+	if (
+		cached &&
+		Date.now() - cached.at < (cached.published.version ? PUBLISHED_FRESH_MS : PUBLISHED_RETRY_MS)
+	) {
+		return cached.published;
+	}
+	const published = await readPublishedPackage(root.name);
+	publishedByCwd.set(key, { published, at: Date.now() });
+	return published;
+}
+
 /**
  * Read everything the bubble draws.
  *
  * The tag is read first because the delta needs it; the manifests and the
- * workspace are local file reads and run beside it. Two git processes, both only
- * when the bubble is opened.
+ * workspace are local file reads and run beside it. The registry is asked last,
+ * and only about a package that has a name and is not private: the rest of the
+ * bubble does not wait on the network.
  */
 export async function readPackageSummary(
 	cwd: string,
@@ -120,10 +201,16 @@ export async function readPackageSummary(
 			? readers.readLoosePackages(cwd, workspace?.packages.map((pkg) => pkg.dir) ?? [])
 			: [];
 	const root = readRootPackageJson(cwd);
+	const primary = manifests.find((manifest) => manifest.version);
+	const published =
+		primary?.ecosystem === "nodejs" && root.name && !root.private
+			? await (readers.readPublished ?? readPublishedPackage)(root.name)
+			: undefined;
 	return {
 		manifests,
 		name: root.name ?? basename(cwd),
 		private: root.private,
+		published,
 		tag,
 		delta,
 		workspace,
@@ -222,14 +309,107 @@ function packageRows(
 	return rows;
 }
 
-/** One line per manifest: what it is, what version it declares, which file it is. */
-function manifestLine(manifest: RootManifest, summary: PackageSummary, theme: ThemeLike): string {
-	const version = manifest.version ?? "--";
-	// Publishing is an npm field; the other ecosystems have no equivalent flag.
-	const publish =
-		manifest.ecosystem === "nodejs" ? (summary.private ? "private" : "public") : undefined;
-	const rest = [version, publish, `· ${manifest.file}`].filter(Boolean).join(" ");
-	return `${NERD_DEFAULT_ICONS.package} ${paint(theme, "accent", ecosystemLabel(manifest.ecosystem))} ${paint(theme, "dim", rest)}`;
+/**
+ * One glyph per publishing platform, so the column says which ecosystem a row is
+ * about before the word does. All of these are in Maple Mono NF; anything else
+ * falls back to the generic package mark.
+ */
+const PLATFORM_ICONS: Record<string, string> = {
+	nodejs: "\ue71e", // npm
+	bun: "\ue76f",
+	deno: "\ue7c0",
+	rust: "\ue7a8",
+	php: "\ue73d",
+	dart: "\ue798",
+	elixir: "\ue62d",
+	haskell: "\ue777",
+	python: "\ue73c",
+	ruby: "\ue739",
+	maven: "\ue738",
+	gradle: "\ue660",
+	crystal: "\ue62f",
+	julia: "\ue624",
+	nim: "\ue677",
+	helm: "\ue7d8",
+};
+
+function platformIcon(ecosystem: string): string {
+	return PLATFORM_ICONS[ecosystem] ?? NERD_DEFAULT_ICONS.package;
+}
+
+/** Exported for the bubble's tests, which assert the glyph per ecosystem. */
+export function iconForEcosystem(ecosystem: string): string {
+	return platformIcon(ecosystem);
+}
+
+/**
+ * Which of two `1.2.3` versions is newer, or undefined when either is not one.
+ *
+ * Numeric segments only: a prerelease suffix is left out of the comparison, so
+ * `1.0.0-rc.1` against `1.0.0` reads as equal rather than inventing an ordering.
+ */
+function compareVersions(left: string, right: string): number | undefined {
+	const parse = (value: string): number[] | undefined => {
+		const match = /^(\d+)\.(\d+)\.(\d+)/.exec(value.trim());
+		return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : undefined;
+	};
+	const a = parse(left);
+	const b = parse(right);
+	if (!a || !b) return undefined;
+	for (let index = 0; index < 3; index += 1) {
+		if (a[index] !== b[index]) return (a[index] ?? 0) > (b[index] ?? 0) ? 1 : -1;
+	}
+	return 0;
+}
+
+function manifestRows(
+	manifest: RootManifest,
+	summary: PackageSummary,
+	theme: ThemeLike,
+	open: (url: string) => void,
+): PillBubbleLine[] {
+	const isNpm = manifest.ecosystem === "nodejs";
+	const published = isNpm ? summary.published : undefined;
+	const icon = platformIcon(manifest.ecosystem);
+	// The npm mark already spells `npm`, so the word beside it would only repeat it.
+	const head = isNpm
+		? icon
+		: `${icon} ${paint(theme, "accent", ecosystemLabel(manifest.ecosystem))}`;
+	const relation = published?.version
+		? compareVersions(manifest.version ?? "", published.version)
+		: undefined;
+
+	const rows: PillBubbleLine[] = [];
+	// The row that says `published` is the one that links: it names what npm has,
+	// so opening npm is the way to check it.
+	if (published?.version && relation !== 0) {
+		rows.push({
+			text: `${head} ${paint(theme, "dim", `${published.version} published`)}`,
+			onSelect: () => open(published.url),
+		});
+	}
+
+	const state =
+		// `private` is a package.json field: a Python manifest beside it is not
+		// affected by the JS package deciding it will not publish.
+		manifest.file === "package.json" && summary.private
+			? "private"
+			: // Only a comparison can say which way round it is: the manifest can be
+				// ahead of npm, behind it in a stale checkout, or the same.
+				relation === 1
+				? "unreleased"
+				: relation === -1
+					? "older than npm"
+					: relation === 0
+						? "published"
+						: undefined;
+	const rest = [manifest.version ?? "--", state, `· ${manifest.file}`].filter(Boolean).join(" ");
+	const row = `${head} ${paint(theme, "dim", rest)}`;
+	// With the versions equal this row is the published claim, so it links too.
+	rows.push(
+		relation === 0 && published?.version ? { text: row, onSelect: () => open(published.url) } : row,
+	);
+	return rows;
 }
 
 /** The heading for a section of packages that no workspace manager declares. */
@@ -249,14 +429,19 @@ function looseHeading(loose: readonly WorkspacePackage[], theme: ThemeLike): str
 export function packageBubbleContent(
 	summary: PackageSummary,
 	theme: ThemeLike = NO_THEME,
+	open: (url: string) => void = openExternalUrl,
 ): PillBubbleContent {
 	const primary = summary.manifests.find((manifest) => manifest.version);
-	const title =
-		[primary?.version, summary.name].filter(Boolean).join(" · ") || summary.name || "Package";
+	// No version in the title: a manifest carries the version someone is about to
+	// release, and a bubble that leads with it reads as if it had shipped. The line
+	// that knows what the registry says is the one that names a release.
+	const title = summary.published?.version
+		? `${summary.name ?? "Package"} · v${summary.published.version} on npm`
+		: (summary.name ?? "Package");
 
-	const body: string[] = [];
+	const body: PillBubbleLine[] = [];
 	for (const manifest of summary.manifests) {
-		body.push(manifestLine(manifest, summary, theme));
+		body.push(...manifestRows(manifest, summary, theme, open));
 	}
 
 	if (summary.tag) {

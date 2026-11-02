@@ -30,14 +30,17 @@ function readers(git: GitReadResult = branchStatus) {
 		result: { version: "1.2.3", ecosystem: "node", file: "package.json" },
 	}));
 	const readPullSnapshot = vi.fn(async () => undefined);
-	const readLatestTag = vi.fn(async () => "v1.2.2" as string | undefined);
+	const readPublishedVersion = vi.fn(async () => ({
+		version: "1.2.2",
+		url: "https://example.test/pkg",
+	}));
 	const deps: ProjectProbeReaders = {
 		readGitStatus,
 		readGitHost,
 		readPullSnapshot,
 		readRuntimeInfo,
 		readPackageVersion,
-		readLatestTag,
+		readPublishedVersion,
 	};
 	return {
 		deps,
@@ -46,7 +49,7 @@ function readers(git: GitReadResult = branchStatus) {
 		readPullSnapshot,
 		readRuntimeInfo,
 		readPackageVersion,
-		readLatestTag,
+		readPublishedVersion,
 	};
 }
 
@@ -104,10 +107,10 @@ describe("probeProject", () => {
 		);
 	});
 
-	it("reads the newest tag only when the version pill is on the bar", async () => {
+	it("asks the registry only when the version pill is on the bar", async () => {
 		const without = readers();
 		await probeProject("/tmp/project", configWith(["cwd"]), without.deps);
-		expect(without.readLatestTag).not.toHaveBeenCalled();
+		expect(without.readPublishedVersion).not.toHaveBeenCalled();
 
 		const withPackage = readers();
 		const probe = await probeProject(
@@ -115,8 +118,8 @@ describe("probeProject", () => {
 			configWith(["packageVersion"]),
 			withPackage.deps,
 		);
-		expect(withPackage.readLatestTag).toHaveBeenCalledTimes(1);
-		expect(probe.packageTag).toBe("v1.2.2");
+		expect(withPackage.readPublishedVersion).toHaveBeenCalledTimes(1);
+		expect(probe.publishedVersion).toBe("1.2.2");
 	});
 
 	it("asks for a forge icon only when the git pill is on the bar", async () => {
