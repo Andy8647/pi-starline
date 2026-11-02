@@ -127,21 +127,58 @@ function matchesDetection(
 
 // --- Version utilities ---
 
+async function readVersionOutput(
+	command: string,
+	args: readonly string[],
+	cwd?: string,
+): Promise<string | undefined> {
+	const { stdout, stderr } = await execFileAsync(command, [...args], {
+		cwd,
+		timeout: VERSION_TIMEOUT_MS,
+	});
+	const text =
+		`${typeof stdout === "string" ? stdout : String(stdout)}\n${typeof stderr === "string" ? stderr : String(stderr)}`.trim();
+	return text || undefined;
+}
+
+/**
+ * How to run a version command through the Windows command interpreter.
+ *
+ * `mvn` and `gradle` are `.cmd` shims there, and Node refuses to start a
+ * `.cmd`/`.bat` with `execFile` when no shell is involved, so the lookup dies with
+ * `spawn mvn ENOENT` even though the same command works in a terminal. `/d` skips
+ * the AutoRun keys, `/s` keeps the quoting of the line as written, `/c` runs and
+ * exits. The arguments come from the runtime table, never from a user.
+ */
+export function windowsVersionCommand(
+	command: string,
+	args: readonly string[],
+	comspec: string | undefined = process.env.ComSpec,
+): { file: string; args: string[] } {
+	const quote = (value: string): string =>
+		/[\s"]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+	const line = [command, ...args].map(quote).join(" ");
+	return { file: comspec || "cmd.exe", args: ["/d", "/s", "/c", line] };
+}
+
 async function runVersion(
 	command: string,
 	args: readonly string[] = [],
 	cwd?: string,
 ): Promise<string | undefined> {
 	try {
-		const { stdout, stderr } = await execFileAsync(command, [...args], {
-			cwd,
-			timeout: VERSION_TIMEOUT_MS,
-		});
-		const text =
-			`${typeof stdout === "string" ? stdout : String(stdout)}\n${typeof stderr === "string" ? stderr : String(stderr)}`.trim();
-		return text || undefined;
-	} catch {
-		return undefined;
+		return await readVersionOutput(command, args, cwd);
+	} catch (error) {
+		const missing = (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT";
+		// Only Windows has the shim problem, and only a missing command is worth a
+		// second attempt: a timeout or a non-zero exit would fail the same way twice.
+		if (process.platform !== "win32" || !missing) return undefined;
+		const fallback = windowsVersionCommand(command, args);
+		try {
+			return await readVersionOutput(fallback.file, fallback.args, cwd);
+		} catch {
+			return undefined;
+		}
 	}
 }
 
