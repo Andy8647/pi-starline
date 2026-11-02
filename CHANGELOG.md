@@ -10,6 +10,41 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [0.10.4] - unreleased
+
+A repository whose root holds more than one manifest now says so, the
+subprojects no workspace declares are listed, and the bubbles stop explaining how
+to close them.
+
+**Added**
+
+- **The packages a workspace does not declare.** `apps/web` being a pnpm member
+  said nothing about `apps/api`, `apps/ingest` and `packages/domain` sitting
+  beside it. A section after the workspace lists them: two levels deep, never
+  entering a directory that has a manifest of its own, skipping whatever the
+  workspace already listed, capped like the workspace list itself. The heading
+  names the ecosystem when they all share one (`python · not in a workspace`).
+
+**Fixed**
+
+- **A mixed repository was described as one ecosystem.** The bubble showed the
+  single manifest the version happened to come from, so a pnpm workspace root
+  whose `package.json` declares no version read as a Python project and never
+  mentioned npm at all. Every manifest in the directory now gets a line, with its
+  own version (`--` when it declares none) and its file. The pill still shows one
+  number — the first manifest that has a version — and the bubble now says which
+  file that was.
+- **A row that ended in padding.** The version column is width-matched across a
+  section for the rows that carry a mark after it; the rows without one no longer
+  end in spaces.
+
+**Changed**
+
+- **The bubbles no longer say how to close them.** ESC closes every bubble, so
+  the line only cost a row. The hints that teach something else stay —
+  `enter opens`, `↑↓ enter · click`, `/subagents-fleet for details` — minus the
+  ESC mentioned beside it.
+
 ## [0.10.3] - 2026-11-02
 
 The pull list lists each pull once and can take you to the repository, there is
