@@ -197,7 +197,7 @@ export function thinkingPickerContent(ctx: ExtensionContext): PillBubbleContent 
 						},
 					},
 		),
-		hint: "↑↓ enter · click · esc",
+		hint: "↑↓ enter · click",
 	};
 }
 
@@ -445,7 +445,7 @@ function showPackage({ ctx, pill }: PillActionContext): void {
 		() =>
 			summary
 				? packageBubbleContent(summary, theme)
-				: { title: "Package", body: ["Reading the manifest…"], hint: "esc closes" },
+				: { title: "Package", body: ["Reading the manifest…"] },
 		pill,
 	);
 	void readPackageSummary(ctx.cwd).then((next) => {

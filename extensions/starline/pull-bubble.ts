@@ -109,7 +109,9 @@ export function pullBubbleContent(now = Date.now()): PillBubbleContent {
 		return {
 			title: "Pull requests",
 			body,
-			hint: cachedWebUrl ? "enter opens · esc closes" : "esc closes",
+			// The bubble is dismissed by the key that opens every bubble, so the only
+			// thing worth saying is what a row does.
+			hint: cachedWebUrl ? "enter opens" : undefined,
 		};
 	}
 

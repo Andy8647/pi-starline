@@ -2,7 +2,12 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { expandPatterns, matchDirs, readWorkspace } from "../extensions/starline/workspace";
+import {
+	expandPatterns,
+	matchDirs,
+	readLoosePackages,
+	readWorkspace,
+} from "../extensions/starline/workspace";
 
 function makeTree(files: Record<string, string>): string {
 	const root = mkdtempSync(join(tmpdir(), "starline-workspace-"));
@@ -110,6 +115,47 @@ describe("workspace detection", () => {
 	it("is not a workspace when nothing declares one", () => {
 		const root = makeTree({ "package.json": pkg("solo", "2.0.0") });
 		expect(readWorkspace(root)).toBeUndefined();
+	});
+});
+
+describe("packages outside any declaration", () => {
+	it("finds the subprojects a workspace does not list", () => {
+		const root = makeTree({
+			"package.json": JSON.stringify({ name: "mixed", private: true }),
+			"pyproject.toml": '[project]\nname = "mixed"\nversion = "0.1.0"\n',
+			"pnpm-workspace.yaml": "packages:\n  - 'apps/web'\n",
+			"apps/web/package.json": pkg("web", "0.1.0", { private: true }),
+			"apps/api/pyproject.toml": '[project]\nname = "api"\nversion = "0.1.0"\n',
+			"apps/ingest/pyproject.toml": '[project]\nname = "ingest"\nversion = "0.1.0"\n',
+			"apps/web/node_modules/dep/package.json": pkg("dep", "9.9.9"),
+			"docs/notes.md": "not a package\n",
+		});
+
+		const workspace = readWorkspace(root);
+		const loose = readLoosePackages(root, workspace?.packages.map((entry) => entry.dir) ?? []);
+		expect(loose.map((entry) => [entry.dir, entry.version, entry.ecosystem])).toEqual([
+			["apps/api", "0.1.0", "python"],
+			["apps/ingest", "0.1.0", "python"],
+		]);
+	});
+
+	it("stops at a package rather than reading the package's own directories", () => {
+		const root = makeTree({
+			"apps/api/pyproject.toml": '[project]\nversion = "0.1.0"\n',
+			"apps/api/inner/package.json": pkg("inner", "1.0.0"),
+		});
+
+		expect(readLoosePackages(root).map((entry) => entry.dir)).toEqual(["apps/api"]);
+	});
+
+	it("looks two levels deep, not further", () => {
+		const root = makeTree({
+			"a/b/package.json": pkg("b", "1.0.0"),
+			"a/b/c/package.json": pkg("c", "1.0.0"),
+			"a/b2/d/package.json": pkg("d", "1.0.0"),
+		});
+
+		expect(readLoosePackages(root).map((entry) => entry.dir)).toEqual(["a/b"]);
 	});
 });
 
