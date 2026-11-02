@@ -10,10 +10,11 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
-## [0.10.4] - unreleased
+## [0.10.4] - 2026-11-02
 
-A repository whose root holds more than one manifest now says so, the
-subprojects no workspace declares are listed, and the bubbles stop explaining how
+A repository whose root holds more than one manifest now says so, the version
+pill says what npm actually has rather than what the manifest is about to
+release, Maven's version shows up on Windows, and the bubbles stop explaining how
 to close them.
 
 **Added**
