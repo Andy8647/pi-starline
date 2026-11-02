@@ -122,4 +122,11 @@ describe("coding-agent contract", () => {
 	it("InteractiveMode exposes renderWidgetContainer as a replaceable method", () => {
 		expectReplaceable(InteractiveMode.prototype, "InteractiveMode", "renderWidgetContainer");
 	});
+
+	// A click in the tree bubble opens Pi's own /tree on the turn (tree-pill.ts).
+	it("InteractiveMode exposes showTreeSelector for the tree bubble", () => {
+		expect(typeof descriptorInChain(InteractiveMode.prototype, "showTreeSelector")?.value).toBe(
+			"function",
+		);
+	});
 });
