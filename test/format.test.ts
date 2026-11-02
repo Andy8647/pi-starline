@@ -611,35 +611,24 @@ describe("formatPackageVersionSegment", () => {
 });
 
 describe("formatPackagePillLabel", () => {
-	const pkg = { ecosystem: "nodejs", version: "0.10.3", file: "package.json" };
+	const pkg = { ecosystem: "nodejs", version: "0.10.4", file: "package.json" };
 
-	it("puts the version behind the package glyph", () => {
-		expect(formatPackagePillLabel(pkg, "v0.10.3", "nerd")).toBe("\u{f487} 0.10.3");
-	});
-
-	it("marks a version the newest tag does not name", () => {
-		expect(formatPackagePillLabel(pkg, "v0.10.2", "nerd")).toBe("\u{f487} 0.10.3*");
-	});
-
-	it("reads the tag's prefix rather than requiring a bare version", () => {
+	it("shows the version the registry has, not the manifest's", () => {
 		expect(formatPackagePillLabel(pkg, "0.10.3", "nerd")).toBe("\u{f487} 0.10.3");
-		expect(formatPackagePillLabel(pkg, "release-0.10.3", "nerd")).toBe("\u{f487} 0.10.3");
-		expect(formatPackagePillLabel(pkg, "@scope/pkg@0.10.3", "nerd")).toBe("\u{f487} 0.10.3");
 	});
 
-	it("does not let a tag that merely ends in the same digits count as a match", () => {
-		// `11.2.3` ends with `2.3`; a version is a whole segment, not a suffix.
-		expect(formatPackagePillLabel({ ...pkg, version: "2.3" }, "v11.2.3", "nerd")).toBe(
-			"\u{f487} 2.3*",
-		);
+	it("never marks anything unreleased", () => {
+		// Git tags are a local marker; the registry is what decides what shipped, so
+		// the pill has nothing to compare and no star to draw.
+		expect(formatPackagePillLabel(pkg, "0.10.3", "nerd")).not.toContain("*");
 	});
 
-	it("leaves a repository with no tags unmarked", () => {
-		expect(formatPackagePillLabel(pkg, undefined, "nerd")).toBe("\u{f487} 0.10.3");
+	it("falls back to the manifest when the registry has no answer", () => {
+		expect(formatPackagePillLabel(pkg, undefined, "nerd")).toBe("\u{f487} 0.10.4");
 	});
 
 	it("renders nothing without a manifest", () => {
-		expect(formatPackagePillLabel(undefined, "v0.10.3", "nerd")).toBe("");
+		expect(formatPackagePillLabel(undefined, "0.10.3", "nerd")).toBe("");
 	});
 });
 

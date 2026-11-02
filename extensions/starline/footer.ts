@@ -473,7 +473,7 @@ export function installFooter(
 										config.colors.packageVersion,
 										formatPackagePillLabel(
 											state.packageVersion,
-											state.packageTag,
+											state.packagePublished,
 											iconMode,
 											config.icons.package,
 										),

@@ -27,6 +27,18 @@ to close them.
 
 **Fixed**
 
+- **A version that had not shipped read as published.** The bubble's first row
+  said `0.10.4 public` because `package.json` declared 0.10.4 and was not
+  private, which reads as if npm already had it. The registry is now asked for
+  `latest`: its version gets a `published` row of its own, the manifest's version
+  is called `unreleased` when the two differ, and with no answer from the
+  registry the row claims nothing at all. The title names the published version
+  instead of the manifest's, and with the two equal one row carries both. The pill
+  follows the same rule and shows the registry's version; the `*` that compared it
+  against a git tag is gone, because a tag is a local marker and the registry is
+  what says something shipped. The manifest's own row says `unreleased` only when
+  it is ahead of npm; a checkout that is behind says so (`older than npm`)
+  instead of being called a pending release.
 - **A mixed repository was described as one ecosystem.** The bubble showed the
   single manifest the version happened to come from, so a pnpm workspace root
   whose `package.json` declares no version read as a Python project and never
@@ -40,6 +52,12 @@ to close them.
 
 **Changed**
 
+- **A manifest's platform has its own mark, and links to the package.** npm,
+  cargo, composer, pub, mix, cabal, pip, gems, maven and the rest each draw their
+  ecosystem's glyph instead of the generic package box — for npm the mark spells
+  `npm` already, so the word beside it is gone — and the row that names the
+  published version opens that package on npm. The manifest's own row is not a
+  link: it is a fact about this checkout, not about what shipped.
 - **The bubbles no longer say how to close them.** ESC closes every bubble, so
   the line only cost a row. The hints that teach something else stay —
   `enter opens`, `↑↓ enter · click`, `/subagents-fleet for details` — minus the

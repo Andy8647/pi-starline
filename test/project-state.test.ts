@@ -150,9 +150,9 @@ describe("applyProjectRefreshToState", () => {
 		expect(state.packageVersion).toBeUndefined();
 	});
 
-	it("keeps the newest tag when a refresh did not ask for one, and clears it with the directory", () => {
+	it("keeps the published version when a refresh did not ask for one, and clears it with the directory", () => {
 		const state = createInitialState(emptyGitStatus());
-		state.packageTag = "v1.2.3";
+		state.packagePublished = "1.2.3";
 
 		applyProjectRefreshToState(state, {
 			cwd: "/repo",
@@ -160,7 +160,7 @@ describe("applyProjectRefreshToState", () => {
 			git: { kind: "ok", status: emptyGitStatus() },
 			runtime: { kind: "ok", runtime: undefined },
 		});
-		expect(state.packageTag).toBe("v1.2.3");
+		expect(state.packagePublished).toBe("1.2.3");
 
 		applyProjectRefreshToState(state, {
 			cwd: "/new",
@@ -168,7 +168,7 @@ describe("applyProjectRefreshToState", () => {
 			git: { kind: "error" },
 			runtime: { kind: "error" },
 		});
-		expect(state.packageTag).toBeUndefined();
+		expect(state.packagePublished).toBeUndefined();
 	});
 
 	it("clears commit and metrics on cwd change", () => {

@@ -20,8 +20,8 @@ export function applyProjectRefreshToState(
 		gitHost?: GitHost;
 		runtime: RuntimeReadResult;
 		packageVersion?: PackageVersionReadResult;
-		/** The newest tag, for the unreleased mark; undefined when not asked for. */
-		packageTag?: string;
+		/** What the registry has as `latest`; undefined when not asked for. */
+		publishedVersion?: string;
 		/** Undefined when the bar does not show a pull: keep the last answer. */
 		pull?: { snapshot: PullSnapshot | undefined };
 	},
@@ -33,7 +33,7 @@ export function applyProjectRefreshToState(
 		state.runtime = undefined;
 		state.gitHost = undefined;
 		state.packageVersion = undefined;
-		state.packageTag = undefined;
+		state.packagePublished = undefined;
 		state.pull = undefined;
 	}
 
@@ -71,7 +71,7 @@ export function applyProjectRefreshToState(
 		}
 	}
 
-	if (args.packageTag !== undefined) state.packageTag = args.packageTag;
+	if (args.publishedVersion !== undefined) state.packagePublished = args.publishedVersion;
 
 	return args.cwd;
 }

@@ -27,8 +27,8 @@ export type FooterState = GitStatusSummary & {
 	runtime?: RuntimeInfo;
 	gitHost?: GitHost;
 	packageVersion?: PackageVersionResult;
-	/** The newest tag, for the mark that says the version above is unreleased. */
-	packageTag?: string;
+	/** What the registry has as `latest`: the version the pill shows. */
+	packagePublished?: string;
 	/** The branch's pull, or the repository's open count, as last read. */
 	pull?: PullSnapshot;
 	sessionStartEpoch?: number;
@@ -48,6 +48,7 @@ export function createInitialState(gitDefaults: GitStatusSummary): FooterState {
 		runtime: undefined,
 		gitHost: undefined,
 		packageVersion: undefined,
+		packagePublished: undefined,
 		pull: undefined,
 		sessionStartEpoch: Date.now(),
 		...gitDefaults,

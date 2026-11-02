@@ -513,22 +513,23 @@ export function formatPackageVersionSegment(
 }
 
 /**
- * The package pill: the manifest version behind the package glyph.
+ * The package pill: the version the registry has, behind the package glyph.
  *
- * A `*` means the newest tag says something else was the last thing released.
- * A repository with no tags gets no mark: there is nothing to compare against,
- * and a mark on every version would stop meaning anything.
+ * The manifest's version is the one someone is about to release, so it is not the
+ * number to show: a pill reading `0.10.4` while npm still has `0.10.3` invites a
+ * release that has not happened. Git is not consulted either — a tag is a local
+ * marker, and the registry is the thing that decides what is out there. When the
+ * registry has no answer the manifest's version is the only fact left.
  */
 export function formatPackagePillLabel(
 	pkg: PackageVersionResult | undefined,
-	tag: string | undefined,
+	published: string | undefined,
 	mode: IconMode = "auto",
 	configuredIcon: string = "",
 ): string {
 	if (!pkg) return "";
 	const icon = resolvePackageIcon(configuredIcon, mode);
-	const unreleased = tag !== undefined && !tagMatchesVersion(tag, pkg.version);
-	return `${icon} ${pkg.version}${unreleased ? "*" : ""}`;
+	return `${icon} ${published ?? pkg.version}`;
 }
 
 /** `v1.2.3`, `release-1.2.3` and `@scope/pkg@1.2.3` all end in the version. */
