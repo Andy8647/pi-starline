@@ -27,7 +27,7 @@ describe("package bubble", () => {
 
 	it("names the version, the manifest and what was released", () => {
 		const summary: PackageSummary = {
-			manifest: { ecosystem: "nodejs", version: "0.10.3", file: "package.json" },
+			manifests: [{ ecosystem: "nodejs", version: "0.10.3", file: "package.json" }],
 			name: "pi-starline",
 			tag: "v0.10.2",
 			delta: { commits: 3, paths: [] },
@@ -36,15 +36,14 @@ describe("package bubble", () => {
 		const content = packageBubbleContent(summary);
 		expect(content.title).toBe("0.10.3 · pi-starline");
 		expect(content.body).toEqual([
-			`${PKG} npm public · package.json`,
+			`${PKG} npm 0.10.3 public · package.json`,
 			"󰓹 v0.10.2 · 3 commits ahead",
 		]);
-		expect(content.hint).toBe("esc closes");
 	});
 
 	it("says the tag is HEAD when nothing has landed since", () => {
 		const content = packageBubbleContent({
-			manifest: { ecosystem: "python", version: "2.1.0", file: "pyproject.toml" },
+			manifests: [{ ecosystem: "python", version: "2.1.0", file: "pyproject.toml" }],
 			name: "acme",
 			tag: "2.1.0",
 			delta: { commits: 0, paths: [] },
@@ -55,26 +54,43 @@ describe("package bubble", () => {
 
 	it("marks a package nothing is published from", () => {
 		const content = packageBubbleContent({
-			manifest: { ecosystem: "nodejs", version: "0.0.3", file: "package.json" },
+			manifests: [{ ecosystem: "nodejs", version: "0.0.3", file: "package.json" }],
 			name: "pi-monorepo",
 			private: true,
 		});
 
-		expect(content.body).toEqual([`${PKG} npm private · package.json`]);
+		expect(content.body).toEqual([`${PKG} npm 0.0.3 private · package.json`]);
 	});
 
 	it("leaves the release line out when the repository has no tag", () => {
 		const content = packageBubbleContent({
-			manifest: { ecosystem: "rust", version: "0.4.2", file: "Cargo.toml" },
+			manifests: [{ ecosystem: "rust", version: "0.4.2", file: "Cargo.toml" }],
 			name: "acme",
 		});
 
-		expect(content.body).toEqual([`${PKG} cargo public · Cargo.toml`]);
+		expect(content.body).toEqual([`${PKG} cargo 0.4.2 · Cargo.toml`]);
+	});
+
+	it("names every manifest, so a mixed repository is not described as one ecosystem", () => {
+		const content = packageBubbleContent({
+			manifests: [
+				{ ecosystem: "nodejs", file: "package.json" },
+				{ ecosystem: "python", version: "0.1.0", file: "pyproject.toml" },
+			],
+			name: "mwac-space-navigator",
+			private: true,
+		});
+
+		expect(content.title).toBe("0.1.0 · mwac-space-navigator");
+		expect(content.body).toEqual([
+			`${PKG} npm -- private · package.json`,
+			`${PKG} python 0.1.0 · pyproject.toml`,
+		]);
 	});
 
 	it("lists a workspace, with the packages the tag's diff touched", () => {
 		const summary: PackageSummary = {
-			manifest: { ecosystem: "nodejs", version: "0.0.3", file: "package.json" },
+			manifests: [{ ecosystem: "nodejs", version: "0.0.3", file: "package.json" }],
 			name: "pi-monorepo",
 			private: true,
 			tag: "v0.99.0",
@@ -94,7 +110,7 @@ describe("package bubble", () => {
 
 		const content = packageBubbleContent(summary);
 		expect(content.body).toEqual([
-			`${PKG} npm private · package.json`,
+			`${PKG} npm 0.0.3 private · package.json`,
 			"󰓹 v0.99.0 · 12 commits ahead",
 			"pnpm workspace · 3 packages",
 			"  ai                       1.2.0  changed",
@@ -103,8 +119,55 @@ describe("package bubble", () => {
 		]);
 	});
 
+	it("lists the subprojects no workspace declares", () => {
+		const summary: PackageSummary = {
+			manifests: [
+				{ ecosystem: "nodejs", file: "package.json" },
+				{ ecosystem: "python", version: "0.1.0", file: "pyproject.toml" },
+			],
+			name: "mwac-space-navigator",
+			private: true,
+			tag: "v0.1.0",
+			delta: { commits: 4, paths: ["apps/api/mwac_api/main.py", "apps/web/src/App.tsx"] },
+			workspace: {
+				manager: "pnpm",
+				packages: [member("apps/web", "web", "0.1.0", { private: true })],
+			},
+			loose: [
+				{ dir: "apps/api", name: "api", version: "0.1.0", ecosystem: "python" },
+				{ dir: "apps/ingest", name: "ingest", version: undefined, ecosystem: "python" },
+			],
+		};
+
+		const content = packageBubbleContent(summary);
+		expect(content.body).toEqual([
+			`${PKG} npm -- private · package.json`,
+			`${PKG} python 0.1.0 · pyproject.toml`,
+			"󰓹 v0.1.0 · 4 commits ahead",
+			"pnpm workspace · 1 package",
+			"  web                      0.1.0  changed · private",
+			"python · not in a workspace",
+			"  api                      0.1.0  changed",
+			"  ingest                   --",
+		]);
+	});
+
+	it("names the ecosystem only when every loose package shares one", () => {
+		const summary: PackageSummary = {
+			manifests: [{ ecosystem: "nodejs", version: "1.0.0", file: "package.json" }],
+			name: "mixed",
+			loose: [
+				{ dir: "svc/api", name: "api", version: "1.0.0", ecosystem: "python" },
+				{ dir: "svc/web", name: "web", version: "1.0.0", ecosystem: "nodejs" },
+			],
+		};
+
+		expect(packageBubbleContent(summary).body).toContain("· not in a workspace");
+	});
+
 	it("says a workspace matched nothing rather than drawing an empty list", () => {
 		const content = packageBubbleContent({
+			manifests: [],
 			name: "acme",
 			workspace: { manager: "cargo", packages: [] },
 		});
@@ -116,7 +179,7 @@ describe("package bubble", () => {
 	});
 
 	it("falls back to the directory name when there is no manifest", () => {
-		const content = packageBubbleContent({ name: "scratch" });
+		const content = packageBubbleContent({ manifests: [], name: "scratch" });
 
 		expect(content.title).toBe("scratch");
 		expect(content.body).toEqual(["No package manifest in this directory."]);
@@ -146,19 +209,20 @@ describe("changedPackageDirs", () => {
 });
 
 describe("readPackageSummary", () => {
-	it("reads the manifest and the workspace without asking git for a delta with no tag", async () => {
+	it("reads the manifests and the workspace without asking git for a delta with no tag", async () => {
 		const summary = await readPackageSummary("/tmp/acme", {
-			readManifest: () => ({ ecosystem: "nodejs", version: "1.2.3", file: "package.json" }),
+			readManifests: () => [{ ecosystem: "nodejs", version: "1.2.3", file: "package.json" }],
 			readLatestTag: async () => undefined,
 			readTagDelta: async () => {
 				throw new Error("no tag, so no diff");
 			},
 			readWorkspace: () => ({ manager: "pnpm", packages: [member("packages/ui", "ui", "1.0.0")] }),
+			readLoosePackages: () => [],
 		});
 
 		expect(summary.tag).toBeUndefined();
 		expect(summary.delta).toBeUndefined();
-		expect(summary.manifest?.version).toBe("1.2.3");
+		expect(summary.manifests[0]?.version).toBe("1.2.3");
 		expect(summary.name).toBe("acme");
 		expect(summary.workspace?.manager).toBe("pnpm");
 	});
@@ -166,16 +230,53 @@ describe("readPackageSummary", () => {
 	it("measures HEAD against the tag it was given", async () => {
 		const asked: string[] = [];
 		const summary = await readPackageSummary("/tmp/acme", {
-			readManifest: () => null,
+			readManifests: () => [],
 			readLatestTag: async () => "v1.2.2",
 			readTagDelta: async (_cwd, tag) => {
 				asked.push(tag);
 				return { commits: 2, paths: ["packages/ui/index.ts"] };
 			},
 			readWorkspace: () => undefined,
+			readLoosePackages: () => [],
 		});
 
 		expect(asked).toEqual(["v1.2.2"]);
 		expect(summary.delta?.commits).toBe(2);
+	});
+
+	it("skips the subproject scan in a directory that is not a project", async () => {
+		const asked: string[] = [];
+		const summary = await readPackageSummary("/tmp/scratch", {
+			readManifests: () => [],
+			readLatestTag: async () => undefined,
+			readTagDelta: async () => undefined,
+			readWorkspace: () => undefined,
+			readLoosePackages: (cwd) => {
+				asked.push(cwd);
+				return [];
+			},
+		});
+
+		expect(asked).toEqual([]);
+		expect(summary.loose).toEqual([]);
+	});
+
+	it("hands the workspace's own packages to the subproject scan so nothing is listed twice", async () => {
+		const seen: string[][] = [];
+		await readPackageSummary("/tmp/acme", {
+			readManifests: () => [{ ecosystem: "nodejs", version: "1.0.0", file: "package.json" }],
+			readLatestTag: async () => undefined,
+			readTagDelta: async () => undefined,
+			readWorkspace: () => ({
+				manager: "pnpm",
+				packages: [member("apps/web", "web", "1.0.0")],
+			}),
+			readLoosePackages: (_cwd, known) => {
+				seen.push([...(known ?? [])]);
+				return [];
+			},
+		});
+
+		expect(seen).toEqual([["apps/web"]]);
 	});
 });

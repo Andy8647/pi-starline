@@ -570,11 +570,33 @@ function hasAnyExtension(name: string, extensions: readonly string[]): boolean {
 	return false;
 }
 
-export function readPackageVersion(cwd: string): PackageVersionResult | null {
+/**
+ * One manifest found in a directory, whether or not it carries a version.
+ *
+ * A repository can hold several at once — a pnpm workspace root with a
+ * `package.json` and the Python service beside it has two — and the bubble has
+ * to name both rather than pick one and imply the other is not there.
+ */
+export type RootManifest = {
+	ecosystem: string;
+	file: string;
+	/** Undefined when the manifest declares no static version. */
+	version?: string;
+};
+
+/**
+ * Every manifest this directory holds, in parser order.
+ *
+ * Order is the parsers' own: `package.json` before `pyproject.toml`, so a
+ * caller that wants "the version" takes the first entry that has one and gets
+ * the same answer the single-manifest reader always gave it.
+ */
+export function readRootManifests(cwd: string): RootManifest[] {
+	const manifests: RootManifest[] = [];
+
 	// File-mode readers: cheap `existsSync` checks in deterministic order.
-	for (let i = 0; i < parsers.length; i++) {
-		const source = parsers[i];
-		if (!source || source.kind === "extensions") continue;
+	for (const source of parsers) {
+		if (source.kind === "extensions") continue;
 		for (const file of source.files) {
 			const full = join(cwd, file);
 			if (!existsSync(full)) continue;
@@ -586,28 +608,26 @@ export function readPackageVersion(cwd: string): PackageVersionResult | null {
 			} catch {
 				continue;
 			}
-			if (version) return { ecosystem: ecosystemFor(file), version, file };
+			manifests.push({ ecosystem: ecosystemFor(file), file, version });
 		}
 	}
 
-	// Extension-mode readers: one readdir, then try each candidate against
-	// its parser. The reading order matches `parsers` declaration order so
-	// Haskell (`*.cabal`) is preferred over Ruby (`*.gemspec`) when both
-	// exist (very rare; deterministic and documented).
+	// Extension-mode readers: one readdir, then try each candidate against its
+	// parser. The reading order matches `parsers` declaration order so Haskell
+	// (`*.cabal`) is preferred over Ruby (`*.gemspec`) when both exist (very
+	// rare; deterministic and documented).
 	let entries: readonly string[];
 	try {
-		entries = readdirSync(cwd);
+		entries = readdirSync(cwd).sort();
 	} catch {
-		return null;
+		return manifests;
 	}
 
-	for (let i = 0; i < parsers.length; i++) {
-		const source = parsers[i];
-		if (source?.kind !== "extensions") continue;
+	for (const source of parsers) {
+		if (source.kind !== "extensions") continue;
 		for (const entry of entries) {
 			if (!hasAnyExtension(entry, source.files)) continue;
-			const full = join(cwd, entry);
-			const raw = safeReadFile(full);
+			const raw = safeReadFile(join(cwd, entry));
 			if (raw === undefined) continue;
 			let version: string | undefined;
 			try {
@@ -615,11 +635,24 @@ export function readPackageVersion(cwd: string): PackageVersionResult | null {
 			} catch {
 				continue;
 			}
-			if (version) return { ecosystem: ecosystemFor(entry), version, file: entry };
+			manifests.push({ ecosystem: ecosystemFor(entry), file: entry, version });
 		}
 	}
 
-	return null;
+	return manifests;
+}
+
+/**
+ * The version the pill shows: the first manifest that declares one.
+ *
+ * A version-less `package.json` (a private workspace root, the usual shape)
+ * falls through to whatever else the directory holds, which is why a pnpm
+ * monorepo can report the version from its `pyproject.toml`.
+ */
+export function readPackageVersion(cwd: string): PackageVersionResult | null {
+	const manifest = readRootManifests(cwd).find((entry) => entry.version !== undefined);
+	if (!manifest?.version) return null;
+	return { ecosystem: manifest.ecosystem, version: manifest.version, file: manifest.file };
 }
 
 /**

@@ -436,3 +436,38 @@ export function readWorkspace(cwd: string): WorkspaceInfo | undefined {
 	}
 	return undefined;
 }
+
+/** How deep a repository without a workspace declaration is still looked at. */
+const LOOSE_DEPTH = 2;
+
+/**
+ * Subprojects no workspace declaration covers.
+ *
+ * A mixed repository is the case this exists for: `apps/web` is a pnpm
+ * workspace member, and the Python services beside it (`apps/api`,
+ * `packages/domain`) belong to nothing at all. Listing only the declared
+ * member would describe a four-package repository as a one-package one.
+ *
+ * Two levels, not a crawl, and a directory that has a manifest is not entered:
+ * a package's internals are not subprojects. Directories a workspace already
+ * lists are skipped, so nothing appears twice.
+ */
+export function readLoosePackages(cwd: string, known: Iterable<string> = []): WorkspacePackage[] {
+	const seen = new Set(known);
+	const packages: WorkspacePackage[] = [];
+	const walk = (relative: string, depth: number): void => {
+		if (packages.length >= MAX_PACKAGES || depth >= LOOSE_DEPTH) return;
+		for (const child of childDirs(join(cwd, relative))) {
+			const dir = relative ? `${relative}/${child}` : child;
+			if (seen.has(dir)) continue;
+			const member = readMember(cwd, dir);
+			if (member) {
+				packages.push(member);
+				continue;
+			}
+			walk(dir, depth + 1);
+		}
+	};
+	walk("", 0);
+	return packages;
+}
