@@ -77,7 +77,23 @@ export type PillRenderOptions = {
 	ascii?: boolean;
 	/** Called once per pill that survived truncation, in left-to-right order. */
 	onSpan?: (span: PillSpan) => void;
+	/**
+	 * The pills that did not fit, in bar order.
+	 *
+	 * The bar never draws part of a pill: when it runs out of room it drops whole
+	 * pills from its right end and stands a `+N` counter in their place, so what is
+	 * missing is still countable and still reachable through that pill's bubble.
+	 * Dropping from the right makes `pill.segments` its own priority list — what is
+	 * leftmost survives longest — which is the one ordering the user already owns.
+	 */
+	onOverflow?: (dropped: readonly PillOverflow[]) => void;
 };
+
+/** A pill that did not fit, as its bubble lists it. */
+export type PillOverflow = { key: string; text: string };
+
+/** Key of the counter that stands in for the pills that did not fit. */
+export const OVERFLOW_PILL_KEY = "overflow";
 
 export type PillInput = {
 	/** Segment name, for diagnostics. */
@@ -297,6 +313,84 @@ export function renderPillBar(
 	const leftCap = wantsCaps && config.caps === "round" ? CAP_GLYPHS.left : "";
 	const rightCap = wantsCaps ? CAP_GLYPHS.right : "";
 
+	const limit = width > 0 ? width : Number.POSITIVE_INFINITY;
+	const separatorWidth = visibleWidth(separator);
+	const capsWidth = visibleWidth(leftCap) + visibleWidth(rightCap);
+	/** A pill costs its text plus the padding either side. */
+	const pillWidth = (text: string) => visibleWidth(text) + 2;
+	/** Width of `kept` pills, plus an optional counter standing in for the rest. */
+	const lineWidth = (kept: number, counter: string | undefined): number => {
+		let total = capsWidth;
+		for (let index = 0; index < kept; index++) {
+			total += (index > 0 ? separatorWidth : 0) + pillWidth(pills[index]?.text ?? "");
+		}
+		if (counter !== undefined) {
+			total += (kept > 0 ? separatorWidth : 0) + pillWidth(counter);
+		}
+		return total;
+	};
+	const counterText = (dropped: number) => `+${dropped}`;
+
+	// Everything fits until proven otherwise, which is the common case.
+	let kept = pills.length;
+	let showCounter = false;
+	let truncateFirstTo = 0;
+
+	if (lineWidth(kept, undefined) > limit) {
+		kept = 0;
+		for (let candidate = pills.length - 1; candidate >= 1; candidate--) {
+			if (lineWidth(candidate, counterText(pills.length - candidate)) <= limit) {
+				kept = candidate;
+				showCounter = true;
+				break;
+			}
+		}
+
+		if (kept === 0) {
+			// No pill plus the counter fits. Whole pills still count for more than
+			// the counter does, so fill with those first; only when not even one fits
+			// does the first pill lose part of its label (`Long…` rather than `+8`).
+			for (let candidate = pills.length - 1; candidate >= 1; candidate--) {
+				if (lineWidth(candidate, undefined) <= limit) {
+					kept = candidate;
+					break;
+				}
+			}
+
+			if (kept === 0) {
+				const room = limit - capsWidth - 2;
+				if (room >= 1) {
+					kept = 1;
+					truncateFirstTo = room;
+				} else if (lineWidth(0, counterText(pills.length)) <= limit) {
+					showCounter = true;
+				}
+			}
+		}
+	}
+
+	const dropped = pills.slice(kept);
+	const counterPill: PreparedPill | undefined =
+		showCounter && dropped.length > 0
+			? (() => {
+					const bg = neutralBackground(theme, source);
+					return {
+						key: OVERFLOW_PILL_KEY,
+						text: counterText(dropped.length),
+						bg,
+						fg: contrastTextSgr(bg),
+						bold: config.bold,
+					};
+				})()
+			: undefined;
+
+	const line: PreparedPill[] = pills.slice(0, kept);
+	if (counterPill) line.push(counterPill);
+	if (truncateFirstTo > 0 && line[0]) {
+		line[0] = { ...line[0], text: truncateToWidth(line[0].text, truncateFirstTo, "…") };
+	}
+	if (line.length === 0) return "";
+
 	let out = "";
 	// Columns the terminal will draw so far. Getting this from `visibleWidth`
 	// rather than string length is what makes CJK segment text hit the right cells.
@@ -307,22 +401,20 @@ export function renderPillBar(
 	};
 
 	const capStart = column;
-	const firstBg = pills[0]?.bg;
+	const firstBg = line[0]?.bg;
 	if (leftCap && firstBg) {
 		const capFg = toForegroundSgr(firstBg);
 		if (capFg) emit(`${DEFAULT_BG}${capFg}${leftCap}${RESET}`);
 	}
 
-	const spans: PillSpan[] = [];
-
-	pills.forEach((pill, index) => {
+	line.forEach((pill, index) => {
 		// The left cap opens the bar in the first pill's colour, so it belongs to it.
 		const startColumn = index === 0 ? capStart : column;
 		const bodyStartColumn = column;
 		emit(`${pill.bg}${pill.fg}${pill.bold ? BOLD : ""} ${pill.text} ${RESET}`);
 		const bodyEndColumn = column;
 
-		const next = pills[index + 1];
+		const next = line[index + 1];
 		if (next) {
 			// A solid arrow works by being the left colour on the right colour, so
 			// it vanishes when the two pills share a background — several segments
@@ -343,7 +435,7 @@ export function renderPillBar(
 
 		// The arrow (or cap) is emitted before the span closes, so it belongs to
 		// the pill that points out of itself.
-		spans.push({
+		options.onSpan?.({
 			key: pill.key,
 			startColumn,
 			endColumn: column,
@@ -354,23 +446,16 @@ export function renderPillBar(
 		});
 	});
 
+	// The last line of defence: a pill whose own text is wider than the terminal
+	// still cannot be allowed to wrap the footer.
 	const rendered = width > 0 ? truncateToWidth(out, width, "") : out;
-	if (options.onSpan) {
-		// Truncation keeps a prefix, so surviving cells keep their columns; only
-		// the far end needs clamping, and a pill clipped away entirely vanishes.
-		const visible = visibleWidth(rendered);
-		for (const span of spans) {
-			const startColumn = Math.min(span.startColumn, visible);
-			const endColumn = Math.min(span.endColumn, visible);
-			if (endColumn > startColumn) {
-				const bodyStartColumn = Math.min(span.bodyStartColumn, endColumn - 1);
-				const bodyEndColumn = Math.max(
-					bodyStartColumn + 1,
-					Math.min(span.bodyEndColumn, endColumn),
-				);
-				options.onSpan({ ...span, startColumn, endColumn, bodyStartColumn, bodyEndColumn });
-			}
-		}
+	if (options.onOverflow && dropped.length > 0) {
+		options.onOverflow(
+			dropped.map((pill) => ({
+				key: pill.key,
+				text: stripVTControlCharacters(pill.text).trim(),
+			})),
+		);
 	}
 
 	return rendered;

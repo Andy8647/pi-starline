@@ -33,12 +33,26 @@ import { collectPillInputs, type PillSpan, renderPillBar } from "./pill";
 import { pillActionFor, queuedSegmentText, runPillAction } from "./pill-actions";
 import { clearPillAnchors, setPillAnchors } from "./pill-anchors";
 import { closePillBubble, isPillBubbleOpenFor, type PillAnchor } from "./pill-bubble";
+import { setPillOverflowRows } from "./pill-overflow";
 import { pullColorSpec, pullSegmentText } from "./pull";
 import type { FooterState } from "./state";
 import { renderStyleForSource } from "./style";
 import { subagentsSegmentText } from "./subagent-fleet";
+import { activeTpsHistory } from "./tps-history";
+import { medianTps, tpsTierFor } from "./tps-tier";
 import type { TurnTiming } from "./turn-clock";
 import { modelPillLabel } from "./working-indicator";
+
+/**
+ * The two transcript moves, drawn as their own pills.
+ *
+ * Plain Unicode arrows rather than Starship glyphs: `icons.ahead` and
+ * `icons.behind` already use `↑` and `↓` inside the git pill, and two bare
+ * `↑`/`↓` pills next to it would read as more of the same. `⇡`/`⇣` are the same
+ * idea at a different weight, and both survive a terminal without a Nerd Font.
+ */
+const PREVIOUS_PROMPT_LABEL = "⇡";
+const LATEST_MESSAGE_LABEL = "⇣";
 
 /**
  * Pi's component mouse event and result. Pi dispatches to `handleMouse` from
@@ -378,6 +392,19 @@ export function installFooter(
 				const costDisplay = withIcon(config.icons.cost, state.costLabel);
 				const tpsLabel = buildTpsLabel(hooks.getLiveTps?.());
 				const tpsDisplay = tpsLabel ? withIcon(config.icons.tps, tpsLabel) : "";
+				// Slow, usual or fast *for this session*: the rate is read against the median
+				// of its finished messages, not against a number that would mean something
+				// different on every model. See `tps-tier.ts`.
+				const tpsTier = tpsTierFor(
+					hooks.getLiveTps?.(),
+					medianTps((activeTpsHistory()?.all() ?? []).map((point) => point.tps)),
+				);
+				const tpsColor =
+					tpsTier === "fast"
+						? (config.colors.tpsFast ?? config.colors.tps)
+						: tpsTier === "slow"
+							? (config.colors.tpsSlow ?? config.colors.tps)
+							: config.colors.tps;
 				// The one pill shows a percentage; the rest of these numbers are only
 				// on screen while its bubble is open.
 				const contextTabTokens = useLiveContext ? liveContext.tokens : undefined;
@@ -419,6 +446,10 @@ export function installFooter(
 							return sessionNameLabel;
 						case "git":
 							return git.label;
+						case "previous_prompt":
+							return PREVIOUS_PROMPT_LABEL;
+						case "latest":
+							return LATEST_MESSAGE_LABEL;
 						case "runtime": {
 							if (!state.runtime) return "";
 							const symbol = resolveRuntimeSymbol(
@@ -464,7 +495,7 @@ export function installFooter(
 						case "cost":
 							return renderStyleForSource(theme, colorSource, config.colors.cost, costDisplay);
 						case "tps":
-							return renderStyleForSource(theme, colorSource, config.colors.tps, tpsDisplay);
+							return renderStyleForSource(theme, colorSource, tpsColor, tpsDisplay);
 						case "package_version":
 							return state.packageVersion
 								? renderStyleForSource(
@@ -510,6 +541,11 @@ export function installFooter(
 							return config.colors.model;
 						case "thinking":
 							return config.colors.thinking ?? thinkingThemeKey(thinkingText);
+						case "previousPrompt":
+						case "latest":
+							// No colour of its own: both are controls, not readings, so they take
+							// the bar's neutral background like any other uncoloured segment.
+							return "";
 						case "queue":
 							return config.colors.queue;
 						case "subagents":
@@ -534,7 +570,7 @@ export function installFooter(
 						case "cost":
 							return config.colors.cost;
 						case "tps":
-							return config.colors.tps;
+							return tpsColor;
 						case "sessionDuration":
 							return config.colors.sessionDuration;
 						case "username":
@@ -567,6 +603,9 @@ export function installFooter(
 					{
 						ascii: iconMode === "ascii",
 						onSpan: (span) => spans.push(span),
+						// The counter pill answers a click with what it is counting, so the
+						// render has to say which pills it left out. See `pill-overflow.ts`.
+						onOverflow: setPillOverflowRows,
 					},
 				);
 				// Nothing has content: draw nothing rather than a bare pair of caps.

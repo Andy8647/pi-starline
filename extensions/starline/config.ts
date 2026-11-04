@@ -218,6 +218,10 @@ export type PolishedTuiConfig = {
 		cost: ColorSpec;
 		/** Decode throughput of the latest assistant message. */
 		tps: ColorSpec;
+		/** Throughput well below this session's usual rate. Defaults to `colors.tps` when empty. */
+		tpsSlow?: ColorSpec;
+		/** Throughput well above this session's usual rate. */
+		tpsFast?: ColorSpec;
 		runtimePrefix: ColorSpec;
 		extensionStatus: ColorSpec;
 		sessionDuration: ColorSpec;
@@ -285,6 +289,8 @@ export const defaultConfig: PolishedTuiConfig = {
 		contextError: "bold red",
 		cost: "bold green",
 		tps: "bright-black",
+		tpsSlow: "yellow",
+		tpsFast: "bold green",
 		runtimePrefix: "",
 		extensionStatus: "bright-black",
 		sessionDuration: "yellow",
@@ -529,6 +535,8 @@ function normalizeColors(record: Record<string, unknown>): Partial<PolishedTuiCo
 		contextError: colorValue(record, "contextError"),
 		cost: colorValue(record, "cost"),
 		tps: colorValue(record, "tps"),
+		tpsSlow: colorValue(record, "tpsSlow"),
+		tpsFast: colorValue(record, "tpsFast"),
 		runtimePrefix: colorValue(record, "runtimePrefix"),
 		extensionStatus: colorValue(record, "extensionStatus"),
 		sessionDuration: colorValue(record, "sessionDuration"),

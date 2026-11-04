@@ -10,6 +10,61 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [0.11.0] - 2026-11-05
+
+Pi's `↓ Jump to latest message` block is gone from the transcript, and the two
+moves it stood for are pills on the bar instead. One of them is new: there was
+no way back to the previous prompt except the keyboard.
+
+**Added**
+
+- **`previousPrompt` and `latest`, two pills that move the transcript.** They sit
+  on the bar like any other pill and draw one arrow each (`⇡` and `⇣`, not `↑`
+  and `↓`, which the git pill already uses for ahead and behind).
+  `previousPrompt` jumps to the previous prompt's first row, aligned to the top
+  of the viewport; `latest` returns to the end and resumes following new output.
+  Both stay on the bar all the time, so scrolling never reflows the bar, and a
+  press with nowhere to go does nothing instead of disappearing: `latest` at the
+  end of the transcript, `previousPrompt` when no prompt starts above the
+  viewport. `⇡` and `⇣` take the bar's neutral background — they are controls,
+  not readings, so `colors.*` is untouched. Both are placed after `thinking` by
+  default, and `/starline previousPrompt` and `/starline latest` do the same two
+  jumps from the keyboard.
+
+**Changed**
+
+- **The bar drops whole pills instead of cutting one in half.** It rendered
+  everything and truncated the line at the terminal's width, which left a pill
+  with no right cap and a label ending mid-word — and the pills it ate were the
+  ones on the right, which is where `context` and `tps` usually sit. The bar now
+  keeps the pills that fit, drops the rest whole, and stands a `+N` counter in
+  their place; clicking it lists what is not on screen with the text each of those
+  pills would have shown. `pill.segments` is therefore also the priority list: the
+  leftmost pill is the last one to go.
+
+- **Pi's scroll-to-end label is not drawn.** That block was painted over the last
+  row of the transcript, hiding the line it landed on, and it only ever offered
+  one direction. With the two pills carrying both moves, the label and its click
+  rectangle are suppressed: the row it covered is yours again, and nothing
+  invisible answers a click there. Pi's own keys (`tui.altScreen.previousPrompt`,
+  `tui.altScreen.bottom`) keep working as before.
+- **The `tps` pill's colour follows the session.** A fixed threshold would not
+  travel: 30 t/s is a fast local model and a slow frontier one, so the same
+  cut-off paints both the same colour and says nothing. The rate is now read
+  against the median of the session's finished messages — `colors.tpsFast` from
+  30% above it, `colors.tpsSlow` from 30% below, `colors.tps` in between — so the
+  colour answers "faster or slower than this session usually replies". The band
+  is entered at 30% and left at 15%, which keeps a number sitting on a threshold
+  from blinking between two colours mid-message, and fewer than four measured
+  messages stays on `colors.tps`, because that is not a median yet.
+
+**Notes**
+
+- The two segments are new, so a `pill.segments` list written by hand does not
+  have them. Add `previousPrompt` and `latest` where you want them, in
+  `starline.json` or from the **Pills** tab in `/starline`; without them the bar
+  looks exactly as it did and the label is still suppressed.
+
 ## [0.10.4] - 2026-11-02
 
 A repository whose root holds more than one manifest now says so, the version

@@ -29,7 +29,8 @@ describe("movePillSegment", () => {
 
 	it("reorders a segment that is already in the bar", () => {
 		const next = movePillSegment(segments, "model", "2");
-		expect(next.slice(0, 3)).toEqual(["thinking", "model", "queue"]);
+		expect(next[1]).toBe("model");
+		expect(next.filter((segment) => segment === "model")).toHaveLength(1);
 		expect(next).toHaveLength(segments.length);
 	});
 
@@ -147,7 +148,8 @@ describe("/starline Pills tab", () => {
 		// The first eight rows are on screen; the rest scroll.
 		expect(rendered).toMatch(/Model\s+1/);
 		expect(rendered).toMatch(/Thinking\s+2/);
-		expect(rendered).toMatch(/Git\s+6/);
+		expect(rendered).toMatch(/Previous prompt\s+3/);
+		expect(rendered).toMatch(/Latest message\s+4/);
 		expect(rendered).toContain(`1/${PILL_SEGMENT_NAMES.length}`);
 	});
 

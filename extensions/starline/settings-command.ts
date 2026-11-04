@@ -115,6 +115,8 @@ const featureSettingDescriptions: Record<FeatureSettingId, string> = {
 const pillSegmentLabels: Record<string, string> = {
 	model: "Model",
 	thinking: "Thinking",
+	previousPrompt: "Previous prompt",
+	latest: "Latest message",
 	queue: "Queue",
 	subagents: "Subagents",
 	cwd: "Directory",

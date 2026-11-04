@@ -37,6 +37,8 @@ export const EXTENSION_STATUS_PREFIX = `${EXTENSION_STATUS_SEGMENT}:`;
 export const PILL_SEGMENT_VARIABLES: Record<string, string> = {
 	model: "model",
 	thinking: "thinking",
+	previousPrompt: "previous_prompt",
+	latest: "latest",
 	queue: "queue",
 	subagents: "subagents",
 	cwd: "cwd",
@@ -61,6 +63,8 @@ export const DEFAULT_PILL_CONFIG: PillConfig = {
 	segments: [
 		"model",
 		"thinking",
+		"previousPrompt",
+		"latest",
 		"queue",
 		"subagents",
 		"cwd",

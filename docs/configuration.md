@@ -144,6 +144,8 @@ Default config values — copy this and change any value you want:
 		"cacheHit": "bright-black",
 		"cost": "bold green",
 		"tps": "bright-black",
+		"tpsSlow": "yellow",
+		"tpsFast": "bold green",
 		"runtimePrefix": "",
 		"extensionStatus": "bright-black",
 		"sessionDuration": "yellow",
@@ -265,6 +267,8 @@ The footer is a bar of coloured pills joined by seamless powerline arrows. `pill
 		"segments": [
 			"model",
 			"thinking",
+			"previousPrompt",
+			"latest",
 			"queue",
 			"cwd",
 			"git",
@@ -280,13 +284,13 @@ The footer is a bar of coloured pills joined by seamless powerline arrows. `pill
 }
 ```
 
-| Key               | Values                                                                                                                    | Meaning                                                                                                                                |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `segments`        | segment names (`cwd`, `git`, `context`, `cost`, …), plus `queue`, `subagents`, `extensionStatus`, `extensionStatus:<key>` | Order, left to right                                                                                                                   |
-| `separator`       | `powerline` (default), `powerline-thin`, `none`                                                                           | Glyph between pills                                                                                                                    |
-| `bold`            | `true` (default), `false`                                                                                                 | Bold segment text                                                                                                                      |
-| `caps`            | `round` (default), `right`, `none`                                                                                        | How the bar's ends are closed                                                                                                          |
-| `bubbleAnimation` | `true` (default), `false`                                                                                                 | Unfold a clicked pill's bubble upward from the pill (60 ms) instead of showing it at once. Applies from the next session or `/reload`. |
+| Key               | Values                                                                                                                                                | Meaning                                                                                                                                |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `segments`        | segment names (`cwd`, `git`, `context`, `cost`, …), plus `queue`, `subagents`, `previousPrompt`, `latest`, `extensionStatus`, `extensionStatus:<key>` | Order, left to right, and the order it drops pills in                                                                                  |
+| `separator`       | `powerline` (default), `powerline-thin`, `none`                                                                                                       | Glyph between pills                                                                                                                    |
+| `bold`            | `true` (default), `false`                                                                                                                             | Bold segment text                                                                                                                      |
+| `caps`            | `round` (default), `right`, `none`                                                                                                                    | How the bar's ends are closed                                                                                                          |
+| `bubbleAnimation` | `true` (default), `false`                                                                                                                             | Unfold a clicked pill's bubble upward from the pill (60 ms) instead of showing it at once. Applies from the next session or `/reload`. |
 
 Order and visibility of the bar live in `pill.segments`. The **Pills** tab in
 `/starline` edits the same list: one row per segment, and its value is the
@@ -303,10 +307,17 @@ Notes:
 - **The `gitPr` pill is clickable.** It shows the number with the forge's marker (`#123` on GitHub, `!123` on GitLab), coloured by state (open, draft, merged, closed) and followed by the checks mark (`✓` passing, `✗` failing, `⋯` running). With no pull on the branch it shows how many pulls the repository has open instead (`12` in the branch pill's purple, `0` included). Clicking it lists the current user's open pulls in three groups (yours, waiting on your review, the rest you are involved in); clicking a row opens it in the browser. The list is read when the bubble opens, not on the refresh timer. See [Pull requests](#pull-requests).
 - **The `subagents` pill is clickable.** With [`pi-subagents`](https://github.com/nicobailon/pi-subagents) installed, it appears while subagents are running and says how many (`2 agents`); it disappears when they finish, and without pi-subagents it never appears. Clicking it, or running `/starline subagents`, opens the bubble with one line per run: agent (and step label), model, time running and tokens so far. `/subagents-fleet` still opens pi-subagents' own inspector for steering and stopping. The numbers come from pi-subagents' public in-process RPC, refreshed when a run starts or ends rather than on a timer. If the pill replaces pi-subagents' FleetView and async widget for you, turn those off in `~/.pi/agent/extensions/subagent/config.json` with `"fleetView": false` and `"asyncWidget": false`. `colors.subagents` (default `bold green`) colours the pill and the bubble
 - **The `thinking` pill is clickable.** A click opens the same bubble with every thinking level the model supports, the current one marked; click another level to switch. Opening it changes nothing. `off` is not offered, so the pill stays on screen. `/starline thinking` steps to the next level from the keyboard and reports the step (`medium → high`).
+- **`previousPrompt` and `latest` scroll the transcript, and they draw nothing but an arrow each** (`⇡` and `⇣`). `previousPrompt` jumps up to the previous prompt's first row, aligned to the top of the viewport; `latest` returns to the end and resumes following new output. Both are clickable, both stay on the bar all the time, and pressing one when it has nowhere to go does nothing: `latest` at the end of the transcript, `previousPrompt` when no prompt starts above the viewport. Pi's own `↓ Jump to latest message` block is not drawn while Starline is installed, so the transcript keeps its last row; Pi's keys still work (`tui.altScreen.previousPrompt`, `tui.altScreen.bottom`).
 - **Colours need no extra configuration.** A segment's existing `colors.*` entry becomes the pill background. Text colour is picked automatically for legibility unless you set `fg:` yourself.
 - `extensionStatus` is not one segment but however many other extensions have registered (balance, automode, mcp, …). Listing it expands to all of them; `extensionStatus:<key>` places one specific status, and it is not repeated by a later `extensionStatus`.
 - A status configured with `colorMode: "themed"` (the default) recolours the extension's status segment to match the rest of the bar. `colorMode: "original"` keeps the colours its own extension chose, on a neutral background.
 - Unknown segment names are dropped rather than drawn as empty pills.
+- **A bar that does not fit drops whole pills, from the right.** It never draws
+  part of a pill: when the next one will not fit, it and everything after it come
+  off the bar and a `+N` counter takes their place. That makes `pill.segments` its
+  own priority list — the leftmost pill survives longest — so put what you want
+  kept on the left. Clicking the counter opens a bubble listing what is not on
+  screen, with the text each of those pills would have shown.
 - Where two neighbouring pills resolve to the same background, the solid arrow would be invisible (it is the left colour drawn on the right colour), so a thin divider is drawn in the text colour instead. Several segments share a default colour, so this comes up more often than it sounds.
 - In `icons.mode: "ascii"` the arrows and caps disappear; the background transitions still separate the segments.
 
@@ -413,6 +424,17 @@ Messages that arrive in a single chunk (no stream to measure) are skipped instea
 of reporting a fabricated rate. With several messages in one turn the pill
 follows the most recent one, so it settles on the last thing the model wrote. Not
 clickable: there is nothing behind it beyond the number.
+
+**The colour is relative to this session.** The rate is read against the median of
+the session's finished messages: 30% or more above it is `colors.tpsFast`, 30% or
+more below is `colors.tpsSlow`, and everything in between keeps `colors.tps`.
+A fixed threshold would not travel across models, where the same number is fast
+on one and slow on another. Two details follow from that:
+
+- The band is entered at 30% and left at 15%, so a number hovering on a threshold
+  does not blink between two colours while a message streams.
+- Fewer than four measured messages is not a median: the pill stays on
+  `colors.tps` until the session has a "usual" rate of its own.
 
 ## Git
 

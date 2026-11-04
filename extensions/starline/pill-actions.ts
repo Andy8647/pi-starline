@@ -24,6 +24,7 @@ import {
 	setThinkingLevel,
 } from "./live-session";
 import { type PackageSummary, packageBubbleContent, readPackageSummary } from "./package-summary";
+import { OVERFLOW_PILL_KEY } from "./pill";
 import { externalPillAction } from "./pill-api";
 import {
 	type PillAnchor,
@@ -32,10 +33,12 @@ import {
 	showPillBubble,
 } from "./pill-bubble";
 import { PILL_SEGMENT_VARIABLES } from "./pill-config";
+import { activePillOverflowRows } from "./pill-overflow";
 import { showPulls } from "./pull-bubble";
 import type { ThemeLike } from "./style";
 import { type FleetSnapshot, getActiveSubagentFleet } from "./subagent-fleet";
 import { activeTpsHistory, tpsBubbleContent } from "./tps-history";
+import { jumpToLatestMessage, jumpToPreviousPrompt } from "./transcript-jump";
 
 /** What an action gets: the session, and where the pill is if a click found it. */
 export type PillActionContext = {
@@ -549,6 +552,34 @@ function showGitChanges({ ctx, pill }: PillActionContext): void {
 }
 
 /**
+ * What the bar left out, when it had to drop pills to fit.
+ *
+ * The rows are the render's, so the bubble opens on the width that drew the
+ * counter rather than on whatever was measured last. A row names the segment and
+ * repeats the text it would have shown, which is the whole point of keeping this
+ * reachable: the number is still there, one click away, instead of being clipped.
+ */
+function showOverflow({ ctx, pill }: PillActionContext): void {
+	const rows = activePillOverflowRows();
+	if (rows.length === 0) return;
+	showPillBubble(
+		ctx,
+		() => ({
+			title: `${rows.length} not on the bar`,
+			body: rows.map((row) => `${overflowLabel(row.key)}  ${row.text}`),
+			hint: "Widen the terminal to put them back",
+		}),
+		pill,
+	);
+}
+
+/** `extensionStatus:provider-balance` reads as `provider-balance` on a row. */
+function overflowLabel(key: string): string {
+	const separator = key.indexOf(":");
+	return separator === -1 ? key : key.slice(separator + 1);
+}
+
+/**
  * Segment key → action. Segments with no entry are labels: a click on one is not
  * handled, so nothing is swallowed.
  */
@@ -558,8 +589,11 @@ export const PILL_ACTIONS: Readonly<Partial<Record<string, PillAction>>> = {
 	gitPr: ({ ctx, pill }) => {
 		showPulls(ctx, pill);
 	},
+	latest: jumpToLatestMessage,
 	model: showModels,
+	[OVERFLOW_PILL_KEY]: showOverflow,
 	packageVersion: showPackage,
+	previousPrompt: jumpToPreviousPrompt,
 	queue: showQueuedMessages,
 	subagents: showSubagents,
 	thinking: showThinkingLevel,
@@ -572,11 +606,13 @@ export const PILL_ACTIONS: Readonly<Partial<Record<string, PillAction>>> = {
  * A segment key Starline owns (a builtin segment) wins over a bridge, so a status
  * cannot hijack `queue`. The comparison ignores case because `/starline <name>`
  * lowercases its argument, and `gitPr` would otherwise only answer to the mouse.
- * Everything else is looked up in the published API, which is how
- * `extensionStatus:<key>` pills become clickable. No entry anywhere means the
- * pill is a label and the click falls through.
+ * The `+N` counter is not a segment and never appears in `pill.segments`, so it is
+ * answered before the segment lookup. Everything else is looked up in the
+ * published API, which is how `extensionStatus:<key>` pills become clickable. No
+ * entry anywhere means the pill is a label and the click falls through.
  */
 export function pillActionFor(key: string): PillAction | undefined {
+	if (key === OVERFLOW_PILL_KEY) return PILL_ACTIONS[OVERFLOW_PILL_KEY];
 	if (key in PILL_SEGMENT_VARIABLES) return PILL_ACTIONS[key];
 	const lowered = key.toLowerCase();
 	const segment = Object.keys(PILL_SEGMENT_VARIABLES).find(

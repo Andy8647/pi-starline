@@ -77,6 +77,8 @@ import {
 	setActiveSubagentFleet,
 } from "./subagent-fleet";
 import { contextPercentAfter, setTpsHistory, TPS_ENTRY_TYPE, TpsHistory } from "./tps-history";
+import { resetTpsTier } from "./tps-tier";
+import { installTranscriptJump } from "./transcript-jump";
 import { TurnClock } from "./turn-clock";
 import { PolishedEditor, WrappedPolishedEditor } from "./ui";
 import { setWorkingIndicator } from "./working-indicator";
@@ -159,6 +161,7 @@ export default function (pi: ExtensionAPI) {
 	let cleanupSessionCapture: (() => void) | undefined;
 	let cleanupQueueRows: (() => void) | undefined;
 	let cleanupDockGap: () => void = () => {};
+	let cleanupTranscriptJump: () => void = () => {};
 
 	const refresh = () => {
 		if (sessionLifecycle.isCurrent()) requestFooterRender?.();
@@ -269,6 +272,9 @@ export default function (pi: ExtensionAPI) {
 		// Starline draws the box, so Pi's blank separator row above it is a gap with
 		// nothing to separate. See `dock-gap.ts`.
 		cleanupDockGap = installAboveEditorGapHiding(() => getCurrentConfig().features.editor);
+		// Pi's own `↓ Jump to latest message` block is replaced by the `previousPrompt`
+		// and `latest` pills, so it is not drawn at all. See `transcript-jump.ts`.
+		cleanupTranscriptJump = installTranscriptJump();
 		prototypePatchesInstalled = true;
 		// Pi filled the slot once at startup, before this patch existed.
 		rebuildWidgetSlots(ctx);
@@ -279,6 +285,8 @@ export default function (pi: ExtensionAPI) {
 		cleanupPrototypePatches = () => {};
 		cleanupDockGap();
 		cleanupDockGap = () => {};
+		cleanupTranscriptJump();
+		cleanupTranscriptJump = () => {};
 		prototypePatchesInstalled = false;
 		rebuildWidgetSlots(ctx);
 	};
@@ -662,6 +670,9 @@ export default function (pi: ExtensionAPI) {
 		// starts from the last of them instead of an empty segment.
 		tpsHistory.restore(readSessionEntries(ctx));
 		liveTps.seed(tpsHistory.all().at(-1)?.tps);
+		// The "usual rate" band belongs to one session; a resumed one starts from the
+		// middle and settles again once its own median means something.
+		resetTpsTier();
 		// A resumed session keeps its original header, and reporting the moment this
 		// process attached to it would make the elapsed-time segment read 0s forever.
 		state.sessionStartEpoch = resolveSessionStartEpoch(readSessionHeader(ctx));

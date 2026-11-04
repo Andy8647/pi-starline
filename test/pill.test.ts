@@ -364,6 +364,59 @@ describe("renderPillBar", () => {
 		const out = renderPillBar([cwd, cost], theme, "theme", config, 8);
 		expect(out.endsWith("\x1b[0m")).toBe(true);
 	});
+
+	describe("when the bar does not fit", () => {
+		const inputs: PillInput[] = [
+			{ key: "model", text: "deepseek", spec: "syntaxKeyword" },
+			{ key: "cwd", text: "starline", spec: "syntaxKeyword" },
+			{ key: "context", text: "3.9%", spec: "syntaxKeyword" },
+			{ key: "tps", text: "188 t/s", spec: "syntaxKeyword" },
+		];
+
+		function render(width: number) {
+			const spans: string[] = [];
+			const dropped: { key: string; text: string }[] = [];
+			const out = renderPillBar(inputs, theme, "theme", config, width, {
+				onSpan: (span) => spans.push(span.key),
+				onOverflow: (rows) => dropped.push(...rows),
+			});
+			return { line: stripVTControlCharacters(out), spans, dropped };
+		}
+
+		it("reports nothing when everything fits", () => {
+			const { line, spans, dropped } = render(80);
+			expect(dropped).toEqual([]);
+			expect(spans).toEqual(["model", "cwd", "context", "tps"]);
+			expect(line).toContain("188 t/s");
+		});
+
+		it("drops whole pills from the right and counts them", () => {
+			// 24 cells: no room for "188 t/s" plus the counter, so it goes first.
+			const { line, spans, dropped } = render(24);
+			expect(spans).toEqual(["model", "overflow"]);
+			expect(dropped.map((row) => row.key)).toEqual(["cwd", "context", "tps"]);
+			expect(line).toContain("+3");
+		});
+
+		it("never draws part of a pill", () => {
+			for (const width of [10, 14, 18, 22, 26, 30]) {
+				const { line, dropped } = render(width);
+				expect(line).not.toMatch(/[a-z0-9] t\/s/); // no cut "188 t"
+				expect(line.length).toBeLessThanOrEqual(width);
+				// Every pill that was kept is either a whole label or not there at all.
+				for (const text of ["deepseek", "starline", "3.9%", "188 t/s"]) {
+					const cut = text.slice(0, -2);
+					expect(line.includes(cut) && !line.includes(text)).toBe(false);
+				}
+				expect(dropped.length).toBeGreaterThan(0);
+			}
+		});
+
+		it("reports the text each dropped pill would have shown", () => {
+			const { dropped } = render(24);
+			expect(dropped).toContainEqual({ key: "tps", text: "188 t/s" });
+		});
+	});
 });
 
 describe("per-status icons in the bar", () => {

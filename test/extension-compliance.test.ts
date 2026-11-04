@@ -857,7 +857,9 @@ describe("Pi docs compliance", () => {
 		});
 
 		expect(() => footer?.render(120)).not.toThrow();
-		expect(footer?.render(120).join("\n")).toContain("[muted]");
+		// The bar drops whole pills when it runs out of room, so the assertion is that
+		// the first pill still carries its reading rather than which pill survives last.
+		expect(footer?.render(120).join("\n")).toContain("no-model");
 	});
 
 	it("strips plugin ANSI and control sequences before rendering third-party statuses", () => {
