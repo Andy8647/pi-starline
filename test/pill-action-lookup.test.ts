@@ -16,4 +16,10 @@ describe("pillActionFor", () => {
 		expect(pillActionFor("gitcommit")).toBeUndefined();
 		expect(pillActionFor("nonsense")).toBeUndefined();
 	});
+
+	it("answers for the counter that stands in for pills that did not fit", () => {
+		// `overflow` is not a segment and never appears in `pill.segments`, so it has
+		// to be answered before the segment lookup rather than through it.
+		expect(pillActionFor("overflow")).toBeTypeOf("function");
+	});
 });

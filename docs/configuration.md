@@ -286,7 +286,7 @@ The footer is a bar of coloured pills joined by seamless powerline arrows. `pill
 
 | Key               | Values                                                                                                                                                | Meaning                                                                                                                                |
 | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `segments`        | segment names (`cwd`, `git`, `context`, `cost`, …), plus `queue`, `subagents`, `previousPrompt`, `latest`, `extensionStatus`, `extensionStatus:<key>` | Order, left to right                                                                                                                   |
+| `segments`        | segment names (`cwd`, `git`, `context`, `cost`, …), plus `queue`, `subagents`, `previousPrompt`, `latest`, `extensionStatus`, `extensionStatus:<key>` | Order, left to right, and the order it drops pills in                                                                                  |
 | `separator`       | `powerline` (default), `powerline-thin`, `none`                                                                                                       | Glyph between pills                                                                                                                    |
 | `bold`            | `true` (default), `false`                                                                                                                             | Bold segment text                                                                                                                      |
 | `caps`            | `round` (default), `right`, `none`                                                                                                                    | How the bar's ends are closed                                                                                                          |
@@ -312,6 +312,12 @@ Notes:
 - `extensionStatus` is not one segment but however many other extensions have registered (balance, automode, mcp, …). Listing it expands to all of them; `extensionStatus:<key>` places one specific status, and it is not repeated by a later `extensionStatus`.
 - A status configured with `colorMode: "themed"` (the default) recolours the extension's status segment to match the rest of the bar. `colorMode: "original"` keeps the colours its own extension chose, on a neutral background.
 - Unknown segment names are dropped rather than drawn as empty pills.
+- **A bar that does not fit drops whole pills, from the right.** It never draws
+  part of a pill: when the next one will not fit, it and everything after it come
+  off the bar and a `+N` counter takes their place. That makes `pill.segments` its
+  own priority list — the leftmost pill survives longest — so put what you want
+  kept on the left. Clicking the counter opens a bubble listing what is not on
+  screen, with the text each of those pills would have shown.
 - Where two neighbouring pills resolve to the same background, the solid arrow would be invisible (it is the left colour drawn on the right colour), so a thin divider is drawn in the text colour instead. Several segments share a default colour, so this comes up more often than it sounds.
 - In `icons.mode: "ascii"` the arrows and caps disappear; the background transitions still separate the segments.
 

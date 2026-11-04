@@ -96,16 +96,24 @@ describe("pill spans", () => {
 		expect(visibleWidth(bar)).toBe(11);
 	});
 
-	it("keeps a clipped pill's visible cells and drops one clipped away entirely", () => {
-		const clipped = spansOf([aa, bbb], { caps: "none", separator: "none" }, 6);
-		expect(plain(clipped.bar)).toBe(" aa  b");
-		expect(columns(clipped.spans)).toEqual([
+	it("keeps the first pill and cuts its label when not even one pill plus the counter fits", () => {
+		// 6 cells: the first pill (4) and the counter (4) do not both fit, so the
+		// first pill survives whole and the second is dropped without a counter.
+		const narrow = spansOf([aa, bbb], { caps: "none", separator: "none" }, 6);
+		expect(plain(narrow.bar)).toBe(" aa ");
+		expect(columns(narrow.spans)).toEqual([{ key: "aa", startColumn: 0, endColumn: 4 }]);
+
+		// 8 cells: room for the first pill and a counter, and no half pill either way.
+		const counted = spansOf([aa, bbb], { caps: "none", separator: "none" }, 8);
+		expect(plain(counted.bar)).toBe(" aa  +1 ");
+		expect(columns(counted.spans)).toEqual([
 			{ key: "aa", startColumn: 0, endColumn: 4 },
-			{ key: "bbb", startColumn: 4, endColumn: 6 },
+			{ key: "overflow", startColumn: 4, endColumn: 8 },
 		]);
 
-		const gone = spansOf([aa, bbb], { caps: "none", separator: "none" }, 4);
-		expect(columns(gone.spans)).toEqual([{ key: "aa", startColumn: 0, endColumn: 4 }]);
+		// 4 cells: one pill fits exactly, the label is not touched.
+		const single = spansOf([aa, bbb], { caps: "none", separator: "none" }, 4);
+		expect(plain(single.bar)).toBe(" aa ");
 	});
 
 	it("never reports a column the terminal does not draw", () => {

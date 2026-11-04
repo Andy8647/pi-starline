@@ -33,6 +33,15 @@ no way back to the previous prompt except the keyboard.
 
 **Changed**
 
+- **The bar drops whole pills instead of cutting one in half.** It rendered
+  everything and truncated the line at the terminal's width, which left a pill
+  with no right cap and a label ending mid-word — and the pills it ate were the
+  ones on the right, which is where `context` and `tps` usually sit. The bar now
+  keeps the pills that fit, drops the rest whole, and stands a `+N` counter in
+  their place; clicking it lists what is not on screen with the text each of those
+  pills would have shown. `pill.segments` is therefore also the priority list: the
+  leftmost pill is the last one to go.
+
 - **Pi's scroll-to-end label is not drawn.** That block was painted over the last
   row of the transcript, hiding the line it landed on, and it only ever offered
   one direction. With the two pills carrying both moves, the label and its click

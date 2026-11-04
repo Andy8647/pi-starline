@@ -33,6 +33,7 @@ import { collectPillInputs, type PillSpan, renderPillBar } from "./pill";
 import { pillActionFor, queuedSegmentText, runPillAction } from "./pill-actions";
 import { clearPillAnchors, setPillAnchors } from "./pill-anchors";
 import { closePillBubble, isPillBubbleOpenFor, type PillAnchor } from "./pill-bubble";
+import { setPillOverflowRows } from "./pill-overflow";
 import { pullColorSpec, pullSegmentText } from "./pull";
 import type { FooterState } from "./state";
 import { renderStyleForSource } from "./style";
@@ -602,6 +603,9 @@ export function installFooter(
 					{
 						ascii: iconMode === "ascii",
 						onSpan: (span) => spans.push(span),
+						// The counter pill answers a click with what it is counting, so the
+						// render has to say which pills it left out. See `pill-overflow.ts`.
+						onOverflow: setPillOverflowRows,
 					},
 				);
 				// Nothing has content: draw nothing rather than a bare pair of caps.
