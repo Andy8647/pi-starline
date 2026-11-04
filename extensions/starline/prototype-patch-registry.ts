@@ -11,6 +11,7 @@ type PrototypePatchAdapter =
 	| "agent-session-capture-usage"
 	| "pending-messages-hide"
 	| "above-editor-gap-hide"
+	| "scroll-to-end-indicator-hide"
 	| "mouse-pointer-shape";
 
 type PrototypeMethodName = string;

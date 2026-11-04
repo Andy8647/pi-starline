@@ -41,6 +41,17 @@ import type { TurnTiming } from "./turn-clock";
 import { modelPillLabel } from "./working-indicator";
 
 /**
+ * The two transcript moves, drawn as their own pills.
+ *
+ * Plain Unicode arrows rather than Starship glyphs: `icons.ahead` and
+ * `icons.behind` already use `↑` and `↓` inside the git pill, and two bare
+ * `↑`/`↓` pills next to it would read as more of the same. `⇡`/`⇣` are the same
+ * idea at a different weight, and both survive a terminal without a Nerd Font.
+ */
+const PREVIOUS_PROMPT_LABEL = "⇡";
+const LATEST_MESSAGE_LABEL = "⇣";
+
+/**
  * Pi's component mouse event and result. Pi dispatches to `handleMouse` from
  * pi-tui 0.85.0; on 0.84.x the method is simply never called.
  */
@@ -419,6 +430,10 @@ export function installFooter(
 							return sessionNameLabel;
 						case "git":
 							return git.label;
+						case "previous_prompt":
+							return PREVIOUS_PROMPT_LABEL;
+						case "latest":
+							return LATEST_MESSAGE_LABEL;
 						case "runtime": {
 							if (!state.runtime) return "";
 							const symbol = resolveRuntimeSymbol(
@@ -510,6 +525,11 @@ export function installFooter(
 							return config.colors.model;
 						case "thinking":
 							return config.colors.thinking ?? thinkingThemeKey(thinkingText);
+						case "previousPrompt":
+						case "latest":
+							// No colour of its own: both are controls, not readings, so they take
+							// the bar's neutral background like any other uncoloured segment.
+							return "";
 						case "queue":
 							return config.colors.queue;
 						case "subagents":

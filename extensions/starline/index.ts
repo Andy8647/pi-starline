@@ -77,6 +77,7 @@ import {
 	setActiveSubagentFleet,
 } from "./subagent-fleet";
 import { contextPercentAfter, setTpsHistory, TPS_ENTRY_TYPE, TpsHistory } from "./tps-history";
+import { installTranscriptJump } from "./transcript-jump";
 import { TurnClock } from "./turn-clock";
 import { PolishedEditor, WrappedPolishedEditor } from "./ui";
 import { setWorkingIndicator } from "./working-indicator";
@@ -159,6 +160,7 @@ export default function (pi: ExtensionAPI) {
 	let cleanupSessionCapture: (() => void) | undefined;
 	let cleanupQueueRows: (() => void) | undefined;
 	let cleanupDockGap: () => void = () => {};
+	let cleanupTranscriptJump: () => void = () => {};
 
 	const refresh = () => {
 		if (sessionLifecycle.isCurrent()) requestFooterRender?.();
@@ -269,6 +271,9 @@ export default function (pi: ExtensionAPI) {
 		// Starline draws the box, so Pi's blank separator row above it is a gap with
 		// nothing to separate. See `dock-gap.ts`.
 		cleanupDockGap = installAboveEditorGapHiding(() => getCurrentConfig().features.editor);
+		// Pi's own `↓ Jump to latest message` block is replaced by the `previousPrompt`
+		// and `latest` pills, so it is not drawn at all. See `transcript-jump.ts`.
+		cleanupTranscriptJump = installTranscriptJump();
 		prototypePatchesInstalled = true;
 		// Pi filled the slot once at startup, before this patch existed.
 		rebuildWidgetSlots(ctx);
@@ -279,6 +284,8 @@ export default function (pi: ExtensionAPI) {
 		cleanupPrototypePatches = () => {};
 		cleanupDockGap();
 		cleanupDockGap = () => {};
+		cleanupTranscriptJump();
+		cleanupTranscriptJump = () => {};
 		prototypePatchesInstalled = false;
 		rebuildWidgetSlots(ctx);
 	};

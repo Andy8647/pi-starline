@@ -36,6 +36,7 @@ import { showPulls } from "./pull-bubble";
 import type { ThemeLike } from "./style";
 import { type FleetSnapshot, getActiveSubagentFleet } from "./subagent-fleet";
 import { activeTpsHistory, tpsBubbleContent } from "./tps-history";
+import { jumpToLatestMessage, jumpToPreviousPrompt } from "./transcript-jump";
 
 /** What an action gets: the session, and where the pill is if a click found it. */
 export type PillActionContext = {
@@ -558,8 +559,10 @@ export const PILL_ACTIONS: Readonly<Partial<Record<string, PillAction>>> = {
 	gitPr: ({ ctx, pill }) => {
 		showPulls(ctx, pill);
 	},
+	latest: jumpToLatestMessage,
 	model: showModels,
 	packageVersion: showPackage,
+	previousPrompt: jumpToPreviousPrompt,
 	queue: showQueuedMessages,
 	subagents: showSubagents,
 	thinking: showThinkingLevel,
