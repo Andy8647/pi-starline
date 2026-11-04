@@ -39,6 +39,15 @@ no way back to the previous prompt except the keyboard.
   rectangle are suppressed: the row it covered is yours again, and nothing
   invisible answers a click there. Pi's own keys (`tui.altScreen.previousPrompt`,
   `tui.altScreen.bottom`) keep working as before.
+- **The `tps` pill's colour follows the session.** A fixed threshold would not
+  travel: 30 t/s is a fast local model and a slow frontier one, so the same
+  cut-off paints both the same colour and says nothing. The rate is now read
+  against the median of the session's finished messages — `colors.tpsFast` from
+  30% above it, `colors.tpsSlow` from 30% below, `colors.tps` in between — so the
+  colour answers "faster or slower than this session usually replies". The band
+  is entered at 30% and left at 15%, which keeps a number sitting on a threshold
+  from blinking between two colours mid-message, and fewer than four measured
+  messages stays on `colors.tps`, because that is not a median yet.
 
 **Notes**
 

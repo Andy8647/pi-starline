@@ -77,6 +77,7 @@ import {
 	setActiveSubagentFleet,
 } from "./subagent-fleet";
 import { contextPercentAfter, setTpsHistory, TPS_ENTRY_TYPE, TpsHistory } from "./tps-history";
+import { resetTpsTier } from "./tps-tier";
 import { installTranscriptJump } from "./transcript-jump";
 import { TurnClock } from "./turn-clock";
 import { PolishedEditor, WrappedPolishedEditor } from "./ui";
@@ -669,6 +670,9 @@ export default function (pi: ExtensionAPI) {
 		// starts from the last of them instead of an empty segment.
 		tpsHistory.restore(readSessionEntries(ctx));
 		liveTps.seed(tpsHistory.all().at(-1)?.tps);
+		// The "usual rate" band belongs to one session; a resumed one starts from the
+		// middle and settles again once its own median means something.
+		resetTpsTier();
 		// A resumed session keeps its original header, and reporting the moment this
 		// process attached to it would make the elapsed-time segment read 0s forever.
 		state.sessionStartEpoch = resolveSessionStartEpoch(readSessionHeader(ctx));

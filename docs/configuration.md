@@ -144,6 +144,8 @@ Default config values — copy this and change any value you want:
 		"cacheHit": "bright-black",
 		"cost": "bold green",
 		"tps": "bright-black",
+		"tpsSlow": "yellow",
+		"tpsFast": "bold green",
 		"runtimePrefix": "",
 		"extensionStatus": "bright-black",
 		"sessionDuration": "yellow",
@@ -416,6 +418,17 @@ Messages that arrive in a single chunk (no stream to measure) are skipped instea
 of reporting a fabricated rate. With several messages in one turn the pill
 follows the most recent one, so it settles on the last thing the model wrote. Not
 clickable: there is nothing behind it beyond the number.
+
+**The colour is relative to this session.** The rate is read against the median of
+the session's finished messages: 30% or more above it is `colors.tpsFast`, 30% or
+more below is `colors.tpsSlow`, and everything in between keeps `colors.tps`.
+A fixed threshold would not travel across models, where the same number is fast
+on one and slow on another. Two details follow from that:
+
+- The band is entered at 30% and left at 15%, so a number hovering on a threshold
+  does not blink between two colours while a message streams.
+- Fewer than four measured messages is not a median: the pill stays on
+  `colors.tps` until the session has a "usual" rate of its own.
 
 ## Git
 

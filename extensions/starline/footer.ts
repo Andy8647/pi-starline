@@ -37,6 +37,8 @@ import { pullColorSpec, pullSegmentText } from "./pull";
 import type { FooterState } from "./state";
 import { renderStyleForSource } from "./style";
 import { subagentsSegmentText } from "./subagent-fleet";
+import { activeTpsHistory } from "./tps-history";
+import { medianTps, tpsTierFor } from "./tps-tier";
 import type { TurnTiming } from "./turn-clock";
 import { modelPillLabel } from "./working-indicator";
 
@@ -389,6 +391,19 @@ export function installFooter(
 				const costDisplay = withIcon(config.icons.cost, state.costLabel);
 				const tpsLabel = buildTpsLabel(hooks.getLiveTps?.());
 				const tpsDisplay = tpsLabel ? withIcon(config.icons.tps, tpsLabel) : "";
+				// Slow, usual or fast *for this session*: the rate is read against the median
+				// of its finished messages, not against a number that would mean something
+				// different on every model. See `tps-tier.ts`.
+				const tpsTier = tpsTierFor(
+					hooks.getLiveTps?.(),
+					medianTps((activeTpsHistory()?.all() ?? []).map((point) => point.tps)),
+				);
+				const tpsColor =
+					tpsTier === "fast"
+						? (config.colors.tpsFast ?? config.colors.tps)
+						: tpsTier === "slow"
+							? (config.colors.tpsSlow ?? config.colors.tps)
+							: config.colors.tps;
 				// The one pill shows a percentage; the rest of these numbers are only
 				// on screen while its bubble is open.
 				const contextTabTokens = useLiveContext ? liveContext.tokens : undefined;
@@ -479,7 +494,7 @@ export function installFooter(
 						case "cost":
 							return renderStyleForSource(theme, colorSource, config.colors.cost, costDisplay);
 						case "tps":
-							return renderStyleForSource(theme, colorSource, config.colors.tps, tpsDisplay);
+							return renderStyleForSource(theme, colorSource, tpsColor, tpsDisplay);
 						case "package_version":
 							return state.packageVersion
 								? renderStyleForSource(
@@ -554,7 +569,7 @@ export function installFooter(
 						case "cost":
 							return config.colors.cost;
 						case "tps":
-							return config.colors.tps;
+							return tpsColor;
 						case "sessionDuration":
 							return config.colors.sessionDuration;
 						case "username":
