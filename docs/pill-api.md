@@ -85,6 +85,9 @@ export default function (pi: ExtensionAPI) {
 - **The key is your status key.** That is how Starline knows which pill is yours.
   Starline's own segment names (`queue`, `model`, …) win over a status with the
   same key.
+- **A bridge beats `extensionStatuses.commands`.** Both are ways to make someone
+  else's pill clickable; a registered action is the more specific one, so it wins
+  over a command configured for the same key.
 - **A real one:** [pi-balance](https://github.com/Andy8647/pi-balance)'s
   `src/starline-pill.ts` does exactly this, with a live "updated … ago" line and two
   actions.
@@ -94,6 +97,20 @@ export default function (pi: ExtensionAPI) {
   `pi-starline/types/pill-api`, and at runtime nothing is imported.
 
 ## 2. Someone else's extension: a bridge
+
+If the other extension already has a command that opens what you want to show —
+`/ps` for a process panel, `/jobs` for a job list — do not write a bridge at all.
+Map the status key to that command in `~/.pi/agent/starline.json`:
+
+```json
+{ "extensionStatuses": { "commands": { "procs": "/ps" } } }
+```
+
+A click then runs the command through Pi's own command path, which is the only way
+to open an extension's panel from outside it. Only an extension command runs: a
+typo, a prompt template or a skill is refused with a notification, because Pi would
+otherwise send the text as a prompt and start a model turn. See
+[Configuration](../docs/configuration.md#point-a-third-party-pill-at-its-panel).
 
 If the extension you want in a pill does not publish a status, or does not use
 the pill API, a bridge can do both on its behalf. Put it in its own file, for
