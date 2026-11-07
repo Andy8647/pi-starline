@@ -90,7 +90,8 @@ Default config values — copy this and change any value you want:
 		"metrics": {
 			"onlyNonzero": true,
 			"ignoreSubmodules": false
-		}
+		},
+		"issues": false
 	},
 	"icons": {
 		"mode": "auto",
@@ -445,7 +446,8 @@ on one and slow on another. Two details follow from that:
 		"hostIcon": false,
 		"branch": { "maxLength": "full" },
 		"commit": { "hashLength": 7, "onlyDetached": true, "showTag": true },
-		"metrics": { "onlyNonzero": true, "ignoreSubmodules": false }
+		"metrics": { "onlyNonzero": true, "ignoreSubmodules": false },
+		"issues": false
 	}
 }
 ```
@@ -460,6 +462,7 @@ on one and slow on another. Two details follow from that:
 | `commit.showTag`           | `true`   | Append the exact-match tag (`git describe --tags --exact-match HEAD`). The lookup only runs while a tag can be shown.                                                                                                                                                                                                                                                                    |
 | `metrics.onlyNonzero`      | `true`   | Omit each zero side of `+added −deleted` independently, and hide the pill entirely at `0/0`.                                                                                                                                                                                                                                                                                             |
 | `metrics.ignoreSubmodules` | `false`  | Pass `--ignore-submodules=all` to the numstat diff.                                                                                                                                                                                                                                                                                                                                      |
+| `issues`                   | `false`  | List the repository's open issues in the `gitPr` bubble. See [Issues in the same bubble](#issues-in-the-same-bubble).                                                                                                                                                                                                                                                                    |
 
 The numstat diff is the Starship “total dirty” view: staged and unstaged combined. It piggybacks on the git refresh with a hard 2 s timeout; a metrics-only failure degrades silently without discarding fresh branch/status data. On very large monorepos the diff may lag or be omitted on timeout.
 
@@ -496,6 +499,28 @@ is nothing to show and no pill.
 Review state is not on the pill: a second `✓`/`✗` next to the checks mark would be
 ambiguous at one character each. The bubble lists each pull's state, and the checks
 mark on the pill already turns red when a check fails.
+
+#### Issues in the same bubble
+
+`git.issues` adds the repository's open issues to that bubble. It is off by default:
+the bubble gets longer and the forge gets one more read.
+
+```json
+{ "git": { "issues": true } }
+```
+
+- **Mine is always listed**: `Assigned to you` and `You opened`, so a large
+  repository's backlog is never the thing you have to wade through.
+- **The rest only while it is small**: above 20 open issues the section collapses to
+  one row, `↗ All 8412 open issues`, which opens the issue list. Eight rows of a
+  four-figure backlog would be a sample dressed up as a list.
+- **A fork with issues turned off hides the section** instead of claiming there are
+  none, and a failed issue read says `Issues unavailable` while the pulls stay.
+- On GitHub the issue searches ride along with the pull searches in the same GraphQL
+  request, so turning this on costs no extra round trip there; GitLab has no combined
+  search, so it costs two or three `glab` calls.
+- The pill itself does not change. A second number on the bar — the repository's open
+  issues — would not be about the current branch, and there is nothing to do with it.
 
 ## Box height
 

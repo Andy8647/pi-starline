@@ -63,6 +63,7 @@ import {
 	startProjectRefreshInterval,
 } from "./project-refresh";
 import { applyProjectRefreshToState } from "./project-state";
+import { setPullBubbleIssues } from "./pull-bubble";
 import { setActivePull } from "./pull-live";
 import { installNativeQueueRowHiding } from "./queue-rows";
 import { installSelectorBorderStyle } from "./selector-border";
@@ -596,6 +597,9 @@ export default function (pi: ExtensionAPI) {
 		installSubagentFleet();
 		installModelSwitcher();
 		setPillBubbleAnimation(currentConfig.pill.bubbleAnimation ? BUBBLE_ANIMATION_MS : 0);
+		// The pull bubble reads its own copy: `PillActionContext` carries the session,
+		// not the config.
+		setPullBubbleIssues(currentConfig.git.issues);
 		applyConfiguredUi(ctx);
 		installMousePatches();
 		refresh();

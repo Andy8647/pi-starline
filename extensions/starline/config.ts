@@ -85,6 +85,11 @@ export type GitConfig = {
 	branch: GitBranchConfig;
 	commit: GitCommitConfig;
 	metrics: GitMetricsConfig;
+	/**
+	 * List the repository's open issues in the pull bubble. Off by default: it
+	 * changes what that bubble lists and costs the forge one more read.
+	 */
+	issues: boolean;
 };
 
 export type MouseConfig = {
@@ -272,6 +277,7 @@ export const defaultConfig: PolishedTuiConfig = {
 		branch: { maxLength: "full" },
 		commit: { hashLength: 7, onlyDetached: true, showTag: true },
 		metrics: { onlyNonzero: true, ignoreSubmodules: false },
+		issues: false,
 	},
 	icons: {
 		mode: "auto",
@@ -414,6 +420,7 @@ function parseGitConfig(value: unknown): GitConfig {
 		branch: { maxLength: normalizeGitBranchMaxLength(branch.maxLength) },
 		commit: normalizeGitCommitConfig(commit),
 		metrics: normalizeGitMetricsConfig(metrics),
+		issues: typeof value.issues === "boolean" ? value.issues : defaults.issues,
 	};
 }
 
