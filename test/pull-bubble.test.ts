@@ -213,4 +213,26 @@ describe("issues in the pull bubble", () => {
 			REPO_ROW,
 		]);
 	});
+	it("drops a group the fit emptied instead of leaving a 0 of 8 heading", () => {
+		const many = Array.from({ length: 3 }, (_, index) => pull(index + 1));
+		const body = texts(
+			pullBubbleBody(lists({ authored: many, reviewing: many }), "#", REPO_URL, { maxRows: 3 }),
+		);
+
+		expect(body).toEqual(["Yours · 1 of 3", "#1 Pr 1 · open", REPO_ROW]);
+	});
+
+	it("says how many of the forge's total it is showing", () => {
+		const rows = Array.from({ length: 8 }, (_, index) => issue(index + 1));
+		const body = texts(
+			pullBubbleBody(lists(), "#", REPO_URL, {
+				issues: issueLists({ openCount: 40, assigned: { items: rows, total: 40 } }),
+				issuesUrl: `${REPO_URL}/issues`,
+			}),
+		);
+
+		// The search returns at most eight; a heading that said `· 40` under eight
+		// rows would read as a complete list.
+		expect(body[0]).toBe("Assigned to you · 8 of 40");
+	});
 });

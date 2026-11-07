@@ -158,12 +158,18 @@ function fitSections(sections: Section[], maxRows: number | undefined): PillBubb
 		}
 	}
 	return trimmed.flatMap((section) => {
+		// A group the fit took every row from is gone rather than left as an empty
+		// heading claiming "0 of 8"; its count is not worth a row of its own when
+		// there is nothing to show under it.
+		if (section.rows.length > 0 && section.shown === 0) return [];
 		// A section with no rows at all is a statement, not a group: "Issues
-		// unavailable" has no count to give.
+		// unavailable" has no count to give. A group whose forge count is larger
+		// than the rows it got says so — the search returns at most eight, so
+		// `Assigned to you · 40` would look complete when it is not.
 		const heading =
 			section.rows.length === 0
 				? section.heading
-				: section.shown < section.rows.length
+				: section.shown < section.total
 					? `${section.heading} · ${section.shown} of ${section.total}`
 					: `${section.heading} · ${section.total}`;
 		return [heading, ...section.rows.slice(0, section.shown)];
