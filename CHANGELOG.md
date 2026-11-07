@@ -10,6 +10,18 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [0.12.0] - unreleased
+
+Three changes to the bar and its bubbles: a wide pill gives up width instead of
+taking the segments behind it with it, a third-party pill can open the panel its
+extension already has, and the pull bubble can list the repository's issues.
+
+**Added**
+
+**Changed**
+
+**Fixed**
+
 ## [0.11.0] - 2026-11-05
 
 Pi's `↓ Jump to latest message` block is gone from the transcript, and the two
