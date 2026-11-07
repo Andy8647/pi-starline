@@ -12,8 +12,9 @@
  * `pill-bubble.ts` and is shared: this file only decides what goes in it.
  */
 
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionContext, SlashCommandInfo } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
+import { statusCommandName } from "./config";
 import { collectContextBreakdown, contextBubbleContent, probeFor } from "./context-breakdown";
 import { activeContextSnapshot } from "./context-live";
 import { activeGitStatus } from "./git-live";
@@ -23,10 +24,12 @@ import {
 	readThinkingLevels,
 	setThinkingLevel,
 } from "./live-session";
+import { activeEditor } from "./mouse/editor-mouse";
 import { type PackageSummary, packageBubbleContent, readPackageSummary } from "./package-summary";
 import { OVERFLOW_PILL_KEY } from "./pill";
 import { externalPillAction } from "./pill-api";
 import {
+	closePillBubble,
 	type PillAnchor,
 	type PillBubbleContent,
 	type PillBubbleHandle,
@@ -240,6 +243,26 @@ let modelSwitcher: ModelSwitcher | undefined;
 
 export function setModelSwitcher(switcher: ModelSwitcher | undefined): void {
 	modelSwitcher = switcher;
+}
+
+/**
+ * The slash-command surface a configured command needs, registered by the
+ * extension entry, which holds `pi`: an action only gets the context, and
+ * neither `getCommands` nor `sendUserMessage` is on it.
+ */
+export type PillCommandRunner = {
+	/** The command a status key is configured with, read from the live config. */
+	commandFor(key: string): string | undefined;
+	/** Everything `/name` resolves to right now, for validation before sending. */
+	list(): readonly Pick<SlashCommandInfo, "name" | "source">[];
+	/** Send the command down Pi's own prompt path. */
+	send(text: string): void;
+};
+
+let pillCommandRunner: PillCommandRunner | undefined;
+
+export function setPillCommandRunner(runner: PillCommandRunner | undefined): void {
+	pillCommandRunner = runner;
 }
 
 /** Without a model scope the picker falls back to the whole catalogue, capped. */
@@ -573,10 +596,66 @@ function showOverflow({ ctx, pill }: PillActionContext): void {
 	);
 }
 
-/** `extensionStatus:provider-balance` reads as `provider-balance` on a row. */
+/** `extensionStatus:procs` reads as `procs` on a row. */
 function overflowLabel(key: string): string {
 	const separator = key.indexOf(":");
 	return separator === -1 ? key : key.slice(separator + 1);
+}
+
+function notifyWarning(ctx: ExtensionContext, message: string): void {
+	if (ctx.hasUI) ctx.ui.notify(message, "warning");
+}
+
+/**
+ * Run a `/command` from `extensionStatuses.commands` — the shortest way to open
+ * a panel another extension already has (`procs` → `/ps`) without a bridge.
+ *
+ * Only an extension command is ever sent. Pi treats an unmatched `/foo` as
+ * ordinary prompt text, so a typo or a stale entry would start a model turn
+ * instead of reporting the mistake. The check reads the same registry Pi
+ * dispatches through and runs immediately before the send, so the two cannot
+ * disagree.
+ */
+function runConfiguredCommand(command: string, ctx: ExtensionContext): void {
+	const runner = pillCommandRunner;
+	if (!runner) return;
+	// A bubble on screen would sit over the panel the command opens.
+	closePillBubble();
+	// A panel already swapped into the editor's place has focus away from the
+	// draft. Sending again would clear it without disposing it; nothing to say,
+	// since the user is looking at what the click asked for.
+	const editor = activeEditor();
+	if (editor && (editor.component as { focused?: boolean }).focused === false) return;
+
+	const name = statusCommandName(command);
+	const named = runner.list().filter((candidate) => candidate.name === name);
+	// A prompt template and an extension command may share a name; the extension
+	// one is what this setting is for, so the first of those wins.
+	const extensionCommand = named.find((candidate) => candidate.source === "extension");
+	if (!extensionCommand) {
+		const other = named[0];
+		notifyWarning(
+			ctx,
+			other
+				? `/${name} is a ${other.source}, not an extension command: it would start a model turn.`
+				: `No /${name} command in this session; check extensionStatuses.commands.`,
+		);
+		return;
+	}
+	runner.send(command);
+}
+
+/**
+ * A pill whose click runs a configured command, or undefined when this status
+ * key is not in `extensionStatuses.commands`.
+ *
+ * The action is built per lookup rather than cached, so a `/reload` of the config
+ * is what the next click sees; the lookup itself is a keyed read.
+ */
+function commandPillAction(key: string): PillAction | undefined {
+	const command = pillCommandRunner?.commandFor(key);
+	if (!command) return undefined;
+	return ({ ctx }) => runConfiguredCommand(command, ctx);
 }
 
 /**
@@ -619,7 +698,11 @@ export function pillActionFor(key: string): PillAction | undefined {
 		(name) => name.toLowerCase() === lowered,
 	);
 	if (segment) return PILL_ACTIONS[segment];
-	return externalPillAction(key);
+	// A bridge beats the configured command: code is more specific than a
+	// declaration, and it is also what makes the config a default rather than a
+	// rule. Layering them means a bridge that unregisters hands the click back to
+	// the config instead of leaving the pill inert.
+	return externalPillAction(key) ?? commandPillAction(key);
 }
 
 /**

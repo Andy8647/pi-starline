@@ -52,7 +52,7 @@ import { LiveTpsController } from "./live-tps";
 import { installMouse } from "./mouse";
 import { setActiveEditor } from "./mouse/editor-mouse";
 import { installPasteCollapse } from "./paste-collapse";
-import { setModelSwitcher } from "./pill-actions";
+import { setModelSwitcher, setPillCommandRunner } from "./pill-actions";
 import { publishPillApi } from "./pill-api";
 import { setPillBubbleAnimation } from "./pill-bubble";
 import { probeProject } from "./project-probe";
@@ -358,6 +358,24 @@ export default function (pi: ExtensionAPI) {
 		});
 	};
 
+	/**
+	 * A pill mapped to a slash command in `extensionStatuses.commands` runs it
+	 * through Pi's own command path, which is the only way to open another
+	 * extension's panel. Registered here because `pi` is here and an action only
+	 * gets the context.
+	 */
+	const installPillCommands = () => {
+		setPillCommandRunner({
+			commandFor: (key) => {
+				const commands = currentConfig.extensionStatuses.commands;
+				// A plain index would answer for `toString` and the like.
+				return Object.hasOwn(commands, key) ? commands[key] : undefined;
+			},
+			list: () => pi.getCommands(),
+			send: (text) => pi.sendUserMessage(text, { expandPromptTemplates: true }),
+		});
+	};
+
 	/** A foreground run starts with no event of its own, only the tool call. */
 	const refreshFleetForTool = (event: { toolName?: string }) => {
 		if (event.toolName === SUBAGENT_TOOL_NAME) getActiveSubagentFleet()?.refresh();
@@ -595,6 +613,7 @@ export default function (pi: ExtensionAPI) {
 		installQueueRowHiding();
 		installSubagentFleet();
 		installModelSwitcher();
+		installPillCommands();
 		setPillBubbleAnimation(currentConfig.pill.bubbleAnimation ? BUBBLE_ANIMATION_MS : 0);
 		applyConfiguredUi(ctx);
 		installMousePatches();
@@ -624,6 +643,7 @@ export default function (pi: ExtensionAPI) {
 			setActivePull(undefined);
 			setActiveContextSnapshot(undefined);
 			setModelSwitcher(undefined);
+			setPillCommandRunner(undefined);
 			uninstallPrototypePatches(ctx);
 			setWorkingIndicator(undefined);
 			stopSessionTimer();

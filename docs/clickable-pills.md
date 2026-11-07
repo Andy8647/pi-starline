@@ -269,6 +269,17 @@ The design choices behind it:
   module's registry while the new footer reads its own.
 - **The key is the status key**, which is also the pill's span key, so no mapping
   is needed. Starline's own segment names win, so a status cannot hijack `queue`.
+- **Four sources, one order:** the `+N` counter, then a built-in segment, then a
+  registered action, then `extensionStatuses.commands`. A bridge beats the
+  config for the same reason it exists at all: code is more specific than a
+  declaration. Layering them rather than merging them means a bridge that
+  unregisters hands the click back to the config instead of leaving the pill
+  inert.
+- **A configured command is not a hook.** `extensionStatuses.commands` runs a
+  slash command the user names, which is how a pill can open a panel an extension
+  already has without a bridge. It never runs a prompt template, and it validates
+  against the live command registry right before sending, because Pi would treat
+  an unmatched `/foo` as prompt text.
 - **Additive, still v1.** The handle, the function content and `via` were added
   without breaking a v1 caller: an older Starline returns nothing from
   `showBubble`, which a caller detects with `handle?.`.

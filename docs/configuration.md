@@ -175,7 +175,8 @@ Default config values — copy this and change any value you want:
 		"placements": {},
 		"colorModes": {},
 		"colors": {},
-		"icons": {}
+		"icons": {},
+		"commands": {}
 	},
 	"mouse": {
 		"enabled": true,
@@ -353,6 +354,34 @@ number reads as one compact pill instead of `MCP: 3 servers`:
 A status with no number keeps its text under `value`: blanking `ready` would leave
 an icon that says nothing. The format changes only what the bar draws, not what
 the publishing extension sent (its own `setStatus` text stays as it was).
+
+### Point a third-party pill at its panel
+
+Some extensions have a panel of their own and a command that opens it. Map the
+status key to that command and a click opens it, without a bridge extension:
+
+```json
+{
+	"extensionStatuses": {
+		"commands": { "procs": "/ps" }
+	}
+}
+```
+
+- The key is the status key as published, without the `extensionStatus:` prefix.
+- **Only an extension command runs.** Pi sends an unmatched `/foo` down the prompt
+  path as ordinary text, so a mistyped command would start a model turn. Starline
+  reads the live command list first and notifies instead; prompt templates and
+  skills are refused for the same reason.
+- **A bridge wins.** If an extension registers a pill action for the same key
+  through the [pill API](pill-api.md), that action answers the click and this
+  setting is not reached. The `Extension segments` tab in `/starline` says which
+  one is in charge (`Click: /ps` or `Click: the bridge registered for this pill`).
+- **Built-in segments cannot be remapped.** They answer for themselves, and a
+  status taking one over would break the rule that a status cannot hijack `queue`.
+- **Only while nothing else has the editor.** A command that opens a panel
+  replaces the editor; clicking the pill again while that panel is up does
+  nothing rather than opening a second one.
 
 ## Segment display options
 
