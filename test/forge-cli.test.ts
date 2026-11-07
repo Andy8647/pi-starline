@@ -451,4 +451,27 @@ describe("readForgeLists with issues", () => {
 		expect(lists?.pulls.authored[0]?.number).toBe(3);
 		expect(lists?.issues).toBe("failed");
 	});
+	it("counts GitLab's backlog after deduplicating it against the two groups", async () => {
+		// One unfiltered page is all GitLab gives for the backlog, so its count is
+		// the rows that survive: claiming a row that is already listed under
+		// "Assigned to you" would show a number with no rows under it.
+		const { run } = runner([
+			JSON.stringify([]),
+			JSON.stringify([]),
+			JSON.stringify([]),
+			JSON.stringify({ data: { project: { issuesEnabled: true, issues: { count: 2 } } } }),
+			JSON.stringify([{ iid: 1, title: "mine", web_url: "g/1" }]),
+			JSON.stringify([]),
+			JSON.stringify([
+				{ iid: 1, title: "mine", web_url: "g/1" },
+				{ iid: 2, title: "other", web_url: "g/2" },
+			]),
+		]);
+
+		const lists = await readForgeLists("/repo", gitlab, { issues: true }, run);
+
+		if (!lists?.issues || lists.issues === "failed") throw new Error("expected issues");
+		expect(lists.issues.other.items.map((issue) => issue.number)).toEqual([2]);
+		expect(lists.issues.other.total).toBe(1);
+	});
 });

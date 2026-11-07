@@ -540,13 +540,20 @@ async function readGitlabIssues(
 			return true;
 		}),
 	});
+	/** A group GitLab gave no total for: its count is the rows that survived. */
+	const byRows = (group: IssueGroup): IssueGroup => ({
+		items: group.items,
+		total: group.items.length,
+	});
 
 	return {
 		enabled: true,
 		openCount: counted.openCount,
 		assigned: once(assigned.group),
 		authored: once(authored.group),
-		other: backlog ? once(backlog.group) : { items: [], total: 0 },
+		// The backlog is one unfiltered page, so its count is the rows that survive
+		// deduplication against the two groups above; the forge reported no total.
+		other: backlog ? byRows(once(backlog.group)) : { items: [], total: 0 },
 	};
 }
 
