@@ -595,6 +595,9 @@ export function installFooter(
 						pillSpecFor,
 						(key) => getExtensionStatusColor(config, key) ?? config.colors.extensionStatus,
 						(key) => getExtensionStatusIcon(config, key),
+						// A squeezed git pill must keep its dirty counts and operation; the
+						// branch name is the part that gives way.
+						(segment) => (segment === "git" ? git.labelTailColumns : 0),
 					),
 					theme,
 					colorSource,

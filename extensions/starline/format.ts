@@ -1,7 +1,7 @@
 import { homedir, hostname, userInfo } from "node:os";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { sliceByColumn, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type {
 	ColorSource,
 	ColorSpec,
@@ -614,12 +614,45 @@ function stripAnsi(text: string): string {
 	return text.replace(/\u001B\[[0-9;]*m/g, "");
 }
 
+/**
+ * Cut `text` to `maxColumns` visible columns, keeping both ends and putting one
+ * `…` between them.
+ *
+ * End truncation keeps the shared prefix, which is exactly the part two branches
+ * of the same kind have in common: `feature/ABC-1234-add-a-thing` and
+ * `feature/ABC-5678-fix-another` both answer `feature/…`. The tail is where the
+ * difference is, and `keepTailColumns` protects a caller's own tail (a git pill's
+ * dirty counts and in-progress operation) even when the split would cut it.
+ *
+ * Cuts land on grapheme boundaries, so a wide glyph that does not fit is dropped
+ * rather than halved; the result is at most `maxColumns`, occasionally one short.
+ */
+export function truncateMiddle(text: string, maxColumns: number, keepTailColumns = 0): string {
+	if (maxColumns <= 0) return "";
+	const total = visibleWidth(text);
+	if (total <= maxColumns) return text;
+
+	// The ellipsis is one column of the budget, whatever the ends get to keep.
+	const budget = maxColumns - 1;
+	const tailColumns = Math.min(keepTailColumns, budget);
+	const room = budget - tailColumns;
+	const headColumns = Math.ceil(room / 2);
+	const tailWidth = Math.min(tailColumns + Math.floor(room / 2), budget);
+
+	const head = stripAnsi(sliceByColumn(text, 0, headColumns, true));
+	const tail = stripAnsi(sliceByColumn(text, Math.max(0, total - tailWidth), tailWidth, true));
+	const out = `${head}…${tail}`;
+	// Both slices already refuse to split a grapheme, so this only guards against
+	// an off-by-one from a wide glyph at a cut.
+	return visibleWidth(out) <= maxColumns ? out : truncateToWidth(out, maxColumns, "…");
+}
+
 export function formatGitBranchText(
 	branch: string,
 	maxLength: GitBranchMaxLength = "full",
 ): string {
 	if (maxLength === "full" || visibleWidth(branch) <= maxLength) return branch;
-	return stripAnsi(truncateToWidth(branch, maxLength, "…"));
+	return truncateMiddle(branch, maxLength);
 }
 
 export function formatUsernameHostLabel(icon: string): string {

@@ -312,12 +312,15 @@ Notes:
 - `extensionStatus` is not one segment but however many other extensions have registered (balance, automode, mcp, …). Listing it expands to all of them; `extensionStatus:<key>` places one specific status, and it is not repeated by a later `extensionStatus`.
 - A status configured with `colorMode: "themed"` (the default) recolours the extension's status segment to match the rest of the bar. `colorMode: "original"` keeps the colours its own extension chose, on a neutral background.
 - Unknown segment names are dropped rather than drawn as empty pills.
-- **A bar that does not fit drops whole pills, from the right.** It never draws
-  part of a pill: when the next one will not fit, it and everything after it come
-  off the bar and a `+N` counter takes their place. That makes `pill.segments` its
-  own priority list — the leftmost pill survives longest — so put what you want
-  kept on the left. Clicking the counter opens a bubble listing what is not on
-  screen, with the text each of those pills would have shown.
+- **A bar that does not fit compresses the wide pills first.** A pill wider than
+  its share is shortened in the middle (`feature/…-add-a-thing`) and the pills
+  behind it stay on the bar; the branch pill keeps its dirty counts and operation
+  whatever it loses. Only when every pill is down to its minimum (24 columns, or
+  its own width) does the bar drop whole pills from the right and put a `+N`
+  counter in their place. That still makes `pill.segments` its own priority list —
+  the leftmost pill survives longest — so put what you want kept on the left.
+  Clicking the counter opens a bubble listing what is not on screen, with the text
+  each of those pills would have shown.
 - Where two neighbouring pills resolve to the same background, the solid arrow would be invisible (it is the left colour drawn on the right colour), so a thin divider is drawn in the text colour instead. Several segments share a default colour, so this comes up more often than it sounds.
 - In `icons.mode: "ascii"` the arrows and caps disappear; the background transitions still separate the segments.
 
@@ -454,7 +457,7 @@ on one and slow on another. Two details follow from that:
 | -------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `counts`                   | `false`  | Show numbers beside the ahead/behind and stash glyphs (`!3`) instead of the glyph alone (`!`).                                                                                                                                                                                                                                                                                           |
 | `hostIcon`                 | `false`  | Replace the branch icon with the `origin` remote's forge logo: GitHub, GitLab, Bitbucket, or a generic git mark for anything else, including self-hosted instances recognised by subdomain (`gitlab.acme.com`). Repos with no `origin` keep the plain branch icon. The remote is read once and cached for ten minutes, and only read when this is on. Disabled in `icons.mode: "ascii"`. |
-| `branch.maxLength`         | `"full"` | Caps the visible width of the branch name. `full` keeps the whole name; a positive integer truncates to that width including the trailing `…`. The **Layout** tab cycles `full`, `10`, `20`, `30`, `40`, `50`.                                                                                                                                                                           |
+| `branch.maxLength`         | `"full"` | Caps the visible width of the branch name. `full` keeps the whole name (a bar that runs out of room still compresses it); a positive integer cuts to that width including one `…`. The cut is in the middle, so both the shared `feature/` prefix and the part that tells two branches apart survive. The **Layout** tab cycles `full`, `10`, `20`, `30`, `40`, `50`.                    |
 | `commit.hashLength`        | `7`      | Short-hash width for the `gitCommit` pill, clamped to `4`–`40`.                                                                                                                                                                                                                                                                                                                          |
 | `commit.onlyDetached`      | `true`   | Show the hash mainly on a detached HEAD, where the branch name is gone.                                                                                                                                                                                                                                                                                                                  |
 | `commit.showTag`           | `true`   | Append the exact-match tag (`git describe --tags --exact-match HEAD`). The lookup only runs while a tag can be shown.                                                                                                                                                                                                                                                                    |
