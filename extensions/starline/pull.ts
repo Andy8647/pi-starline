@@ -42,6 +42,49 @@ export const PULL_GROUPS: readonly PullGroup[] = ["authored", "reviewing", "invo
 
 export type PullLists = Record<PullGroup, Pull[]>;
 
+/** An open issue, as the bubble lists it. A row is a link and nothing more. */
+export type Issue = { number: number; title?: string; url: string };
+
+/** One issue group: the rows it lists, and how many the forge says exist. */
+export type IssueGroup = { items: Issue[]; total: number };
+
+/**
+ * How many open issues still get a list.
+ *
+ * Above this the repository's backlog is not something a bubble can show, and
+ * eight rows of it would be a sample dressed up as a list. The section collapses
+ * to one row with the count and a link instead. A constant rather than a setting:
+ * one number, no second real caller.
+ */
+export const ISSUE_LIST_THRESHOLD = 20;
+
+/**
+ * The repository's issues, for the bubble.
+ *
+ * Two scopes travel together. `assigned` and `authored` are "mine", which is
+ * useful at any repository size; `other` is the rest of the backlog, which only
+ * means anything on a repository small enough to read.
+ */
+export type IssueLists = {
+	/** Open issues on the repository, from the forge's own count. */
+	openCount: number;
+	assigned: IssueGroup;
+	authored: IssueGroup;
+	/** The rest of the open issues; empty above `ISSUE_LIST_THRESHOLD`. */
+	other: IssueGroup;
+	/** False when the repository has no issue tracker, as many forks do. */
+	enabled: boolean;
+};
+
+/**
+ * Everything the pull bubble lists.
+ *
+ * `issues` is absent when the config is off, and `"failed"` when the forge
+ * answered about pulls but not about issues: the pulls are still worth showing,
+ * and claiming "no issues" would be a lie.
+ */
+export type ForgeLists = { pulls: PullLists; issues?: IssueLists | "failed" };
+
 /** One refresh's answer about the current branch. */
 export type PullSnapshot = {
 	/** Which forge answered: decides the marker in front of the number. */

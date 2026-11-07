@@ -78,6 +78,7 @@ describe("mergeConfig", () => {
 			branch: { maxLength: "full" },
 			commit: { hashLength: 7, onlyDetached: true, showTag: true },
 			metrics: { onlyNonzero: true, ignoreSubmodules: false },
+			issues: false,
 		});
 		expect(config.extensionStatuses).toEqual({
 			defaultPlacement: "right",
