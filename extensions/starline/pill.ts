@@ -466,7 +466,12 @@ export function renderPillBar(
 	const line: PreparedPill[] = pills.slice(0, kept);
 	if (counterPill) line.push(counterPill);
 	if (truncateFirstTo > 0 && line[0]) {
-		line[0] = { ...line[0], text: truncateToWidth(line[0].text, truncateFirstTo, "…") };
+		// Nothing fits at its floor: this is a terminal too narrow for one pill, so
+		// the single pill is cut in the middle like a compressed one. The tail is
+		// not protected here — at this width reserving it would squeeze the label
+		// out of its own pill — but a middle cut still keeps whatever of the tail
+		// the budget reaches.
+		line[0] = { ...line[0], text: truncateMiddle(line[0].text, truncateFirstTo) };
 	} else if (kept > 0) {
 		const counter = counterPill ? counterText(dropped.length) : undefined;
 		if (lineWidth(kept, counter) > limit) {
