@@ -18,9 +18,51 @@ extension already has, and the pull bubble can list the repository's issues.
 
 **Added**
 
+- **`extensionStatuses.commands`: a third-party pill that opens its extension's
+  panel.** Map a status key to a slash command (`{"procs": "/ps"}`) and a click runs
+  it, with no bridge to write. Only an extension command runs: a mistyped name, a
+  prompt template or a skill is refused with a notification, because Pi would
+  otherwise send it as a prompt and start a model turn. Built-in segments answer for
+  themselves, and an action registered through the pill API for the same key wins
+  over the configured command, so an existing bridge keeps working.
+- **`git.issues`: the repository's open issues in the pull bubble.** Off by default.
+  `Assigned to you` and `You opened` are always listed; the rest of the backlog only
+  while the repository has 20 or fewer open issues, above which one row
+  (`↗ All 8412 open issues`) opens the list instead. A fork with issues turned off
+  hides the section rather than claiming there are none, and on GitHub the issue
+  searches ride along with the pull searches, so turning this on costs no extra
+  request there. The `gitPr` pill itself does not change: a repository-wide issue
+  count says nothing about the current branch.
+- **The `Extension segments` tab in `/starline` says what a click does**, naming the
+  command or the bridge that overrides it, so a shadowed setting is visible instead
+  of silently ignored.
+
 **Changed**
 
+- **A bar that does not fit compresses the wide pills first.** A pill wider than its
+  share is shortened in the middle and the pills behind it stay on the bar; whole
+  pills are dropped, and counted, only once every pill is down to its minimum (24
+  columns, or its own width). `git.branch.maxLength: "full"` still means no configured
+  cap, but a bar that runs out of room now compresses even then.
+- **A shortened branch keeps both ends.** `formatGitBranchText` cuts in the middle, so
+  `feature/…` no longer hides the part that tells two branches apart, and the branch
+  pill keeps its dirty counts and in-progress operation whatever the name loses. A
+  numeric `maxLength` now means a middle cut rather than an end cut.
+
 **Fixed**
+
+- **A wide pill used to cost everything after it.** The layout dropped whole pills
+  from the right, so on a long `feature/…` branch `context`, `cost` and every
+  extension status went with it; with the branch first, one pill was sometimes
+  stretched across the whole bar instead.
+- **The pull bubble no longer reads forever.** A first read that failed left
+  `Reading from the forge…` on screen; it now says it could not read, and keeps the
+  row that opens the repository.
+- **A pull bubble from another directory no longer answers.** Opened after a `/cd`,
+  it showed the previous repository's lists.
+- **A long bubble no longer runs off the screen.** Its rows are fitted to the terminal
+  and a shortened group says how much of it is showing (`Yours · 5 of 40`), while the
+  rows that lead out of the bubble are never among the ones dropped.
 
 ## [0.11.0] - 2026-11-05
 
