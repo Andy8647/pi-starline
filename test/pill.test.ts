@@ -562,6 +562,19 @@ describe("when a wide pill does not fit", () => {
 		expect(line).toContain("[+2] REBASING");
 	});
 
+	it("cuts the one pill it can keep in the middle, tail and all", () => {
+		// No pill fits at its floor, so the only pill is cut — in the middle, like a
+		// compressed one. End truncation would drop the part that names the branch
+		// at its tail; here the budget simply reaches what it reaches.
+		const git = wide(`feature/ABC-1234-a-thing [+2] REBASING`, { keepTailColumns: 13 });
+		const { line, spans } = render([git], 20);
+
+		expect(spans).toEqual(["git"]);
+		expect(line).toContain("…");
+		expect(line).toContain("feature/");
+		expect(line.length).toBeLessThanOrEqual(20);
+	});
+
 	it("leaves a pill that carries its own styling whole", () => {
 		// `colorMode: "original"` text arrives painted; this module cannot re-measure
 		// a cut through ANSI it did not write, so the pill is all or nothing.
