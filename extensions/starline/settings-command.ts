@@ -32,6 +32,7 @@ import { sanitizeExtensionStatusText } from "./extension-status";
 import { isIconMode } from "./icons";
 import { pillActionFor, runPillAction } from "./pill-actions";
 import { getPillAnchor } from "./pill-anchors";
+import { externalPillAction } from "./pill-api";
 import {
 	EXTENSION_STATUS_PREFIX,
 	isKnownPillSegment,
@@ -364,6 +365,22 @@ function thirdPartyStatusSettingFromId(
 	return { kind, key: rest.slice(separatorIndex + 1) };
 }
 
+/**
+ * What a click on a third-party pill currently does, as one line for the settings
+ * row. A bridge registration is named as such because it is the one case where a
+ * configured command stops being the answer.
+ */
+function clickDescription(config: PolishedTuiConfig, key: string): string | undefined {
+	const commands = config.extensionStatuses.commands;
+	const configured = Object.hasOwn(commands, key) ? commands[key] : undefined;
+	if (externalPillAction(key)) {
+		return configured
+			? `Click: the bridge registered for this pill (overrides ${configured})`
+			: "Click: the bridge registered for this pill";
+	}
+	return configured ? `Click: ${configured}` : undefined;
+}
+
 function buildItems(
 	section: SettingsSection,
 	config: PolishedTuiConfig,
@@ -499,7 +516,11 @@ function buildItems(
 
 	return statuses.flatMap(([key, value]) => {
 		const sanitizedText = sanitizeExtensionStatusText(value);
-		const description = sanitizedText ? `Current status: ${sanitizedText}` : undefined;
+		const statusLine = sanitizedText ? `Current status: ${sanitizedText}` : undefined;
+		// What a click on this pill would do, so a configured command that a bridge
+		// shadows is visible here instead of silently not running.
+		const clickLine = clickDescription(config, key);
+		const description = [statusLine, clickLine].filter(Boolean).join(" · ") || undefined;
 		return [
 			{
 				id: thirdPartyStatusSettingId(key, "placement"),

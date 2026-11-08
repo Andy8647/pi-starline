@@ -14,13 +14,15 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
 	configPath,
 	defaultConfig,
 	getExtensionStatusColorMode,
 	isExtensionStatusColorMode,
+	loadConfig,
 	mergeConfig,
+	parseStatusCommands,
 	saveColorSourcesPatch,
 	saveContextStylePatch,
 	saveContextThresholdsPatch,
@@ -76,6 +78,7 @@ describe("mergeConfig", () => {
 			branch: { maxLength: "full" },
 			commit: { hashLength: 7, onlyDetached: true, showTag: true },
 			metrics: { onlyNonzero: true, ignoreSubmodules: false },
+			issues: false,
 		});
 		expect(config.extensionStatuses).toEqual({
 			defaultPlacement: "right",
@@ -84,6 +87,7 @@ describe("mergeConfig", () => {
 			colors: {},
 			icons: {},
 			formats: {},
+			commands: {},
 		});
 	});
 
@@ -92,13 +96,11 @@ describe("mergeConfig", () => {
 			enabled: true,
 			wheelRouting: true,
 			copyNotice: true,
-			transcriptCleanCopy: true,
 		});
 		expect(defaultConfig.mouse).toEqual({
 			enabled: true,
 			wheelRouting: true,
 			copyNotice: true,
-			transcriptCleanCopy: true,
 		});
 	});
 
@@ -107,8 +109,13 @@ describe("mergeConfig", () => {
 			enabled: false,
 			wheelRouting: false,
 			copyNotice: true,
-			transcriptCleanCopy: true,
 		});
+	});
+
+	it("ignores the transcriptCleanCopy key that moved to pi-tidy", () => {
+		expect(mergeConfig({ mouse: { transcriptCleanCopy: false } }).mouse).toEqual(
+			defaultConfig.mouse,
+		);
 	});
 
 	it("normalizes invalid mouse values", () => {
@@ -116,7 +123,6 @@ describe("mergeConfig", () => {
 			enabled: true,
 			wheelRouting: true,
 			copyNotice: true,
-			transcriptCleanCopy: true,
 		});
 	});
 
@@ -501,6 +507,7 @@ describe("mergeConfig", () => {
 			colors: {},
 			icons: {},
 			formats: {},
+			commands: {},
 		});
 	});
 
@@ -530,6 +537,7 @@ describe("mergeConfig", () => {
 			colors: {},
 			icons: {},
 			formats: {},
+			commands: {},
 		});
 		expect(mergeConfig({ extensionStatuses: { placements: "none" } }).extensionStatuses).toEqual({
 			defaultPlacement: "right",
@@ -538,6 +546,7 @@ describe("mergeConfig", () => {
 			colors: {},
 			icons: {},
 			formats: {},
+			commands: {},
 		});
 	});
 
@@ -885,6 +894,7 @@ describe("mergeConfig", () => {
 				colors: {},
 				icons: {},
 				formats: {},
+				commands: {},
 			});
 			expect(raw.unknown).toBe(true);
 			expect(raw.colors.futureKey).toBe("future");
@@ -937,6 +947,7 @@ describe("mergeConfig", () => {
 				colors: {},
 				icons: {},
 				formats: {},
+				commands: {},
 			});
 			expect(raw.unknown).toBe(true);
 			expect(raw.colors.futureKey).toBe("future");
@@ -1095,7 +1106,6 @@ describe("saveMousePatch", () => {
 				enabled: false,
 				wheelRouting: false,
 				copyNotice: true,
-				transcriptCleanCopy: true,
 			});
 		} finally {
 			rmSync(dir, { recursive: true });
@@ -1116,5 +1126,55 @@ describe("config identity after the starline rename", () => {
 		expect(isExtensionStatusColorMode("themed")).toBe(true);
 		expect(isExtensionStatusColorMode("original")).toBe(true);
 		expect(isExtensionStatusColorMode("neon")).toBe(false);
+	});
+});
+
+describe("extensionStatuses.commands", () => {
+	it("keeps a configured command through mergeConfig", () => {
+		const config = mergeConfig({ extensionStatuses: { commands: { procs: "/ps" } } });
+		expect(config.extensionStatuses.commands).toEqual({ procs: "/ps" });
+	});
+
+	it("rejects a value that is not a slash command", () => {
+		const { commands, rejected } = parseStatusCommands({ procs: "ps", jobs: " /jobs list " });
+		expect(commands).toEqual({ jobs: "/jobs list" });
+		expect(rejected).toEqual(["procs"]);
+	});
+
+	it("rejects a command that points back at /starline", () => {
+		expect(parseStatusCommands({ procs: "/starline procs" }).rejected).toEqual(["procs"]);
+	});
+
+	it("rejects a built-in segment key and the segment spelling of a status", () => {
+		const { commands, rejected } = parseStatusCommands({
+			git: "/ps",
+			"extensionStatus:procs": "/ps",
+			procs: "/ps",
+		});
+		expect(commands).toEqual({ procs: "/ps" });
+		expect(rejected).toEqual(["git", "extensionStatus:procs"]);
+	});
+
+	it("warns once per process about what it could not accept", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "starline-config-"));
+		const path = join(dir, "starline.json");
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		try {
+			writeFileSync(path, JSON.stringify({ extensionStatuses: { commands: { git: "/ps" } } }));
+			// A fresh module instance, so the once-per-process flag starts clear.
+			vi.resetModules();
+			const fresh = await import("../extensions/starline/config");
+			fresh.loadConfig(path);
+			fresh.loadConfig(path);
+
+			const said = warn.mock.calls.filter((call) =>
+				String(call[0]).includes("extensionStatuses.commands"),
+			);
+			expect(said).toHaveLength(1);
+		} finally {
+			warn.mockRestore();
+			vi.resetModules();
+			rmSync(dir, { recursive: true, force: true });
+		}
 	});
 });

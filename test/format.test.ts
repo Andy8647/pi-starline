@@ -22,6 +22,7 @@ import {
 	invalidateUsageTotalsCache,
 	resolveSessionStartEpoch,
 	statusValueText,
+	truncateMiddle,
 } from "../extensions/starline/format";
 import {
 	ASCII_DEFAULT_ICONS,
@@ -291,11 +292,14 @@ describe("formatGitBranchText", () => {
 		expect(formatGitBranchText("1234567890", 10)).toBe("1234567890");
 	});
 
-	it("includes the ellipsis inside the configured visible width", () => {
-		expect(formatGitBranchText("feature", 4)).toBe("fea…");
+	it("keeps both ends of a shortened branch", () => {
+		// End truncation answered `feature/…` for every branch of the same kind: the
+		// part that tells two of them apart is at the tail.
+		expect(formatGitBranchText("feature/ABC-1234-add-a-thing", 16)).toBe("feature/…a-thing");
+		expect(formatGitBranchText("feature", 4)).toBe("fe…e");
 		expect(formatGitBranchText("feature", 1)).toBe("…");
 		const unicode = formatGitBranchText("你好世界", 5);
-		expect(unicode).toBe("你好…");
+		expect(unicode).toBe("你…界");
 		expect(visibleWidth(unicode)).toBe(5);
 	});
 });
@@ -769,5 +773,52 @@ describe("statusValueText", () => {
 	it("leaves text with no number alone", () => {
 		expect(statusValueText("ready")).toBe("ready");
 		expect(statusValueText("")).toBe("");
+	});
+});
+
+describe("truncateMiddle", () => {
+	it("returns text that already fits untouched", () => {
+		expect(truncateMiddle("main", 8)).toBe("main");
+		expect(truncateMiddle("feature/ABC-1", 13)).toBe("feature/ABC-1");
+	});
+
+	it("keeps both ends and puts one ellipsis between them", () => {
+		expect(truncateMiddle("feature/ABC-1234-add-a-thing", 16)).toBe("feature/…a-thing");
+	});
+
+	it("never exceeds the budget, for any width and script", () => {
+		const samples = [
+			"feature/ABC-1234-add-a-thing",
+			"你好世界你好世界你好世界",
+			"🙂🙂🙂🙂🙂🙂🙂🙂",
+		];
+		for (const sample of samples) {
+			for (let budget = 0; budget <= visibleWidth(sample) + 2; budget++) {
+				const out = truncateMiddle(sample, budget);
+				expect(visibleWidth(out), `${sample} at ${budget} gave ${out}`).toBeLessThanOrEqual(
+					Math.max(0, budget),
+				);
+			}
+		}
+	});
+
+	it("cuts on grapheme boundaries rather than halving a glyph", () => {
+		const out = truncateMiddle("🙂🙂🙂🙂🙂🙂", 5);
+		// A wide glyph that does not fit is dropped, which can leave a column free.
+		expect(visibleWidth(out)).toBeLessThanOrEqual(5);
+		expect(out).not.toContain("\ufffd");
+		expect([...out].every((glyph) => glyph === "…" || glyph === "🙂")).toBe(true);
+	});
+
+	it("keeps the tail a caller asked to protect", () => {
+		const text = "feature/ABC-1234-a-really-long-branch [+2] REBASING";
+		const out = truncateMiddle(text, 30, 12);
+		expect(out.endsWith(" [+2] REBASING".slice(-12))).toBe(true);
+		expect(out).toContain("feature/");
+		expect(visibleWidth(out)).toBeLessThanOrEqual(30);
+	});
+
+	it("returns nothing for a budget of zero", () => {
+		expect(truncateMiddle("feature", 0)).toBe("");
 	});
 });

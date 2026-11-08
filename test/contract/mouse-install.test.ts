@@ -114,7 +114,7 @@ describe("mouse patches against the real TuiAltScreen.prototype", () => {
 
 	it("keeps the selection visible and hinted when not auto-copying, and the copy key answers it", async () => {
 		dispose = installMouse(prototype, {
-			getConfig: () => ({ mouse: { copyNotice: true, transcriptCleanCopy: true } }) as never,
+			getConfig: () => ({ mouse: { copyNotice: true } }) as never,
 		});
 
 		const { instance, written } = makeReceiver([

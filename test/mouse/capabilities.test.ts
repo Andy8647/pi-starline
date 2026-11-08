@@ -17,9 +17,8 @@ const ALL = [
 	"handleSelectionMouseEvent",
 	"copyActiveSelectionToClipboard",
 	"getCopyOnSelect",
-	"hasActiveSelection",
+	"getActiveSelectionText",
 	"getSelectionBounds",
-	"getSelectionColumns",
 	"flash",
 	"hasOverlay",
 	"requestRender",
@@ -91,18 +90,18 @@ describe("probeCapabilities", () => {
 describe("enabledFeatures", () => {
 	it("enables everything when every capability is present", () => {
 		const features = enabledFeatures(probeCapabilities(prototypeWith(ALL)));
-		expect(features.size).toBe(5);
+		expect(features.size).toBe(4);
 	});
 
 	it("disables the hint when Pi 0.84.4's selection APIs are missing", () => {
 		// The hint is derived from Pi's own select-without-copy state; without
-		// `getCopyOnSelect` or `hasActiveSelection` there is nothing to derive
+		// `getCopyOnSelect` or `getActiveSelectionText` there is nothing to derive
 		// it from. Copying still answers the copy key, which needs neither.
-		for (const capability of ["getCopyOnSelect", "hasActiveSelection"] as const) {
+		for (const capability of ["getCopyOnSelect", "getActiveSelectionText"] as const) {
 			const without = ALL.filter((name) => name !== capability);
 			const features = enabledFeatures(probeCapabilities(prototypeWith(without)));
 			expect(features.has("selectionHint")).toBe(false);
-			expect(features.has("transcriptCleanCopy")).toBe(true);
+			expect(features.has("editorBufferCopy")).toBe(true);
 		}
 	});
 
@@ -117,7 +116,6 @@ describe("enabledFeatures", () => {
 			"editorClickToCaret",
 			"editorWheelScroll",
 			"selectionHint",
-			"transcriptCleanCopy",
 		]);
 	});
 
@@ -149,11 +147,9 @@ describe("enabledFeatures", () => {
 		expect(features.has("editorWheelScroll")).toBe(false);
 		expect(features.has("selectionHint")).toBe(true);
 		// The same layout an overlay is composited over still holds the editor, so
-		// both editor click features would answer for rows a dialog is covering,
-		// and a clean copy would read a dialog's rows as the transcript's.
+		// both editor click features would answer for rows a dialog is covering.
 		expect(features.has("editorClickToCaret")).toBe(false);
 		expect(features.has("editorBufferCopy")).toBe(false);
-		expect(features.has("transcriptCleanCopy")).toBe(false);
 	});
 
 	it("disables click-to-caret when the mouse event handler is missing", () => {
@@ -165,13 +161,11 @@ describe("enabledFeatures", () => {
 	it("disables buffer copy without the selection it would have to recognise", () => {
 		// It has to read the bounds to find out whether the selection is the
 		// editor's at all, and it raises its own "Copied!" itself because it
-		// answers the copy instead of calling through. `flash` is shared with
-		// the clean copy, which is why only the bounds check gates it here.
+		// answers the copy instead of calling through.
 		for (const capability of ["getSelectionBounds"] as const) {
 			const without = ALL.filter((name) => name !== capability);
 			const features = enabledFeatures(probeCapabilities(prototypeWith(without)));
 			expect(features.has("editorBufferCopy")).toBe(false);
-			expect(features.has("transcriptCleanCopy")).toBe(false);
 		}
 	});
 

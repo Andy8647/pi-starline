@@ -90,7 +90,8 @@ Default config values — copy this and change any value you want:
 		"metrics": {
 			"onlyNonzero": true,
 			"ignoreSubmodules": false
-		}
+		},
+		"issues": false
 	},
 	"icons": {
 		"mode": "auto",
@@ -175,13 +176,13 @@ Default config values — copy this and change any value you want:
 		"placements": {},
 		"colorModes": {},
 		"colors": {},
-		"icons": {}
+		"icons": {},
+		"commands": {}
 	},
 	"mouse": {
 		"enabled": true,
 		"wheelRouting": true,
-		"copyNotice": true,
-		"transcriptCleanCopy": true
+		"copyNotice": true
 	}
 }
 ```
@@ -312,12 +313,15 @@ Notes:
 - `extensionStatus` is not one segment but however many other extensions have registered (balance, automode, mcp, …). Listing it expands to all of them; `extensionStatus:<key>` places one specific status, and it is not repeated by a later `extensionStatus`.
 - A status configured with `colorMode: "themed"` (the default) recolours the extension's status segment to match the rest of the bar. `colorMode: "original"` keeps the colours its own extension chose, on a neutral background.
 - Unknown segment names are dropped rather than drawn as empty pills.
-- **A bar that does not fit drops whole pills, from the right.** It never draws
-  part of a pill: when the next one will not fit, it and everything after it come
-  off the bar and a `+N` counter takes their place. That makes `pill.segments` its
-  own priority list — the leftmost pill survives longest — so put what you want
-  kept on the left. Clicking the counter opens a bubble listing what is not on
-  screen, with the text each of those pills would have shown.
+- **A bar that does not fit compresses the wide pills first.** A pill wider than
+  its share is shortened in the middle (`feature/…-add-a-thing`) and the pills
+  behind it stay on the bar; the branch pill keeps its dirty counts and operation
+  whatever it loses. Only when every pill is down to its minimum (24 columns, or
+  its own width) does the bar drop whole pills from the right and put a `+N`
+  counter in their place. That still makes `pill.segments` its own priority list —
+  the leftmost pill survives longest — so put what you want kept on the left.
+  Clicking the counter opens a bubble listing what is not on screen, with the text
+  each of those pills would have shown.
 - Where two neighbouring pills resolve to the same background, the solid arrow would be invisible (it is the left colour drawn on the right colour), so a thin divider is drawn in the text colour instead. Several segments share a default colour, so this comes up more often than it sounds.
 - In `icons.mode: "ascii"` the arrows and caps disappear; the background transitions still separate the segments.
 
@@ -353,6 +357,34 @@ number reads as one compact pill instead of `MCP: 3 servers`:
 A status with no number keeps its text under `value`: blanking `ready` would leave
 an icon that says nothing. The format changes only what the bar draws, not what
 the publishing extension sent (its own `setStatus` text stays as it was).
+
+### Point a third-party pill at its panel
+
+Some extensions have a panel of their own and a command that opens it. Map the
+status key to that command and a click opens it, without a bridge extension:
+
+```json
+{
+	"extensionStatuses": {
+		"commands": { "procs": "/ps" }
+	}
+}
+```
+
+- The key is the status key as published, without the `extensionStatus:` prefix.
+- **Only an extension command runs.** Pi sends an unmatched `/foo` down the prompt
+  path as ordinary text, so a mistyped command would start a model turn. Starline
+  reads the live command list first and notifies instead; prompt templates and
+  skills are refused for the same reason.
+- **A bridge wins.** If an extension registers a pill action for the same key
+  through the [pill API](pill-api.md), that action answers the click and this
+  setting is not reached. The `Extension segments` tab in `/starline` says which
+  one is in charge (`Click: /ps` or `Click: the bridge registered for this pill`).
+- **Built-in segments cannot be remapped.** They answer for themselves, and a
+  status taking one over would break the rule that a status cannot hijack `queue`.
+- **Only while nothing else has the editor.** A command that opens a panel
+  replaces the editor; clicking the pill again while that panel is up does
+  nothing rather than opening a second one.
 
 ## Segment display options
 
@@ -445,7 +477,8 @@ on one and slow on another. Two details follow from that:
 		"hostIcon": false,
 		"branch": { "maxLength": "full" },
 		"commit": { "hashLength": 7, "onlyDetached": true, "showTag": true },
-		"metrics": { "onlyNonzero": true, "ignoreSubmodules": false }
+		"metrics": { "onlyNonzero": true, "ignoreSubmodules": false },
+		"issues": false
 	}
 }
 ```
@@ -454,12 +487,13 @@ on one and slow on another. Two details follow from that:
 | -------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `counts`                   | `false`  | Show numbers beside the ahead/behind and stash glyphs (`!3`) instead of the glyph alone (`!`).                                                                                                                                                                                                                                                                                           |
 | `hostIcon`                 | `false`  | Replace the branch icon with the `origin` remote's forge logo: GitHub, GitLab, Bitbucket, or a generic git mark for anything else, including self-hosted instances recognised by subdomain (`gitlab.acme.com`). Repos with no `origin` keep the plain branch icon. The remote is read once and cached for ten minutes, and only read when this is on. Disabled in `icons.mode: "ascii"`. |
-| `branch.maxLength`         | `"full"` | Caps the visible width of the branch name. `full` keeps the whole name; a positive integer truncates to that width including the trailing `…`. The **Layout** tab cycles `full`, `10`, `20`, `30`, `40`, `50`.                                                                                                                                                                           |
+| `branch.maxLength`         | `"full"` | Caps the visible width of the branch name. `full` keeps the whole name (a bar that runs out of room still compresses it); a positive integer cuts to that width including one `…`. The cut is in the middle, so both the shared `feature/` prefix and the part that tells two branches apart survive. The **Layout** tab cycles `full`, `10`, `20`, `30`, `40`, `50`.                    |
 | `commit.hashLength`        | `7`      | Short-hash width for the `gitCommit` pill, clamped to `4`–`40`.                                                                                                                                                                                                                                                                                                                          |
 | `commit.onlyDetached`      | `true`   | Show the hash mainly on a detached HEAD, where the branch name is gone.                                                                                                                                                                                                                                                                                                                  |
 | `commit.showTag`           | `true`   | Append the exact-match tag (`git describe --tags --exact-match HEAD`). The lookup only runs while a tag can be shown.                                                                                                                                                                                                                                                                    |
 | `metrics.onlyNonzero`      | `true`   | Omit each zero side of `+added −deleted` independently, and hide the pill entirely at `0/0`.                                                                                                                                                                                                                                                                                             |
 | `metrics.ignoreSubmodules` | `false`  | Pass `--ignore-submodules=all` to the numstat diff.                                                                                                                                                                                                                                                                                                                                      |
+| `issues`                   | `false`  | List the repository's open issues in the `gitPr` bubble. See [Issues in the same bubble](#issues-in-the-same-bubble).                                                                                                                                                                                                                                                                    |
 
 The numstat diff is the Starship “total dirty” view: staged and unstaged combined. It piggybacks on the git refresh with a hard 2 s timeout; a metrics-only failure degrades silently without discarding fresh branch/status data. On very large monorepos the diff may lag or be omitted on timeout.
 
@@ -496,6 +530,28 @@ is nothing to show and no pill.
 Review state is not on the pill: a second `✓`/`✗` next to the checks mark would be
 ambiguous at one character each. The bubble lists each pull's state, and the checks
 mark on the pill already turns red when a check fails.
+
+#### Issues in the same bubble
+
+`git.issues` adds the repository's open issues to that bubble. It is off by default:
+the bubble gets longer and the forge gets one more read.
+
+```json
+{ "git": { "issues": true } }
+```
+
+- **Mine is always listed**: `Assigned to you` and `You opened`, so a large
+  repository's backlog is never the thing you have to wade through.
+- **The rest only while it is small**: above 20 open issues the section collapses to
+  one row, `↗ All 8412 open issues`, which opens the issue list. Eight rows of a
+  four-figure backlog would be a sample dressed up as a list.
+- **A fork with issues turned off hides the section** instead of claiming there are
+  none, and a failed issue read says `Issues unavailable` while the pulls stay.
+- On GitHub the issue searches ride along with the pull searches in the same GraphQL
+  request, so turning this on costs no extra round trip there; GitLab has no combined
+  search, so it costs two or three `glab` calls.
+- The pill itself does not change. A second number on the bar — the repository's open
+  issues — would not be about the current branch, and there is nothing to do with it.
 
 ## Box height
 
@@ -572,8 +628,7 @@ guessing would be silently pasting the wrong thing.
 	"mouse": {
 		"enabled": true,
 		"wheelRouting": true,
-		"copyNotice": true,
-		"transcriptCleanCopy": true
+		"copyNotice": true
 	}
 }
 ```
@@ -582,7 +637,7 @@ guessing would be silently pasting the wrong thing.
 
 - `enabled` — master switch for every mouse feature below. On by default.
 - `wheelRouting` — routes the mouse wheel to scroll the transcript instead of leaving it to the terminal.
-- `copyNotice` — shows a "Copied to clipboard" flash for a copy **Starline** performs, such as a clean copy. Pi confirms its own copy-on-release with its own flash regardless of this setting.
+- `copyNotice` — shows a "Copied to clipboard" flash for a copy **Starline** performs, which is a selection in the draft. Pi confirms its own copy-on-release with its own flash regardless of this setting.
   Single-box click-to-toggle is **Pi's own** since 0.86.0 — a click anywhere in a tool box's result region toggles just that box (the renderer only synthesizes a click when press and release land on the same cell, so drag-selection is unaffected), and thinking blocks, branch/compaction summaries and skill invocations toggle the same way. Starline's hint-row patch and its `clickToExpandTools` key are retired; a `mouse.clickToExpandTools` key in an old config is ignored at runtime.
 
 ## Editor cursor

@@ -146,3 +146,28 @@ describe("metrics", () => {
 		expect(render(state({ metrics: undefined })).metrics).toBe("");
 	});
 });
+
+describe("label tail", () => {
+	it("is zero on a clean tree with no operation", () => {
+		expect(render(state({ branch: "main" })).labelTailColumns).toBe(0);
+	});
+
+	it("covers the dirty counts and the space before them", () => {
+		const git = render(state({ branch: "main", modified: 2 }));
+		// `G main [M]` — a compressed bar must keep ` [M]`, three columns.
+		expect(git.labelTailColumns).toBe(4);
+		expect(git.label).toBe("G main [M]");
+	});
+
+	it("covers an operation with no dirty files", () => {
+		const git = render(state({ branch: "main", gitStateLabel: "REBASING" }));
+		expect(git.labelTailColumns).toBe(9);
+		expect(git.label).toBe("G main REBASING");
+	});
+
+	it("covers both, since the branch name is what gives way", () => {
+		const git = render(state({ branch: "main", modified: 2, gitStateLabel: "REBASING" }));
+		expect(git.labelTailColumns).toBe(13);
+		expect(git.label).toBe("G main [M] REBASING");
+	});
+});

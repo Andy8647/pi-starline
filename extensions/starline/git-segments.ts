@@ -8,6 +8,7 @@
  * is in one file, and `footer.ts` stays layout.
  */
 
+import { visibleWidth } from "@earendil-works/pi-tui";
 import type { ColorSource, ColorSpec, PolishedTuiConfig } from "./config";
 import { formatGitBranchText, formatGitCommitSegment, formatGitMetricsSegment } from "./format";
 import type { GitHost, GitStatusSummary } from "./git";
@@ -51,6 +52,12 @@ export type GitSegments = {
 	label: string;
 	/** Dirty-worktree glyphs and ahead/behind in a `[...]` block; "" when clean. */
 	status: string;
+	/**
+	 * Columns of `label` a compressed bar must keep: the `[status] OPERATION`
+	 * tail and the space before it. Zero on a clean tree with no operation, which
+	 * leaves the whole label fair game for a middle cut.
+	 */
+	labelTailColumns: number;
 	/** `REBASING`-style operation label; "" when no operation is in progress. */
 	state: string;
 	/** Short hash (and tag, when `gitCommit.showTag`), or "" when hidden. */
@@ -160,6 +167,11 @@ export function renderGitSegments(
 		status,
 		operation,
 	].filter(Boolean);
+	// What a truncation must not eat: the dirty counts and the operation say what
+	// is happening to the tree, while the branch name is what the pill is about.
+	const labelTail = [status, operation].filter(Boolean);
+	const labelTailColumns =
+		labelTail.length === 0 ? 0 : visibleWidth(labelTail.join(" ")) + (headText ? 1 : 0);
 
 	return {
 		icon,
@@ -168,6 +180,7 @@ export function renderGitSegments(
 		label: labelParts.join(" "),
 		status,
 		state: operation,
+		labelTailColumns,
 		commit,
 		tag,
 		metrics,

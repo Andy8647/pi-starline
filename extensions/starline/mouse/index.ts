@@ -5,7 +5,7 @@
  * what it would do to it. `installMouse` probes what the running Pi build
  * exposes, logs once if something is missing, and installs each feature gated
  * on exactly its own declared requirement (`capabilities.ts`). Today that is
- * five features across four patches. Two of those methods carry two features
+ * four features across four patches. Two of those methods carry two features
  * each, and in every case the two share a single patch, because the patch
  * registry holds one behaviour per adapter key and a second registration would
  * silently replace the first:
@@ -13,8 +13,8 @@
  * `selectionHint`, one patch plus a derived hint:
  * - `copyActiveSelectionToClipboard` — the method Pi 0.84.4's Ctrl+X handler
  *   reaches (`handleCopyCommand` with `preferSelection`). Wrapped so a
- *   selection the clean-copy features recognise copies clean, calling
- *   through for everything else.
+ *   selection in the draft copies as the draft, calling through for
+ *   everything else.
  * - The hint is derived, not owned: `activeSelectionHintText()` renders the
  *   live renderer's state — an active selection that is not being
  *   auto-copied (`getCopyOnSelect() === false`) — so select-without-copy is
@@ -58,20 +58,11 @@
  *   the draft: they carry the rail glyph down the left, the padding each row is
  *   filled out to, and a hard newline wherever the draft happened to wrap.
  *
- * `transcriptCleanCopy`, sharing the same patch:
- * - A selection in the transcript is copied with the chrome two components
- *   paint around their content removed: pi-tidy's user message rails and
- *   border rules, and its rounded tool box frames. The cleaning
- *   itself is `transcript-copy.ts`, which recognises only those exact markers
- *   and passes everything else through untouched; a selection with no
- *   recognised decoration falls back to Pi's verbatim copy, so nothing that
- *   was clean before changes.
- *
  * Everywhere else the clipboard gets exactly what Pi's own
- * `copyActiveSelectionToClipboard` puts there — see `installMouse` for why frame-free
- * selection is not part of this.
+ * `copyActiveSelectionToClipboard` puts there. That includes the transcript: its
+ * frames are pi-tidy's, and pi-tidy takes them out of Pi's selection text itself.
  */
-import { getKeybindings, sliceByColumn, stripTerminalSequences } from "@earendil-works/pi-tui";
+import { getKeybindings } from "@earendil-works/pi-tui";
 import type { PolishedTuiConfig } from "../config";
 import { installPrototypePatch } from "../prototype-patch-registry";
 import { installPillBubbleDismiss } from "./bubble-dismiss";
@@ -92,11 +83,10 @@ import { activeEditor, wheelTarget } from "./editor-mouse";
 import { scrollEditorBy } from "./editor-scroll";
 import { editorVisualRowCount } from "./editor-text-cursor";
 import { externalMouseLayer } from "./external-layer";
-import { type BoxLike, scrollContentLinesFor } from "./hit-test";
+import type { BoxLike } from "./hit-test";
 import { keyTextFor } from "./key-text";
 import { installPointerShape } from "./pointer-shape";
 import { externalEditorName, selectionHintText } from "./selection-state";
-import { cleanTranscriptRows } from "./transcript-copy";
 
 /** Pi's interrupt chord — refused by the range-delete branch, never consumed. */
 const CTRL_C = "\x03";
@@ -127,21 +117,13 @@ type WheelEventLike = { direction: number; x: number; y: number };
 
 type SelectionPoint = { scrollView?: unknown; row: number; col: number; boundary?: boolean };
 type SelectionBounds = { start: SelectionPoint; end: SelectionPoint };
-type SelectionColumns = { start: number; end: number };
-
 /** The slice of `TuiAltScreen` this module reads or wraps. */
 type MouseCapablePrototype = {
 	getSelectionBounds(this: unknown): SelectionBounds | undefined;
-	getSelectionColumns(
-		this: unknown,
-		line: string,
-		row: number,
-		selection: SelectionBounds,
-	): SelectionColumns;
 	/**
 	 * Pi 0.84.4's public selection-copy entry (`tui-alt-screen.ts`): true when
 	 * the active selection was copied, false when there was none. This is what
-	 * coding-agent's Ctrl+X handler reaches, so a clean copy answering this
+	 * coding-agent's Ctrl+X handler reaches, so a draft copy answering this
 	 * method answers exactly the copies that key performs.
 	 */
 	copyActiveSelectionToClipboard(this: unknown): Promise<boolean>;
@@ -158,8 +140,12 @@ type MouseCapablePrototype = {
 	 * release.
 	 */
 	getCopyOnSelect(this: unknown): boolean;
-	/** Whether the fullscreen viewport has a non-empty active text selection. */
-	hasActiveSelection(this: unknown): boolean;
+	/**
+	 * The text Pi's copies read, undefined with no selection. The hint counts this
+	 * rather than rebuilding it, so whatever another extension does to that text
+	 * (pi-tidy takes its frames out) is in the number.
+	 */
+	getActiveSelectionText(this: unknown): string | undefined;
 	handleViewportInput(this: unknown, data: string): { consume: boolean } | undefined;
 	flash(this: unknown, message: string, durationMs?: number): void;
 	hasOverlay(this: unknown): boolean;
@@ -241,39 +227,34 @@ let activeReceiver: MouseCapablePrototype | undefined;
  *
  * The hint is computed on demand from the live renderer, never cached:
  * "selected, ctrl+x to copy" is true exactly while Pi is not auto-copying
- * and something is actually selected. The character count goes through the
- * same two copy paths the copy key itself would answer, so the hint's
- * promise and the clipboard's bytes stay in agreement.
+ * and something is actually selected. The character count asks the same two
+ * paths the copy key itself would, in the same order, so the hint's promise and
+ * the clipboard's bytes stay in agreement.
  */
-let activeHint:
-	| { getConfig: () => PolishedTuiConfig; bufferCopy: boolean; cleanCopy: boolean }
-	| undefined;
+let activeHint: { getConfig: () => PolishedTuiConfig; bufferCopy: boolean } | undefined;
 
 export function activeSelectionHintText(): string | null {
 	if (!activeHint || !activeReceiver) return null;
-	const { getConfig, bufferCopy, cleanCopy } = activeHint;
+	const { getConfig, bufferCopy } = activeHint;
 	try {
 		// Pi auto-copies on release; a selection that is already on the
 		// clipboard needs no hint. `getCopyOnSelect()` is the live value, so a
 		// setting flipped at runtime flips the hint with it.
 		if (activeReceiver.getCopyOnSelect()) return null;
-		if (!activeReceiver.hasActiveSelection()) return null;
 		const bounds = activeReceiver.getSelectionBounds();
 		if (!bounds) return null;
-		const pending = pendingSelectionText(
-			activeReceiver,
-			getConfig(),
-			bounds,
-			bufferCopy,
-			cleanCopy,
-		);
+		const draft = bufferCopy
+			? editorTextForSelection(activeReceiver, getConfig(), bounds)
+			: undefined;
+		const text = draft ?? activeReceiver.getActiveSelectionText();
+		if (text === undefined) return null;
 		return selectionHintText(
-			pending.text.length,
+			text.length,
 			copyKeyText(),
 			// An editor selection cannot grow past the visible window — there is
 			// no drag-scroll — so the hint for one points at the external editor,
 			// the way to act on the whole draft. "" (unbound) shows no suffix.
-			pending.inEditor ? keyTextFor(EXTERNAL_EDITOR_KEYBINDING) : undefined,
+			draft !== undefined ? keyTextFor(EXTERNAL_EDITOR_KEYBINDING) : undefined,
 			externalEditorName(),
 		);
 	} catch {
@@ -328,45 +309,6 @@ function refreshExternalEditorHint(
 	} catch {
 		// Best effort: an editor this module cannot read offers no hint.
 	}
-}
-
-/**
- * The exact text Pi's selection copy would produce, built the same way it
- * builds it: per row, through the receiver's own `getSelectionColumns`, then
- * `sliceByColumn` and `stripTerminalSequences` (both exported by pi-tui),
- * joined with "\n" — see `copyActiveSelectionToClipboard` in
- * `node_modules/@earendil-works/pi-tui/dist/tui-alt-screen.js`. Reusing Pi's
- * own helpers instead of re-deriving the column math is what keeps this exact
- * rather than an estimate. The scroll-view case needs the box behind
- * `bounds.start.scrollView`; `getScrollViewBox` that finds it is not exported
- * from pi-tui's published entry point, so `scrollContentLinesFor` mirrors its
- * (trivial) tree walk in `hit-test.ts`.
- *
- * This is a *measurement*, not a copy: nothing here writes a clipboard. The
- * pending hint needs to say how many characters ctrl+c would put there. Rows
- * come back verbatim — no frame stripping, no rule-row dropping — so this is
- * the count for a selection Pi's own copy would answer. When
- * `transcriptCleanCopy` would answer the copy instead, `pendingSelectionText`
- * counts the cleaned text — the hint's promise and the clipboard's bytes are
- * kept in agreement there, by counting whichever text the copy will send.
- */
-function selectionText(receiver: MouseCapablePrototype, bounds: SelectionBounds): string {
-	const scrollView = bounds.start.scrollView;
-	const sourceLines = scrollView
-		? scrollContentLinesFor(receiver.currentLayout?.root, scrollView)
-		: receiver.previousScreen;
-	if (!sourceLines) return "";
-	const rows: string[] = [];
-	for (let row = bounds.start.row; row <= bounds.end.row; row++) {
-		const line = sourceLines[row] ?? "";
-		const columns = receiver.getSelectionColumns(line, row, bounds);
-		rows.push(
-			stripTerminalSequences(
-				sliceByColumn(line, columns.start, Math.max(0, columns.end - columns.start), true),
-			).trimEnd(),
-		);
-	}
-	return rows.join("\n");
 }
 
 /**
@@ -462,97 +404,6 @@ async function copyEditorSelection(
 }
 
 /**
- * The transcript's text for this selection with the painted chrome removed,
- * or undefined when there is nothing to clean — in which case Pi's verbatim
- * copy runs, so a selection over plain rows takes exactly the path it always
- * did.
- *
- * Only scroll-view selections are cleaned. A screen-space selection
- * (`bounds.start.scrollView` unset) is over the dock or an overlay, where
- * rows are not transcript content; both stay Pi's. The overlay guard is the
- * same one every feature here asks: an overlay is composited over a layout
- * that still contains the transcript, so without it a selection dropped on a
- * dialog would be read as text from the scrollback behind it.
- *
- * Column mapping: `leftTrim` columns came off the left of a cleaned row, so
- * the selection's start and end columns shift by the same amount on the rows
- * they touch. The shifted bounds go through the receiver's own
- * `getSelectionColumns`, which aligns both ends to grapheme cell ranges
- * (`tui-alt-screen.js:716`) — the end column can no more cut a grapheme here
- * than it can in Pi's own copy.
- */
-function transcriptSelectionText(
-	receiver: MouseCapablePrototype,
-	bounds: SelectionBounds,
-): string | undefined {
-	const scrollView = bounds.start.scrollView;
-	if (!scrollView) return undefined;
-	if (receiver.hasOverlay()) return undefined;
-	const sourceLines = scrollContentLinesFor(receiver.currentLayout?.root, scrollView);
-	if (!sourceLines) return undefined;
-	const cleaned = cleanTranscriptRows(sourceLines, bounds.start.row, bounds.end.row);
-	if (!cleaned.changed) return undefined;
-	const adjusted: SelectionBounds = {
-		start: bounds.start,
-		end: bounds.end,
-	};
-	const rows: string[] = [];
-	for (let i = 0; i < cleaned.rows.length; i++) {
-		const entry = cleaned.rows[i];
-		if (entry === null) continue;
-		const row = bounds.start.row + i;
-		if (entry.leftTrim > 0) {
-			if (row === bounds.start.row) {
-				adjusted.start = { ...bounds.start, col: Math.max(0, bounds.start.col - entry.leftTrim) };
-			}
-			if (row === bounds.end.row) {
-				adjusted.end = { ...bounds.end, col: Math.max(0, bounds.end.col - entry.leftTrim) };
-			}
-		}
-		const columns = receiver.getSelectionColumns(entry.text, row, adjusted);
-		rows.push(
-			sliceByColumn(
-				entry.text,
-				columns.start,
-				Math.max(0, columns.end - columns.start),
-				true,
-			).trimEnd(),
-		);
-	}
-	return rows.join("\n");
-}
-
-/**
- * Writes the transcript's cleaned text to the clipboard for a selection that
- * carried recognised chrome, and reports whether it did — `false` means
- * there was nothing to clean and Pi's own copy must run instead. The bytes
- * go out the same way Pi's own copy sends them (OSC 52 through
- * `terminal.write`), for the same reason `copyEditorSelection` does: nothing
- * downstream can tell the two copies apart.
- *
- * A selection over pure decoration cleans to "" and is consumed without a
- * clipboard write — Pi's own copy has the same shape (`if (text.length === 0)
- * return`), it just gets there after building a string of rails.
- */
-async function copyTranscriptSelection(
-	receiver: MouseCapablePrototype,
-	config: PolishedTuiConfig,
-): Promise<boolean> {
-	try {
-		const bounds = receiver.getSelectionBounds();
-		if (!bounds) return false;
-		const text = transcriptSelectionText(receiver, bounds);
-		if (text === undefined) return false;
-		if (text.length === 0) return true;
-		return await writeSelectionToClipboard(receiver, text, config);
-	} catch {
-		// Cleaning reads the layout and the selection, both best effort.
-		// Anything this trips over means Pi's own copy should run.
-		return false;
-	}
-}
-
-/**
  * Whether `data` is the backspace or delete the range delete acts on.
  *
  * The question is asked of Pi's own keybinding registry, against the two
@@ -614,54 +465,17 @@ function deleteSelectedRange(receiver: MouseCapablePrototype, config: PolishedTu
 }
 
 /**
- * The text a copy of this selection would put on the clipboard, for the hint's
- * character count.
+ * Installs the draft copy on Pi 0.84.4's public copy entry, and the derived
+ * selection hint.
  *
- * It has to ask the same two paths the copy itself asks, in the same order, or
- * the hint promises a number the copy does not deliver.
- */
-function pendingSelectionText(
-	receiver: MouseCapablePrototype,
-	config: PolishedTuiConfig,
-	bounds: SelectionBounds,
-	bufferCopy: boolean,
-	cleanCopy: boolean,
-): { text: string; inEditor: boolean } {
-	const buffered = bufferCopy ? editorTextForSelection(receiver, config, bounds) : undefined;
-	if (buffered !== undefined) return { text: buffered, inEditor: true };
-	// The count the hint shows must be the number the copy key actually
-	// delivers, so a selection the copy would clean is counted after cleaning.
-	if (cleanCopy && config.mouse.transcriptCleanCopy) {
-		try {
-			const cleaned = transcriptSelectionText(receiver, bounds);
-			if (cleaned !== undefined) return { text: cleaned, inEditor: false };
-		} catch {
-			// A cleaning failure falls back to the verbatim count, which is what
-			// the copy itself falls back to as well.
-		}
-	}
-	return { text: selectionText(receiver, bounds), inEditor: false };
-}
-
-/**
- * Installs the clean-copy features on Pi 0.84.4's public copy entry, and the
- * derived selection hint.
- *
- * `editorBufferCopy` and `transcriptCleanCopy` sit in front of
- * `copyActiveSelectionToClipboard` — the method coding-agent's Ctrl+X handler
- * reaches (`handleCopyCommand` with `preferSelection`) — so the clean copy
- * answers exactly the copies that key performs. They share one patch rather
- * than taking a key each because `installPrototypePatch` holds exactly one
- * behaviour per adapter key: a second registration under `mouse-copy` would
- * silently replace the first, and two different keys would leave the order
- * they run in — and which of them gets to consume the call — implicit. Here
- * the precedence is written down: the buffer copy answers first, and only
- * when it declines does the clean copy or predecessor see the call.
+ * `editorBufferCopy` sits in front of `copyActiveSelectionToClipboard` — the
+ * method coding-agent's Ctrl+X handler reaches (`handleCopyCommand` with
+ * `preferSelection`) — so it answers exactly the copies that key performs.
  *
  * `selectionHint` owns no state at all: it records the config reader and the
- * clean-copy flags so `activeSelectionHintText()` can derive the hint on
- * demand from the live renderer. Either clean-copy feature can be off; with
- * neither available the clipboard is Pi's own bytes, exactly as before.
+ * draft-copy flag so `activeSelectionHintText()` can derive the hint on demand
+ * from the live renderer. With the draft copy off, the clipboard is Pi's own
+ * bytes, exactly as before.
  */
 function installCopying(
 	prototype: MouseCapablePrototype,
@@ -669,18 +483,17 @@ function installCopying(
 	features: ReadonlySet<MouseFeature>,
 ): () => void {
 	const bufferCopy = features.has("editorBufferCopy");
-	const cleanCopy = features.has("transcriptCleanCopy");
 	const rangeDelete = features.has("editorClickToCaret");
 	const hint = features.has("selectionHint");
-	if (hint) activeHint = { getConfig: deps.getConfig, bufferCopy, cleanCopy };
+	if (hint) activeHint = { getConfig: deps.getConfig, bufferCopy };
 
 	const cleanups: Array<() => void> = [];
 
-	// Only installed when a feature that answers `copyActiveSelectionToClipboard`
+	// Only installed when the feature that answers `copyActiveSelectionToClipboard`
 	// is on. With just `editorClickToCaret` or `selectionHint` the method is
 	// not ours to touch, and a Pi that has moved it must not make this install
 	// throw.
-	if (bufferCopy || cleanCopy) {
+	if (bufferCopy) {
 		cleanups.push(
 			installPrototypePatch(
 				prototype,
@@ -689,14 +502,7 @@ function installCopying(
 				async ({ predecessor, receiver, args }) => {
 					const typedReceiver = receiver as MouseCapablePrototype;
 					const config = deps.getConfig();
-					if (bufferCopy && (await copyEditorSelection(typedReceiver, config))) return true;
-					if (
-						cleanCopy &&
-						config.mouse.transcriptCleanCopy &&
-						(await copyTranscriptSelection(typedReceiver, config))
-					) {
-						return true;
-					}
+					if (await copyEditorSelection(typedReceiver, config)) return true;
 					return Reflect.apply(predecessor, receiver, args);
 				},
 			),
@@ -1002,20 +808,13 @@ export function installMouse(prototype: object, deps: InstallMouseDeps): () => v
 	// expandable and draws no frame, so any box-drawn table inside bash output
 	// lost its borders.
 	//
-	// `transcriptCleanCopy` is the narrower successor that lesson produced: it
-	// removes only the exact markers two named renderers are known to paint
-	// (Starline's rail + full-width rule pairs, pi-toolbox's equal-width
-	// rounded-corner pairs), never inferred ones — a square-cornered markdown
-	// table, a blockquote gutter and bash output all pass through verbatim,
-	// and a selection with no recognised marker falls back to Pi's own copy
-	// untouched. The full frame-geometry version still wants what is written
-	// below: `pi-toolbox` publishing which rows it drew a border on, at which
-	// columns, so Starline reads a fact instead of inferring one.
+	// pi-tidy paints those frames, so it knows their shapes and takes them out of
+	// Pi's selection text itself. Starline's narrower successor to this feature moved
+	// there in 0.12.
 	if (
 		enabled.has("selectionHint") ||
 		enabled.has("editorBufferCopy") ||
-		enabled.has("editorClickToCaret") ||
-		enabled.has("transcriptCleanCopy")
+		enabled.has("editorClickToCaret")
 	) {
 		cleanups.push(installCopying(typedPrototype, deps, enabled));
 	}

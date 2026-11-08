@@ -15,6 +15,11 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { GitRemote } from "./git";
 import {
+	type ForgeLists,
+	ISSUE_LIST_THRESHOLD,
+	type Issue,
+	type IssueGroup,
+	type IssueLists,
 	PULL_GROUPS,
 	type Pull,
 	type PullChecks,
@@ -239,18 +244,37 @@ function graphqlCountQuery(remote: GitRemote): string {
 }
 
 const GITHUB_LIST_FIELDS = "number title state isDraft url";
+const GITHUB_ISSUE_FIELDS = "number title url";
 
-function githubListsQuery(remote: GitRemote): string {
+function githubIssuesQuery(remote: GitRemote): string {
+	const repo = `${githubOwner(remote)}/${remote.name}`;
+	const alias = (name: string, filters: string) =>
+		`${name}:search(query:"repo:${repo} is:issue is:open ${filters}",type:ISSUE,first:${PULL_LIST_LIMIT})` +
+		`{issueCount nodes{... on Issue{${GITHUB_ISSUE_FIELDS}}}}`;
+	// `issuesAll` is a search rather than `repository.issues` because GitHub's
+	// `issues` connection counts pull requests too, which would report a busy repo
+	// as having hundreds more issues than it does.
+	return [
+		alias("issuesAll", ""),
+		alias("issuesAssigned", "assignee:@me"),
+		alias("issuesAuthored", "author:@me"),
+		alias("issuesOther", "-assignee:@me -author:@me"),
+		`repository(owner:"${githubOwner(remote)}",name:"${remote.name}"){hasIssuesEnabled}`,
+	].join(" ");
+}
+
+function githubListsQuery(remote: GitRemote, issues = false): string {
 	const repo = `${githubOwner(remote)}/${remote.name}`;
 	const alias = (name: string, query: string) =>
 		`${name}:search(query:"repo:${repo} is:pr is:open ${query} sort:updated-desc",type:ISSUE,first:${PULL_LIST_LIMIT})` +
 		`{nodes{... on PullRequest{${GITHUB_LIST_FIELDS}}}}`;
 	// `involves` already covers authored and review-requested pulls, so the two
 	// are excluded from it; otherwise one pull shows up in two groups.
-	return `query{${alias("authored", "author:@me")} ${alias("reviewing", "review-requested:@me")} ${alias(
+	const pulls = `${alias("authored", "author:@me")} ${alias("reviewing", "review-requested:@me")} ${alias(
 		"involved",
 		"involves:@me -author:@me -review-requested:@me",
-	)}}`;
+	)}`;
+	return `query{${pulls}${issues ? ` ${githubIssuesQuery(remote)}` : ""}}`;
 }
 
 function branchPullArgs(remote: GitRemote, branch: string): { command: string; args: string[] } {
@@ -364,61 +388,269 @@ export function dedupePullLists(lists: PullLists): PullLists {
 	return out;
 }
 
+/** One issue out of GitHub's search nodes or GitLab's `glab issue list`. */
+export function issueFromRaw(raw: unknown, forge: "github" | "gitlab"): Issue | undefined {
+	const record = asRecord(raw);
+	if (!record) return undefined;
+	const number =
+		forge === "gitlab"
+			? (asNumber(record.iid) ?? asNumber(record.number))
+			: asNumber(record.number);
+	const url =
+		forge === "gitlab" ? (asString(record.web_url) ?? asString(record.url)) : asString(record.url);
+	if (number === undefined || !url) return undefined;
+	return { number, url, title: asString(record.title) };
+}
+
+function isIssue(issue: Issue | undefined): issue is Issue {
+	return issue !== undefined;
+}
+
+/** One issue group out of a GitHub search alias: its rows and its own count. */
+function issueGroupFromGithub(data: Record<string, unknown> | undefined, name: string): IssueGroup {
+	const search = asRecord(data?.[name]);
+	return {
+		items: asArray(search?.nodes)
+			.map((raw) => issueFromRaw(raw, "github"))
+			.filter(isIssue),
+		total: asNumber(search?.issueCount) ?? 0,
+	};
+}
+
 /**
- * The current user's pulls, in the three groups the bubble lists. One request on
- * GitHub (three search aliases) and three on GitLab, which has no combined search.
- * Only open pulls are listed on either host.
+ * GitHub's issues, out of the same GraphQL response that carries the pulls.
+ *
+ * `other` keeps its rows only while the repository is small enough for a list to
+ * mean something; above `ISSUE_LIST_THRESHOLD` the bubble draws one counted row
+ * instead, and the eight rows the search returned go unused. They are dropped
+ * here so nothing downstream has to know the threshold.
+ */
+export function issueListsFromGithubGraphql(json: unknown): IssueLists | undefined {
+	const data = asRecord(asRecord(json)?.data);
+	if (!data) return undefined;
+
+	const assigned = issueGroupFromGithub(data, "issuesAssigned");
+	const authored = issueGroupFromGithub(data, "issuesAuthored");
+	const other = issueGroupFromGithub(data, "issuesOther");
+	const openCount = issueGroupFromGithub(data, "issuesAll").total;
+
+	const seen = new Set<string>();
+	const once = (group: IssueGroup): IssueGroup => ({
+		total: group.total,
+		items: group.items.filter((issue) => {
+			if (seen.has(issue.url)) return false;
+			seen.add(issue.url);
+			return true;
+		}),
+	});
+
+	return {
+		// A fork usually has issues turned off; the section hides instead of
+		// claiming the repository has none.
+		enabled: asRecord(data.repository)?.hasIssuesEnabled !== false,
+		openCount,
+		assigned: once(assigned),
+		authored: once(authored),
+		other: openCount <= ISSUE_LIST_THRESHOLD ? once(other) : { total: other.total, items: [] },
+	};
+}
+
+/** The repository's issue state and open count, out of a GitLab GraphQL answer. */
+export function issueCountFromGitlabGraphql(
+	json: unknown,
+): { enabled: boolean; openCount: number } | undefined {
+	const data = asRecord(asRecord(json)?.data);
+	const project = asRecord(data?.project);
+	if (!project) return undefined;
+	return {
+		enabled: project.issuesEnabled !== false,
+		openCount: asNumber(asRecord(project.issues)?.count) ?? 0,
+	};
+}
+
+const NO_ISSUES = (): IssueLists => ({
+	enabled: true,
+	openCount: 0,
+	assigned: { items: [], total: 0 },
+	authored: { items: [], total: 0 },
+	other: { items: [], total: 0 },
+});
+
+/** GitLab has no combined issue search, so each group is its own list call. */
+async function readGitlabIssueGroup(
+	cwd: string,
+	filters: string[],
+	run: ForgeRun,
+): Promise<{ group: IssueGroup; ok: boolean }> {
+	const output = await run(
+		"glab",
+		["issue", "list", "--output", "json", "--per-page", String(PULL_LIST_LIMIT), ...filters],
+		cwd,
+	);
+	const items = asArray(parseJson(output))
+		.map((raw) => issueFromRaw(raw, "gitlab"))
+		.filter(isIssue);
+	return { group: { items, total: items.length }, ok: output !== undefined };
+}
+
+/**
+ * GitLab's issues: the count first, then the groups it is worth asking for.
+ *
+ * The count decides whether the backlog is listed at all, which is why it is a
+ * separate call here: one more process on a small repository buys not fetching
+ * rows nobody would read on a large one.
+ */
+async function readGitlabIssues(
+	cwd: string,
+	remote: GitRemote,
+	run: ForgeRun,
+): Promise<IssueLists | "failed"> {
+	const fullPath = `${remote.namespace}/${remote.name}`;
+	const counted = issueCountFromGitlabGraphql(
+		parseJson(
+			await run(
+				"glab",
+				[
+					"api",
+					"graphql",
+					"-f",
+					`query=query{project(fullPath:"${fullPath}"){issuesEnabled issues(states:opened){count}}}`,
+				],
+				cwd,
+			),
+		),
+	);
+	if (!counted) return "failed";
+	if (!counted.enabled) return { ...NO_ISSUES(), openCount: 0 };
+
+	const wantsBacklog = counted.openCount <= ISSUE_LIST_THRESHOLD;
+	const [assigned, authored, backlog] = await Promise.all([
+		readGitlabIssueGroup(cwd, ["--assignee", "@me"], run),
+		readGitlabIssueGroup(cwd, ["--author", "@me"], run),
+		wantsBacklog ? readGitlabIssueGroup(cwd, [], run) : Promise.resolve(undefined),
+	]);
+	if (!assigned.ok && !authored.ok) return "failed";
+
+	const seen = new Set<string>();
+	const once = (group: IssueGroup): IssueGroup => ({
+		total: group.total,
+		items: group.items.filter((issue) => {
+			if (seen.has(issue.url)) return false;
+			seen.add(issue.url);
+			return true;
+		}),
+	});
+	/** A group GitLab gave no total for: its count is the rows that survived. */
+	const byRows = (group: IssueGroup): IssueGroup => ({
+		items: group.items,
+		total: group.items.length,
+	});
+
+	return {
+		enabled: true,
+		openCount: counted.openCount,
+		assigned: once(assigned.group),
+		authored: once(authored.group),
+		// The backlog is one unfiltered page, so its count is the rows that survive
+		// deduplication against the two groups above; the forge reported no total.
+		other: backlog ? byRows(once(backlog.group)) : { items: [], total: 0 },
+	};
+}
+
+/**
+ * The current user's pulls in the three groups the bubble lists, and — when the
+ * config asks for them — the repository's issues.
+ *
+ * One request on GitHub carries both: the issue searches ride along with the pull
+ * searches, so listing issues costs no extra round trip there. GitLab has no
+ * combined search, so its issues are their own calls, and the count that decides
+ * whether the backlog is listed at all is one more.
+ *
+ * Undefined means the pulls could not be read and the bubble should keep what it
+ * had; issues that failed on their own are reported as "failed" instead, since
+ * the pulls are still worth showing.
+ */
+export async function readForgeLists(
+	cwd: string,
+	remote: GitRemote,
+	options: { issues?: boolean } = {},
+	run: ForgeRun = runForge,
+): Promise<ForgeLists | undefined> {
+	if (!forgeSupported(remote.host)) return undefined;
+	const wantsIssues = options.issues === true;
+
+	if (remote.host === "gitlab") {
+		const [pulls, issues] = await Promise.all([
+			readGitlabPulls(cwd, run),
+			wantsIssues ? readGitlabIssues(cwd, remote, run) : Promise.resolve(undefined),
+		]);
+		if (!pulls) return undefined;
+		return issues === undefined ? { pulls } : { pulls, issues };
+	}
+
+	const output = await run(
+		"gh",
+		["api", "graphql", "-f", `query=${githubListsQuery(remote, wantsIssues)}`],
+		cwd,
+	);
+	const parsed = parseJson(output);
+	if (parsed === undefined) return undefined;
+	// The search already asks for open pulls; this keeps one the forge returned
+	// anyway (a state that changed mid-request) off the list.
+	const pulls = pullsFromGithubGraphql(parsed);
+	if (!wantsIssues) return { pulls };
+	return { pulls, issues: issueListsFromGithubGraphql(parsed) ?? "failed" };
+}
+
+/** GitLab's three pull groups as three list calls, or undefined if all failed. */
+async function readGitlabPulls(cwd: string, run: ForgeRun): Promise<PullLists | undefined> {
+	const groups = await Promise.all(
+		(Object.keys(GITLAB_LIST_ARGS) as Array<keyof PullLists>).map(async (group) => {
+			const output = await run(
+				"glab",
+				[
+					"mr",
+					"list",
+					"--output",
+					"json",
+					"--per-page",
+					String(PULL_LIST_LIMIT),
+					...GITLAB_LIST_ARGS[group],
+				],
+				cwd,
+			);
+			const pulls = asArray(parseJson(output))
+				.map((raw) => pullFromGitlab(raw))
+				.filter(isOpenPull);
+			return [group, pulls, output !== undefined] as const;
+		}),
+	);
+	// Every call failed: the bubble keeps its last answer instead of showing three
+	// empty groups, which would read as "you have nothing".
+	if (groups.every(([, , succeeded]) => !succeeded)) return undefined;
+	return dedupePullLists(
+		Object.fromEntries(groups.map(([group, pulls]) => [group, pulls])) as PullLists,
+	);
+}
+
+/** The pulls in a GitHub GraphQL answer, deduped and with closed ones dropped. */
+function pullsFromGithubGraphql(parsed: unknown): PullLists {
+	const lists = pullListsFromGithubGraphql(parsed);
+	return dedupePullLists({
+		authored: lists.authored.filter(isOpenPull),
+		reviewing: lists.reviewing.filter(isOpenPull),
+		involved: lists.involved.filter(isOpenPull),
+	});
+}
+
+/**
+ * The current user's pulls, without the issue reads. Kept as its own name because
+ * the pull snapshot and most callers only ever want this.
  */
 export async function readUserPulls(
 	cwd: string,
 	remote: GitRemote,
 	run: ForgeRun = runForge,
 ): Promise<PullLists | undefined> {
-	if (!forgeSupported(remote.host)) return undefined;
-
-	if (remote.host === "gitlab") {
-		const groups = await Promise.all(
-			(Object.keys(GITLAB_LIST_ARGS) as Array<keyof PullLists>).map(async (group) => {
-				const output = await run(
-					"glab",
-					[
-						"mr",
-						"list",
-						"--output",
-						"json",
-						"--per-page",
-						String(PULL_LIST_LIMIT),
-						...GITLAB_LIST_ARGS[group],
-					],
-					cwd,
-				);
-				const pulls = asArray(parseJson(output))
-					.map((raw) => pullFromGitlab(raw))
-					.filter(isOpenPull);
-				return [group, pulls, output !== undefined] as const;
-			}),
-		);
-		// Every call failed: the bubble keeps its last answer instead of showing
-		// three empty groups, which would read as "you have nothing" .
-		if (groups.every(([, , succeeded]) => !succeeded)) return undefined;
-		return dedupePullLists(
-			Object.fromEntries(groups.map(([group, pulls]) => [group, pulls])) as PullLists,
-		);
-	}
-
-	const output = await run(
-		"gh",
-		["api", "graphql", "-f", `query=${githubListsQuery(remote)}`],
-		cwd,
-	);
-	const parsed = parseJson(output);
-	if (parsed === undefined) return undefined;
-	const lists = pullListsFromGithubGraphql(parsed);
-	// The search already asks for open pulls; this keeps one the forge returned
-	// anyway (a state that changed mid-request) off the list.
-	return dedupePullLists({
-		authored: lists.authored.filter(isOpenPull),
-		reviewing: lists.reviewing.filter(isOpenPull),
-		involved: lists.involved.filter(isOpenPull),
-	});
+	return (await readForgeLists(cwd, remote, {}, run))?.pulls;
 }

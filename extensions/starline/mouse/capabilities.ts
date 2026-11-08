@@ -27,9 +27,8 @@ export type MouseCapability =
 	| "handleSelectionMouseEvent"
 	| "copyActiveSelectionToClipboard"
 	| "getCopyOnSelect"
-	| "hasActiveSelection"
+	| "getActiveSelectionText"
 	| "getSelectionBounds"
-	| "getSelectionColumns"
 	| "flash"
 	| "hasOverlay"
 	| "requestRender";
@@ -38,8 +37,7 @@ export type MouseFeature =
 	| "selectionHint"
 	| "editorWheelScroll"
 	| "editorClickToCaret"
-	| "editorBufferCopy"
-	| "transcriptCleanCopy";
+	| "editorBufferCopy";
 
 const CAPABILITIES: readonly MouseCapability[] = [
 	"handleViewportInput",
@@ -47,9 +45,8 @@ const CAPABILITIES: readonly MouseCapability[] = [
 	"handleSelectionMouseEvent",
 	"copyActiveSelectionToClipboard",
 	"getCopyOnSelect",
-	"hasActiveSelection",
+	"getActiveSelectionText",
 	"getSelectionBounds",
-	"getSelectionColumns",
 	"flash",
 	"hasOverlay",
 	"requestRender",
@@ -66,18 +63,12 @@ const CAPABILITIES: readonly MouseCapability[] = [
 const REQUIREMENTS: Record<MouseFeature, readonly MouseCapability[]> = {
 	// Derived from Pi 0.84.4's own select-without-copy state: the hint shows
 	// only while the renderer is NOT auto-copying (`getCopyOnSelect` false) and
-	// something is actually selected (`hasActiveSelection`). The character
-	// count is computed from the live selection through `getSelectionBounds`
-	// and `getSelectionColumns`, matching the columns the copy itself would
-	// slice — the hint promises what ctrl+x delivers. No release interception,
-	// no pending state: Pi's `copyOnSelect: false` already keeps the selection
-	// highlighted, and the hint rides Pi's own repaints.
-	selectionHint: [
-		"getCopyOnSelect",
-		"hasActiveSelection",
-		"getSelectionBounds",
-		"getSelectionColumns",
-	],
+	// something is actually selected. The character count is the text Pi's own
+	// copies read (`getActiveSelectionText`), and `getSelectionBounds` says whether
+	// the selection is the draft's — the hint promises what ctrl+x delivers. No
+	// release interception, no pending state: Pi's `copyOnSelect: false` already
+	// keeps the selection highlighted, and the hint rides Pi's own repaints.
+	selectionHint: ["getCopyOnSelect", "getActiveSelectionText", "getSelectionBounds"],
 	// The notch arrives through `routeWheel`, which it consumes on an editor hit
 	// rather than calling through — so Pi never reaches its own repaint for that
 	// event and `requestRender` is the only thing that draws the scrolled box. It
@@ -116,7 +107,7 @@ const REQUIREMENTS: Record<MouseFeature, readonly MouseCapability[]> = {
 	],
 	// It wraps `copyActiveSelectionToClipboard` — the method Pi 0.84.4's
 	// Ctrl+X handler reaches (`handleCopyCommand` with `preferSelection`), so
-	// the clean copy answers exactly the copies that key performs — and reads
+	// the draft copy answers exactly the copies that key performs — and reads
 	// the selection through `getSelectionBounds` to find out whether it is the
 	// editor's. `hasOverlay` again: a selection dropped on a dialog must not be
 	// read as text from the draft behind it.
@@ -128,22 +119,6 @@ const REQUIREMENTS: Record<MouseFeature, readonly MouseCapability[]> = {
 	// written to makes the copy fall through to Pi rather than disabling the
 	// feature at install time.
 	editorBufferCopy: ["copyActiveSelectionToClipboard", "getSelectionBounds", "hasOverlay", "flash"],
-	// Shares the `copyActiveSelectionToClipboard` patch with the two features
-	// above it. It reads the selection through `getSelectionBounds` to find the
-	// rows, through `getSelectionColumns` to slice the cleaned text along the
-	// same grapheme-aligned columns Pi would have used, asks `hasOverlay` before
-	// trusting those rows (an overlay is composited over a layout that still
-	// contains the transcript), and raises its own "Copied!" through `flash`
-	// when it answers the copy itself. The clipboard write goes through
-	// `terminal.write`, unlisted for the same reason as editorBufferCopy's — it
-	// is an instance field, checked at the call site instead.
-	transcriptCleanCopy: [
-		"copyActiveSelectionToClipboard",
-		"getSelectionBounds",
-		"getSelectionColumns",
-		"hasOverlay",
-		"flash",
-	],
 };
 
 function isPatchable(prototype: object, name: string): boolean {
