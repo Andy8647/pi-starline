@@ -180,8 +180,7 @@ Default config values — copy this and change any value you want:
 	"mouse": {
 		"enabled": true,
 		"wheelRouting": true,
-		"copyNotice": true,
-		"transcriptCleanCopy": true
+		"copyNotice": true
 	}
 }
 ```
@@ -572,8 +571,7 @@ guessing would be silently pasting the wrong thing.
 	"mouse": {
 		"enabled": true,
 		"wheelRouting": true,
-		"copyNotice": true,
-		"transcriptCleanCopy": true
+		"copyNotice": true
 	}
 }
 ```
@@ -582,7 +580,7 @@ guessing would be silently pasting the wrong thing.
 
 - `enabled` — master switch for every mouse feature below. On by default.
 - `wheelRouting` — routes the mouse wheel to scroll the transcript instead of leaving it to the terminal.
-- `copyNotice` — shows a "Copied to clipboard" flash for a copy **Starline** performs, such as a clean copy. Pi confirms its own copy-on-release with its own flash regardless of this setting.
+- `copyNotice` — shows a "Copied to clipboard" flash for a copy **Starline** performs, which is a selection in the draft. Pi confirms its own copy-on-release with its own flash regardless of this setting.
   Single-box click-to-toggle is **Pi's own** since 0.86.0 — a click anywhere in a tool box's result region toggles just that box (the renderer only synthesizes a click when press and release land on the same cell, so drag-selection is unaffected), and thinking blocks, branch/compaction summaries and skill invocations toggle the same way. Starline's hint-row patch and its `clickToExpandTools` key are retired; a `mouse.clickToExpandTools` key in an old config is ignored at runtime.
 
 ## Editor cursor

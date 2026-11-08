@@ -93,7 +93,6 @@ export type MouseConfig = {
 	/** Show a "copied to clipboard" notice for a copy Starline itself performs. */
 	copyNotice: boolean;
 	/** Copy transcript selections without the painted rails, rules and frames. */
-	transcriptCleanCopy: boolean;
 };
 
 const FIXED_EDITOR_KEY_MAP: Record<string, keyof MouseConfig> = {
@@ -327,7 +326,6 @@ export const defaultConfig: PolishedTuiConfig = {
 		enabled: true,
 		wheelRouting: true,
 		copyNotice: true,
-		transcriptCleanCopy: true,
 	},
 };
 
@@ -732,10 +730,6 @@ function normalizeMouseConfig(record: Record<string, unknown>): MouseConfig {
 				: defaultConfig.mouse.wheelRouting,
 		copyNotice:
 			typeof record.copyNotice === "boolean" ? record.copyNotice : defaultConfig.mouse.copyNotice,
-		transcriptCleanCopy:
-			typeof record.transcriptCleanCopy === "boolean"
-				? record.transcriptCleanCopy
-				: defaultConfig.mouse.transcriptCleanCopy,
 	};
 }
 
@@ -1159,9 +1153,6 @@ export function saveMousePatch(patch: Partial<MouseConfig>, path = configPath): 
 			...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
 			...(patch.wheelRouting !== undefined ? { wheelRouting: patch.wheelRouting } : {}),
 			...(patch.copyNotice !== undefined ? { copyNotice: patch.copyNotice } : {}),
-			...(patch.transcriptCleanCopy !== undefined
-				? { transcriptCleanCopy: patch.transcriptCleanCopy }
-				: {}),
 		};
 	});
 }

@@ -10,6 +10,26 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [0.12.0] - 2026-11-05
+
+Copying the transcript without frames moved to
+[pi-tidy](https://github.com/Andy8647/pi-tidy), which draws them. Update pi-tidy to
+0.8.1 or newer along with this release, or transcript copies bring the frames along.
+
+**Removed**
+
+- **`mouse.transcriptCleanCopy`.** A copy with its frames now takes
+  `tidy.cleanCopy: false` in Pi's `settings.json`. The old key is ignored, so a
+  config that still has it keeps working.
+
+**Fixed**
+
+- **Select-to-copy leaves the frames behind too.** Starline only cleaned the copy
+  key, so with Pi's default `fullscreenCopyOnSelect: true` nothing was cleaned.
+  pi-tidy covers both.
+- **The selection hint counts what the copy key delivers,** from Pi's own selection
+  text, so it matches pi-tidy's result.
+
 ## [0.11.0] - 2026-11-05
 
 Pi's `↓ Jump to latest message` block is gone from the transcript, and the two

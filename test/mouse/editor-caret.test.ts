@@ -425,7 +425,7 @@ describe("editorSelectionRange", () => {
  * The patches, installed on one prototype.
  *
  * `handleViewportInput` is shared by the range delete and the hint refresh,
- * and `copyActiveSelectionToClipboard` by the buffer copy and the clean copy.
+ * and `copyActiveSelectionToClipboard` by the buffer copy.
  * `installPrototypePatch` holds exactly one behaviour per adapter key and
  * silently replaces it, so a second registration under either key would
  * disable the earlier feature with no error and no failing test anywhere in
@@ -509,17 +509,14 @@ function makeScene(draft: string, config = makeConfig()) {
 		getCopyOnSelect() {
 			return this.copyOnSelect;
 		},
-		hasActiveSelection() {
-			return this.selectionBounds !== undefined;
-		},
-		async copyActiveSelectionToClipboard() {
-			// Pi's own algorithm, transcribed from `copyActiveSelectionToClipboard`
-			// in tui-alt-screen.js: per row, `getSelectionColumns`, then
-			// `sliceByColumn` — a *column* slice, not a UTF-16 one, which is what
-			// makes it agree with the rendered width of a row carrying ANSI — then
-			// `stripTerminalSequences` and `trimEnd`, joined and sent as OSC 52.
+		getActiveSelectionText() {
+			// Pi's own algorithm, transcribed from `getActiveSelectionText` in
+			// tui-alt-screen.js: per row, `getSelectionColumns`, then `sliceByColumn` —
+			// a *column* slice, not a UTF-16 one, which is what makes it agree with the
+			// rendered width of a row carrying ANSI — then `stripTerminalSequences` and
+			// `trimEnd`, joined.
 			const selection = this.getSelectionBounds();
-			if (!selection) return false;
+			if (!selection) return undefined;
 			const rows: string[] = [];
 			for (let row = selection.start.row; row <= selection.end.row; row++) {
 				const line = previousScreen[row] ?? "";
@@ -530,8 +527,11 @@ function makeScene(draft: string, config = makeConfig()) {
 					).trimEnd(),
 				);
 			}
-			const text = rows.join("\n");
-			if (text.length === 0) return false;
+			return rows.join("\n");
+		},
+		async copyActiveSelectionToClipboard() {
+			const text = this.getActiveSelectionText();
+			if (!text) return false;
 			this.terminal.write(`\x1b]52;c;${Buffer.from(text).toString("base64")}\x07`);
 			this.flash("Copied!");
 			return true;
@@ -720,7 +720,7 @@ describe("the click-to-caret patch on handleSelectionMouseEvent", () => {
 	});
 });
 
-describe("the clean-copy patch on copyActiveSelectionToClipboard", () => {
+describe("the draft-copy patch on copyActiveSelectionToClipboard", () => {
 	let dispose: (() => void) | undefined;
 
 	afterEach(() => {
@@ -815,6 +815,61 @@ describe("the clean-copy patch on copyActiveSelectionToClipboard", () => {
 		await scene.prototype.copyActiveSelectionToClipboard();
 
 		expect(decodeOsc52(scene.written[0])).toBe("line 5\nline 6");
+	});
+
+	/**
+	 * Pi injects a native clipboard implementation when the host wired one; it knows
+	 * about macOS Terminal.app, tmux without OSC 52 passthrough and WSL, where a bare
+	 * OSC 52 write reports success and leaves the clipboard untouched.
+	 */
+	describe("clipboard delegation", () => {
+		const copyDraft = async (copySelection?: unknown, config = makeConfig()) => {
+			const scene = makeScene(numbered(12), config);
+			if (copySelection) Object.assign(scene.prototype, { copySelection });
+			install(scene);
+			const { textY } = scene.relayout();
+			selectTextRows(scene, textY, 0, 1);
+			await scene.prototype.copyActiveSelectionToClipboard();
+			return scene;
+		};
+
+		it("hands the draft to Pi's implementation and skips the terminal write", async () => {
+			const copied: string[] = [];
+			const scene = await copyDraft(async (text: string) => {
+				copied.push(text);
+				return true;
+			});
+			expect(copied).toEqual(["line 5\nline 6"]);
+			expect(scene.written).toEqual([]);
+			expect(scene.flashes).toContain("Copied!");
+		});
+
+		it("falls back to the terminal write when Pi's implementation fails or throws", async () => {
+			for (const failing of [
+				() => "Copy failed",
+				() => {
+					throw new Error("no display");
+				},
+			]) {
+				const scene = await copyDraft(failing);
+				expect(decodeOsc52(scene.written[0])).toBe("line 5\nline 6");
+				dispose?.();
+				dispose = undefined;
+			}
+		});
+
+		it("still honours copyNotice when Pi's implementation answers", async () => {
+			const scene = await copyDraft(
+				() => true,
+				makeConfig({ mouse: { ...defaultConfig.mouse, copyNotice: false } }),
+			);
+			expect(scene.flashes).toEqual([]);
+		});
+
+		it("keeps the OSC 52 path when no implementation is injected", async () => {
+			const scene = await copyDraft();
+			expect(decodeOsc52(scene.written[0])).toBe("line 5\nline 6");
+		});
 	});
 
 	it("counts Pi's own screen text for a selection outside the input box", () => {
@@ -1150,7 +1205,7 @@ describe("the two features that share handleViewportInput", () => {
 
 	it("NEVER swallows ctrl+c with nothing pending, even with a live selection", () => {
 		// The single outcome that could block this release. Range delete shares
-		// this method with the clean copy, and `tui.editor.deleteCharForward`
+		// this method with the draft copy, and `tui.editor.deleteCharForward`
 		// binds ctrl+d by default — so both interrupt chords are refused outright
 		// by `isRangeDeleteKey`, before any selection is even looked at.
 		const scene = makeScene("alpha beta\ngamma delta");

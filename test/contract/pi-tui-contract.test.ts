@@ -32,13 +32,12 @@ const PATCHED_METHODS = [
 // Read, not patched — the selection itself stays Pi's, and `hasOverlay` is
 // asked the same question Pi's own press path asks before it resolves a scroll
 // view, so click-to-expand does not reach through a dialog. `getCopyOnSelect`
-// and `hasActiveSelection` are read the same way: the hint is derived from
+// and `getActiveSelectionText` are read the same way: the hint is derived from
 // them, never patched.
 const READ_METHODS = [
 	"getSelectionBounds",
-	"getSelectionColumns",
 	"getCopyOnSelect",
-	"hasActiveSelection",
+	"getActiveSelectionText",
 	"flash",
 	"hasOverlay",
 ];

@@ -11,8 +11,8 @@
  * rest are written to the terminal. Ghostty only ends an APC on `ESC \`, treats the
  * `BEL` as payload, and swallows the bytes that follow — which shows up as
  * garbled text in and around the editor while dragging. Upstream issue
- * earendil-works/pi#9332; the fix is earendil-works/pi#9441, still unmerged as of
- * Pi 1.4.0.
+ * earendil-works/pi#9332; the fix is earendil-works/pi#9441, merged 2026-11-04 and
+ * not in a release as of Pi 1.5.0.
  *
  * Starline makes this fire on every editor drag-select because
  * `editorClickToCaret` moves the caret to the press point, so the caret row is
