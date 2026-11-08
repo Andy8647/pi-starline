@@ -47,7 +47,7 @@ Starline makes Pi's fullscreen mode feel like a finished terminal app:
 **Mouse** (Pi's `tuiMode: "fullscreen"`)
 
 - Drag to select in the transcript or the draft; double-click keeps paths and kebab-case whole; triple-click takes a line.
-- Clean copies: Starline's rails and rule rows and pi-toolbox frames are dropped before the clipboard.
+- A selection in the draft copies the text you wrote, without the rail, the padding or a newline where a row wrapped. In the transcript, [pi-tidy](https://github.com/Andy8647/pi-tidy) takes its frames out of what you copy.
 - A selection hint says how many characters the copy key will copy.
 - Click to move the caret; backspace/delete remove a selected range; the wheel scrolls the draft.
 
@@ -69,6 +69,8 @@ pi install npm:pi-starline
 pi install git:github.com/Andy8647/pi-starline
 ```
 
+Runs on macOS, Linux and Windows. On Windows, use Windows Terminal with a [Nerd Font](https://www.nerdfonts.com/) installed. A legacy console host, or a terminal left on its default font, makes the bar look nothing like the screenshots: empty boxes where the icons should be, and no mouse.
+
 What changed in each version: **[Changelog](https://github.com/Andy8647/pi-starline/blob/main/CHANGELOG.md)**.
 
 ## Configure
@@ -81,7 +83,7 @@ Everything else lives in `~/.pi/agent/starline.json`. The file is optional; miss
 {
 	"pill": { "segments": ["model", "cwd", "git", "context", "cost"] },
 	"colors": { "gitBranch": "bold purple" },
-	"mouse": { "transcriptCleanCopy": false }
+	"mouse": { "copyNotice": false }
 }
 ```
 
