@@ -96,13 +96,11 @@ describe("mergeConfig", () => {
 			enabled: true,
 			wheelRouting: true,
 			copyNotice: true,
-			transcriptCleanCopy: true,
 		});
 		expect(defaultConfig.mouse).toEqual({
 			enabled: true,
 			wheelRouting: true,
 			copyNotice: true,
-			transcriptCleanCopy: true,
 		});
 	});
 
@@ -111,8 +109,13 @@ describe("mergeConfig", () => {
 			enabled: false,
 			wheelRouting: false,
 			copyNotice: true,
-			transcriptCleanCopy: true,
 		});
+	});
+
+	it("ignores the transcriptCleanCopy key that moved to pi-tidy", () => {
+		expect(mergeConfig({ mouse: { transcriptCleanCopy: false } }).mouse).toEqual(
+			defaultConfig.mouse,
+		);
 	});
 
 	it("normalizes invalid mouse values", () => {
@@ -120,7 +123,6 @@ describe("mergeConfig", () => {
 			enabled: true,
 			wheelRouting: true,
 			copyNotice: true,
-			transcriptCleanCopy: true,
 		});
 	});
 
@@ -1104,7 +1106,6 @@ describe("saveMousePatch", () => {
 				enabled: false,
 				wheelRouting: false,
 				copyNotice: true,
-				transcriptCleanCopy: true,
 			});
 		} finally {
 			rmSync(dir, { recursive: true });

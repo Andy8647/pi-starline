@@ -10,11 +10,13 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
-## [0.12.0] - unreleased
+## [0.12.0] - 2026-11-08
 
-Three changes to the bar and its bubbles: a wide pill gives up width instead of
-taking the segments behind it with it, a third-party pill can open the panel its
-extension already has, and the pull bubble can list the repository's issues.
+Four changes: a wide pill gives up width instead of taking the segments behind it
+with it, a third-party pill can open the panel its extension already has, the pull
+bubble can list the repository's issues, and copying the transcript without frames
+is pi-tidy's job now. **Update pi-tidy to 0.8.1 or newer along with this release**,
+or transcript copies bring their frames along.
 
 **Added**
 
@@ -63,6 +65,17 @@ extension already has, and the pull bubble can list the repository's issues.
 - **A long bubble no longer runs off the screen.** Its rows are fitted to the terminal
   and a shortened group says how much of it is showing (`Yours · 5 of 40`), while the
   rows that lead out of the bubble are never among the ones dropped.
+- **Select-to-copy leaves the frames behind too.** Starline only cleaned the copy
+  key, so with Pi's default `fullscreenCopyOnSelect: true` nothing was cleaned.
+  pi-tidy covers both.
+- **The selection hint counts what the copy key delivers,** from Pi's own selection
+  text, so it matches pi-tidy's result.
+
+**Removed**
+
+- **`mouse.transcriptCleanCopy`.** A copy with its frames now takes
+  `tidy.cleanCopy: false` in Pi's `settings.json`. The old key is ignored, so a
+  config that still has it keeps working.
 
 ## [0.11.0] - 2026-11-05
 
