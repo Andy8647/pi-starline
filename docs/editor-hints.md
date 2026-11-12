@@ -54,11 +54,11 @@ an empty rule is the normal state.
 
 `types/editor-hint-api.d.ts` in the package is the source of truth; summary:
 
-| Member                                    | Shape                                                   |
-| ----------------------------------------- | ------------------------------------------------------- |
-| `Symbol.for("pi-starline.editor-hint-api.v1")` | the `EditorHintApi` object on `globalThis`         |
-| `api.version`                             | `1`                                                     |
-| `api.setHint(key, text)`                  | `text` is a short string, or `null`/`""` to clear       |
+| Member                                         | Shape                                             |
+| ---------------------------------------------- | ------------------------------------------------- |
+| `Symbol.for("pi-starline.editor-hint-api.v1")` | the `EditorHintApi` object on `globalThis`        |
+| `api.version`                                  | `1`                                               |
+| `api.setHint(key, text)`                       | `text` is a short string, or `null`/`""` to clear |
 
 Text is flattened onto one line, stripped of control sequences and cut at 60
 columns. Nerd Font glyphs are ordinary characters to Starline, so a hint may carry
