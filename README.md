@@ -34,6 +34,7 @@ Starline makes Pi's fullscreen mode feel like a finished terminal app:
 - **Context:** click for the window split into what fills it — system prompt, tool schemas, MCP tools, memory, skills and the conversation — as a grid with a legend, plus the session's token totals.
 - **Throughput:** the last reply's tokens per second; click for a scatter of every reply's rate against how full the context was, coloured by how fast it ran.
 - **Your extension's pill:** a small published API lets any extension open the same bubble with its own content. See [Clickable pills for other extensions](https://github.com/Andy8647/pi-starline/blob/main/docs/pill-api.md).
+- **Your extension's hint:** the right end of the editor's top rule is another published slot, so an extension can say one thing there without spending a row. See [Hints on the editor's top rule](https://github.com/Andy8647/pi-starline/blob/main/docs/editor-hints.md).
 - Clicking anywhere else on screen closes the bubble, and the click still does what it would have done: the caret moves, the line gets selected.
 - Every action also runs from the keyboard as `/starline <name>`, and the pointer turns into a hand over anything clickable.
 
@@ -92,6 +93,7 @@ Everything else lives in `~/.pi/agent/starline.json`. The file is optional; miss
 - [Configuration](https://github.com/Andy8647/pi-starline/blob/main/docs/configuration.md): every option and its default.
 - [What the footer shows](https://github.com/Andy8647/pi-starline/blob/main/docs/segments.md): git status indicators and the detected runtimes.
 - [Clickable pills for other extensions](https://github.com/Andy8647/pi-starline/blob/main/docs/pill-api.md): put your extension's content in a pill.
+- [Hints on the editor's top rule](https://github.com/Andy8647/pi-starline/blob/main/docs/editor-hints.md): put one line of your extension's state on the editor.
 - [Clickable pills: design](https://github.com/Andy8647/pi-starline/blob/main/docs/clickable-pills.md): how the pills, bubbles and bridges work.
 
 ## Development
