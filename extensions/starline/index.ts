@@ -37,6 +37,11 @@ import {
 	isStarlineEditorFactory,
 	markEditorFactory,
 } from "./editor-factory-marker";
+import {
+	clearExternalEditorHints,
+	publishEditorHintApi,
+	setEditorHintRepaint,
+} from "./editor-hint-api";
 import { installFooter } from "./footer";
 import {
 	buildSessionDurationLabel,
@@ -125,6 +130,7 @@ export default function (pi: ExtensionAPI) {
 	// Published before anything else so a bridge that registers in `session_start`
 	// finds it, whichever order the extensions were loaded in.
 	publishPillApi();
+	publishEditorHintApi();
 	// The context bubble needs the tool schemas and the compaction reserve, and
 	// neither is on the context a pill action gets; hold on to the API instead.
 	setContextApi({
@@ -167,6 +173,10 @@ export default function (pi: ExtensionAPI) {
 	const refresh = () => {
 		if (sessionLifecycle.isCurrent()) requestFooterRender?.();
 	};
+	// The hint rides the editor's top rule but repaints with the footer's render
+	// loop, which is the only `tui.requestRender` Starline holds. Publishing before
+	// a session exists is still fine: the map takes the text, the frame follows.
+	setEditorHintRepaint(refresh);
 	const liveContext = new LiveContextController(sessionLifecycle, refresh);
 	const liveTps = new LiveTpsController();
 	// Each measured turn is a point on the throughput curve. The custom entry is
@@ -764,6 +774,9 @@ export default function (pi: ExtensionAPI) {
 		liveContext.clear();
 		liveTps.clear();
 		turnClock.clear();
+		// A hint outlives neither the session nor the extension that published it.
+		clearExternalEditorHints();
+		setEditorHintRepaint(undefined);
 		cleanupUi(ctx);
 	});
 

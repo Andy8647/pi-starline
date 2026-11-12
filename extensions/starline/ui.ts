@@ -12,8 +12,9 @@ import {
 } from "@earendil-works/pi-tui";
 import type { PolishedTuiConfig } from "./config";
 import { applyEditorCursorStyleToLines } from "./editor-cursor";
+import { externalEditorHints } from "./editor-hint-api";
 import { activeSelectionHintText, externalEditorHintText } from "./mouse";
-import { composeHints } from "./mouse/hint";
+import { composeHints, joinHints } from "./mouse/hint";
 import { pasteExpandHintText } from "./paste-collapse";
 import {
 	EDITOR_ACCENT_FALLBACK,
@@ -156,8 +157,11 @@ function composeTopRightStatus(vimStatus: string | undefined, uiTheme: Theme): s
 		activeSelectionHintText() ?? externalEditorHintText(),
 	);
 	const styled = hint ? safeThemeFg(uiTheme, "muted", hint) : undefined;
-	const parts = [vimStatus, styled].filter((part): part is string => Boolean(part));
-	return parts.length > 0 ? parts.join(" ⋅ ") : undefined;
+	// Hints from other extensions go first. `composeBorderLine` cuts this end of the
+	// rule from the right, so whatever Starline can shorten has to be behind a fact
+	// the extension cannot.
+	const external = externalEditorHints().map((text) => safeThemeFg(uiTheme, "muted", text));
+	return joinHints([...external, vimStatus, styled]) ?? undefined;
 }
 
 function plainRenderedText(line: string): string {

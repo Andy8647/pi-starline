@@ -10,6 +10,25 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [0.13.0] - 2026-11-12
+
+One addition: the right end of the editor's top rule is now a published slot, so an
+extension can say one thing next to what it is about instead of in the footer.
+
+**Added**
+
+- **Editor hint API: one line of your extension's state on the editor's border.**
+  The right end of the top rule already carries Starline's own hints (vim mode,
+  `paste again to expand`, `N characters selected, ctrl+x to copy`). An extension can
+  now publish there too, through `Symbol.for("pi-starline.editor-hint-api.v1")` on
+  `globalThis` — the same handshake as the pill API, so nothing imports Starline and
+  nothing breaks when it is not installed. Your hint joins the slot to the left of
+  Starline's, which is the end that survives truncation on a narrow terminal, and a
+  hint that has not changed costs no repaint. Text is flattened onto one line and cut
+  at 60 columns. `pi-ide-context` 0.6.4 is the first user: while a selection is fresh
+  it reads `6 lines selected in main.ts`. See
+  [Hints on the editor's top rule](https://github.com/Andy8647/pi-starline/blob/main/docs/editor-hints.md).
+
 ## [0.12.0] - 2026-11-08
 
 Four changes: a wide pill gives up width instead of taking the segments behind it
