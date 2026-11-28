@@ -33,6 +33,7 @@ Starline makes Pi's fullscreen mode feel like a finished terminal app:
 - **Queue:** an inbox icon and a count while messages wait; click to read them.
 - **Subagents:** with [pi-subagents](https://github.com/nicobailon/pi-subagents), a count of running subagents; click for agent, model, time and tokens, live.
 - **Context:** click for the window split into what fills it — system prompt, tool schemas, MCP tools, memory, skills and the conversation — as a grid with a legend, plus the session's token totals.
+- **Tree:** the branch you are on, and how many others exist; click it for the session drawn as a tree of your messages, where a click opens that turn in `/tree`. `/starline tree` does the same from the keyboard.
 - **Throughput:** the last reply's tokens per second; click for a scatter of every reply's rate against how full the context was, coloured by how fast it ran.
 - **Your extension's pill:** a small published API lets any extension open the same bubble with its own content. See [Clickable pills for other extensions](https://github.com/Andy8647/pi-starline/blob/main/docs/pill-api.md).
 - **Your extension's hint:** the right end of the editor's top rule is another published slot, so an extension can say one thing there without spending a row. See [Hints on the editor's top rule](https://github.com/Andy8647/pi-starline/blob/main/docs/editor-hints.md).
@@ -63,7 +64,7 @@ A session as a whole: the transcript above, the editor frame in the middle, the 
 
 ## Install
 
-Needs **Pi 0.84.4 or newer** (0.85.0 or newer for clickable pills) and a [Nerd Font](https://www.nerdfonts.com/) (or set `icons.mode` to `"ascii"`).
+Needs **Pi 1.5.1 or newer** and a [Nerd Font](https://www.nerdfonts.com/) (or set `icons.mode` to `"ascii"`).
 
 ```bash
 pi install npm:pi-starline

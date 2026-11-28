@@ -41,6 +41,7 @@ export const PILL_SEGMENT_VARIABLES: Record<string, string> = {
 	latest: "latest",
 	queue: "queue",
 	subagents: "subagents",
+	tree: "tree",
 	cwd: "cwd",
 	sessionName: "session_name",
 	git: "git",

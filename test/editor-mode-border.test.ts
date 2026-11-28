@@ -73,7 +73,7 @@ describe("editor border follows Pi's bash-mode painter", () => {
 	});
 
 	it("keeps Starline's border when the theme has no bash painter", () => {
-		// Peer floor is older than Pi 1.4's Theme; the frame must not depend on it.
+		// A theme object without the bash painter must not take the frame with it.
 		const lines = makeEditor(bashBrush, {}, makeTheme({ bash: false })).render(120);
 		expect(lines[0]).toContain("<borderMuted>─");
 		expect(lines.join("\n")).not.toContain("<bashMode>");

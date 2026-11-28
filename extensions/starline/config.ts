@@ -228,6 +228,8 @@ export type PolishedTuiConfig = {
 		subagents: ColorSpec;
 		cwd: ColorSpec;
 		sessionName: ColorSpec;
+		/** The session-tree pill: on screen once the session has a message. */
+		tree: ColorSpec;
 		gitBranch: ColorSpec;
 		contextNormal: ColorSpec;
 		contextWarning: ColorSpec;
@@ -303,6 +305,7 @@ export const defaultConfig: PolishedTuiConfig = {
 		subagents: "bold green",
 		cwd: "bold cyan",
 		sessionName: "bold green",
+		tree: "bold magenta",
 		gitBranch: "bold purple",
 		contextNormal: "bright-black",
 		contextWarning: "bold yellow",
@@ -551,6 +554,7 @@ function normalizeColors(record: Record<string, unknown>): Partial<PolishedTuiCo
 		subagents: colorValue(record, "subagents"),
 		cwd: colorValue(record, "cwd") ?? colorValue(record, "cwdText"),
 		sessionName: colorValue(record, "sessionName"),
+		tree: colorValue(record, "tree"),
 		gitBranch: colorValue(record, "gitBranch") ?? colorValue(record, "git"),
 		contextNormal: colorValue(record, "contextNormal"),
 		contextWarning: colorValue(record, "contextWarning"),

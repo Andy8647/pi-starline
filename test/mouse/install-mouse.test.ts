@@ -20,7 +20,7 @@ type FakeAltScreen = {
 	hasOverlay(): boolean;
 	routeWheel(): void;
 	handleSelectionMouseEvent(): void;
-	applySelection(): void;
+	autoScrollSelection?(): void;
 	requestRender(): void;
 };
 
@@ -60,7 +60,6 @@ function makePrototype(): { prototype: FakeAltScreen; calls: string[]; renders: 
 		},
 		routeWheel() {},
 		handleSelectionMouseEvent() {},
-		applySelection() {},
 		requestRender() {
 			renders.push("render");
 		},
@@ -115,6 +114,45 @@ describe("installMouse selectionHint", () => {
 		prototype.copyOnSelect = true;
 		expect(activeSelectionHintText()).toBeNull();
 		dispose();
+	});
+
+	// Pi 1.6+ ends each auto-scroll tick with a view-only render, which does not
+	// render the editor, so the count on its top rule needs a full render asked for.
+	it("asks for a full render after an auto-scroll tick while the hint shows", () => {
+		const { prototype, calls, renders } = makePrototype();
+		prototype.autoScrollSelection = () => {
+			calls.push("autoscroll");
+		};
+		const dispose = installMouse(prototype, { getConfig: makeConfig(true) });
+		registerReceiver(prototype);
+
+		prototype.autoScrollSelection?.();
+
+		expect(calls).toEqual(["viewport:", "autoscroll"]);
+		expect(renders).toEqual(["render"]);
+		dispose();
+	});
+
+	it("leaves an auto-scroll tick alone when there is no hint to update", () => {
+		const { prototype, renders } = makePrototype();
+		prototype.autoScrollSelection = () => {};
+		const dispose = installMouse(prototype, { getConfig: makeConfig(true) });
+		registerReceiver(prototype);
+
+		prototype.copyOnSelect = true;
+		prototype.autoScrollSelection?.();
+
+		expect(renders).toEqual([]);
+		dispose();
+	});
+
+	it("puts auto-scroll back when disposed", () => {
+		const { prototype } = makePrototype();
+		const original = () => {};
+		prototype.autoScrollSelection = original;
+		installMouse(prototype, { getConfig: makeConfig(true) })();
+
+		expect(prototype.autoScrollSelection).toBe(original);
 	});
 
 	it("no hint without a selection", () => {

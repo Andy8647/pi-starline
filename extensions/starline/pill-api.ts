@@ -23,7 +23,7 @@
  * other extensions are in `types/pill-api.d.ts`; the guide is `docs/pill-api.md`.
  */
 
-import type { PillApi, PillApiAction } from "../../types/pill-api";
+import type { PillApi, PillApiAction, PillBubbleContent } from "../../types/pill-api";
 import { showPillBubble } from "./pill-bubble";
 
 export const PILL_API_SYMBOL = Symbol.for("pi-starline.pill-api.v1");
@@ -70,11 +70,28 @@ export function externalPillAction(key: string): PillApiAction | undefined {
  * a `/reload` that re-imports this module, leave bridges registering into the
  * previous module's registry while the new footer reads its own.
  */
+/**
+ * Only the published fields of another extension's bubble. `maxWidth` and
+ * `underlineTargets` are Starline's own layout knobs, not part of the API, so an
+ * extension that happens to set them gets the documented bubble.
+ */
+function publicContent(content: PillBubbleContent): PillBubbleContent {
+	const copy = { ...content } as Record<string, unknown>;
+	delete copy.maxWidth;
+	delete copy.underlineTargets;
+	return copy as PillBubbleContent;
+}
+
 export function publishPillApi(): void {
 	const api: PillApi = {
 		version: 1,
 		register: registerExternalPillAction,
-		showBubble: (ctx, content, pill) => showPillBubble(ctx, content, pill),
+		showBubble: (ctx, content, pill) =>
+			showPillBubble(
+				ctx,
+				typeof content === "function" ? () => publicContent(content()) : publicContent(content),
+				pill,
+			),
 	};
 	(globalThis as Record<PropertyKey, unknown>)[PILL_API_SYMBOL] = api;
 }

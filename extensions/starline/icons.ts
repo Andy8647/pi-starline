@@ -46,6 +46,8 @@ export type IconGlyphs = {
 	queue: string;
 	/** The running-subagents pill. Same glyph pi-tidy uses for subagent tool rows. */
 	subagents: string;
+	/** The session-tree pill: the branch coordinate, shown only when branches exist. */
+	tree: string;
 	/** Forge logos for the branch segment, used only when gitHostIcon is on. */
 	gitHostGithub: string;
 	gitHostGitlab: string;
@@ -91,6 +93,7 @@ export const ICON_GLYPH_KEYS = [
 	"tps",
 	"queue",
 	"subagents",
+	"tree",
 	"gitHostGithub",
 	"gitHostGitlab",
 	"gitHostBitbucket",
@@ -144,6 +147,8 @@ export const NERD_DEFAULT_ICONS: IconGlyphs = {
 	queue: "\uf01c",
 	// fa-users, the glyph pi-tidy draws for a subagent tool row.
 	subagents: "\uf0c0",
+	// fa-code-fork: the branch the session is on.
+	tree: "\uf126",
 	gitHostGithub: "",
 	gitHostGitlab: "",
 	gitHostBitbucket: "",
@@ -187,6 +192,7 @@ export const ASCII_DEFAULT_ICONS: IconGlyphs = {
 	tps: "",
 	queue: "",
 	subagents: "",
+	tree: "Y",
 	// gitHostIcon is a Nerd Font feature; it disables itself in ascii mode.
 	gitHostGithub: "",
 	gitHostGitlab: "",
