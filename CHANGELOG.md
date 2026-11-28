@@ -10,6 +10,17 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [Unreleased]
+
+### Changed
+
+- **Starline now needs Pi 1.5.1 or newer.** Pi 1.5.1 fixed the cursor-marker leak
+  behind garbled text while drag-selecting in the editor
+  ([earendil-works/pi#9441](https://github.com/earendil-works/pi/pull/9441)), so
+  Starline's own workaround for it is gone, and it no longer wraps Pi's
+  `applySelection`. On an older Pi, drag-selecting in Ghostty garbles text again:
+  update Pi.
+
 ## [0.13.0] - 2026-11-12
 
 One addition: the right end of the editor's top rule is now a published slot, so an
