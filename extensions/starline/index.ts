@@ -6,6 +6,12 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { type EditorTheme, type TUI, TuiAltScreen } from "@earendil-works/pi-tui";
 import {
+	observeBalanceHeaders,
+	refreshBalance,
+	resetBalance,
+	setBalanceHost,
+} from "./balance-pill";
+import {
 	type ColorSourcesConfig,
 	type ContextStyle,
 	type ExtensionStatusColorMode,
@@ -188,6 +194,13 @@ export default function (pi: ExtensionAPI) {
 	// loop, which is the only `tui.requestRender` Starline holds. Publishing before
 	// a session exists is still fine: the map takes the text, the frame follows.
 	setEditorHintRepaint(refresh);
+	// The balance pill asks the provider only while it is in the bar: reading a
+	// balance sends the model's key to the provider's account endpoint.
+	setBalanceHost({
+		isEnabled: () =>
+			currentConfig.features.statusLine && currentConfig.pill.segments.includes("balance"),
+		requestRender: refresh,
+	});
 	const liveContext = new LiveContextController(sessionLifecycle, refresh);
 	const liveTps = new LiveTpsController();
 	// Each measured turn is a point on the throughput curve. The custom entry is
@@ -714,6 +727,7 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("session_start", async (_event, ctx) => {
 		sessionLifecycle.start();
+		resetBalance();
 		resetTreeCache();
 		liveContext.clear();
 		liveTps.clear();
@@ -789,6 +803,7 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
+		resetBalance();
 		resetTreeCache();
 		liveContext.clear();
 		liveTps.clear();
@@ -815,10 +830,17 @@ export default function (pi: ExtensionAPI) {
 		liveContext.clear();
 		turnClock.end();
 		syncInteractiveAndProjectState(event, ctx);
+		// A turn spends money or quota; once a minute at most for the same account.
+		void refreshBalance(ctx);
 	});
 	pi.on("model_select", (event, ctx) => {
 		liveContext.clear();
 		syncInteractiveState(event, ctx);
+		// Another model may bill to another account, which is checked at once.
+		void refreshBalance(ctx);
+	});
+	pi.on("after_provider_response", (event) => {
+		observeBalanceHeaders(event.headers);
 	});
 	pi.on("thinking_level_select", syncInteractiveState);
 	pi.on("session_info_changed", syncInteractiveState);

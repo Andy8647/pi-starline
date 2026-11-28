@@ -37,6 +37,8 @@ export type IconGlyphs = {
 	thinking: string;
 	context: string;
 	cost: string;
+	/** The balance pill: money or quota left on the current model's account. */
+	balance: string;
 	tokens: string;
 	/** Decode throughput, shown only after a message has been measured. */
 	tps: string;
@@ -86,6 +88,7 @@ export const ICON_GLYPH_KEYS = [
 	"thinking",
 	"context",
 	"cost",
+	"balance",
 	"tokens",
 	"tps",
 	"queue",
@@ -136,6 +139,8 @@ export const NERD_DEFAULT_ICONS: IconGlyphs = {
 	thinking: "",
 	context: "",
 	cost: "",
+	// fa-money: what is left on the account.
+	balance: "\uf0d6",
 	tokens: "",
 	tps: "",
 	// fa-inbox: messages waiting their turn.
@@ -182,6 +187,7 @@ export const ASCII_DEFAULT_ICONS: IconGlyphs = {
 	thinking: "",
 	context: "",
 	cost: "",
+	balance: "$",
 	tokens: "",
 	tps: "",
 	queue: "",

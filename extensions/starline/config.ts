@@ -235,6 +235,8 @@ export type PolishedTuiConfig = {
 		contextWarning: ColorSpec;
 		contextError: ColorSpec;
 		cost: ColorSpec;
+		/** Money or quota left on the current model's account. */
+		balance: ColorSpec;
 		/** Decode throughput of the latest assistant message. */
 		tps: ColorSpec;
 		/** Throughput well below this session's usual rate. Defaults to `colors.tps` when empty. */
@@ -309,6 +311,7 @@ export const defaultConfig: PolishedTuiConfig = {
 		contextWarning: "bold yellow",
 		contextError: "bold red",
 		cost: "bold green",
+		balance: "bold yellow",
 		tps: "bright-black",
 		tpsSlow: "yellow",
 		tpsFast: "bold green",
@@ -557,6 +560,7 @@ function normalizeColors(record: Record<string, unknown>): Partial<PolishedTuiCo
 		contextWarning: colorValue(record, "contextWarning"),
 		contextError: colorValue(record, "contextError"),
 		cost: colorValue(record, "cost"),
+		balance: colorValue(record, "balance"),
 		tps: colorValue(record, "tps"),
 		tpsSlow: colorValue(record, "tpsSlow"),
 		tpsFast: colorValue(record, "tpsFast"),

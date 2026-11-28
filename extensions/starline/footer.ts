@@ -5,6 +5,7 @@ import {
 	truncateToWidth,
 	visibleWidth,
 } from "@earendil-works/pi-tui";
+import { balancePillLabel } from "./balance-pill";
 import {
 	type ColorSpec,
 	getExtensionStatusColor,
@@ -501,6 +502,13 @@ export function installFooter(
 							return renderStyleForSource(theme, colorSource, contextColor, contextDisplay);
 						case "cost":
 							return renderStyleForSource(theme, colorSource, config.colors.cost, costDisplay);
+						case "balance":
+							return renderStyleForSource(
+								theme,
+								colorSource,
+								config.colors.balance,
+								balancePillLabel(ctx, config.icons.balance),
+							);
 						case "tps":
 							return renderStyleForSource(theme, colorSource, tpsColor, tpsDisplay);
 						case "package_version":
@@ -578,6 +586,8 @@ export function installFooter(
 							return contextColor;
 						case "cost":
 							return config.colors.cost;
+						case "balance":
+							return config.colors.balance;
 						case "tps":
 							return tpsColor;
 						case "sessionDuration":

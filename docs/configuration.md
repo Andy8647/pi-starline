@@ -119,6 +119,7 @@ Default config values — copy this and change any value you want:
 		"thinking": "",
 		"context": "",
 		"cost": "",
+		"balance": "\uf0d6",
 		"tokens": "",
 		"tps": "",
 		"queue": "\uf01c",
@@ -144,6 +145,7 @@ Default config values — copy this and change any value you want:
 		"tokens": "bright-black",
 		"cacheHit": "bright-black",
 		"cost": "bold green",
+		"balance": "bold yellow",
 		"tps": "bright-black",
 		"tpsSlow": "yellow",
 		"tpsFast": "bold green",
@@ -285,13 +287,13 @@ The footer is a bar of coloured pills joined by seamless powerline arrows. `pill
 }
 ```
 
-| Key               | Values                                                                                                                                                | Meaning                                                                                                                                |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `segments`        | segment names (`cwd`, `git`, `context`, `cost`, …), plus `queue`, `subagents`, `previousPrompt`, `latest`, `extensionStatus`, `extensionStatus:<key>` | Order, left to right, and the order it drops pills in                                                                                  |
-| `separator`       | `powerline` (default), `powerline-thin`, `none`                                                                                                       | Glyph between pills                                                                                                                    |
-| `bold`            | `true` (default), `false`                                                                                                                             | Bold segment text                                                                                                                      |
-| `caps`            | `round` (default), `right`, `none`                                                                                                                    | How the bar's ends are closed                                                                                                          |
-| `bubbleAnimation` | `true` (default), `false`                                                                                                                             | Unfold a clicked pill's bubble upward from the pill (60 ms) instead of showing it at once. Applies from the next session or `/reload`. |
+| Key               | Values                                                                                                                                                           | Meaning                                                                                                                                |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `segments`        | segment names (`cwd`, `git`, `context`, `cost`, …), plus `queue`, `subagents`, `previousPrompt`, `latest`, `balance`, `extensionStatus`, `extensionStatus:<key>` | Order, left to right, and the order it drops pills in                                                                                  |
+| `separator`       | `powerline` (default), `powerline-thin`, `none`                                                                                                                  | Glyph between pills                                                                                                                    |
+| `bold`            | `true` (default), `false`                                                                                                                                        | Bold segment text                                                                                                                      |
+| `caps`            | `round` (default), `right`, `none`                                                                                                                               | How the bar's ends are closed                                                                                                          |
+| `bubbleAnimation` | `true` (default), `false`                                                                                                                                        | Unfold a clicked pill's bubble upward from the pill (60 ms) instead of showing it at once. Applies from the next session or `/reload`. |
 
 Order and visibility of the bar live in `pill.segments`. The **Pills** tab in
 `/starline` edits the same list: one row per segment, and its value is the
@@ -467,6 +469,39 @@ on one and slow on another. Two details follow from that:
   does not blink between two colours while a message streams.
 - Fewer than four measured messages is not a median: the pill stays on
   `colors.tps` until the session has a "usual" rate of its own.
+
+### The balance pill
+
+`balance` shows what is left on the account the current model bills to: money
+for pay-as-you-go accounts, the share of each usage window left for
+subscriptions. Click it for the breakdown and the time each window resets.
+
+| Provider         | Recognised by             | Shows                                       |
+| ---------------- | ------------------------- | ------------------------------------------- |
+| DeepSeek         | `api.deepseek.com`        | Balance per currency, granted and topped up |
+| Moonshot         | `api.moonshot.cn`, `.ai`  | Balance, voucher and cash                   |
+| OpenRouter       | `openrouter.ai`           | What is left of the key's credit limit      |
+| Kimi coding plan | `api.kimi.com/coding`     | The 5-hour and weekly windows               |
+| OpenAI Codex     | `chatgpt.com/backend-api` | The 5-hour and weekly windows, and the plan |
+
+The provider is recognised from the model's base URL, so a custom provider
+pointed at one of these hosts counts too, and a proxy in front of one does not.
+Anything else hides the pill, as does an answer it does not recognise: it never
+shows a `0` it did not read. An OpenRouter key without a credit limit has nothing left to
+count down, so it shows nothing either; account-wide credits need a management
+key, which Pi does not use.
+
+**It is not in the bar by default.** Reading a balance sends the model's API key
+(or sign-in token) to that provider's own account endpoint, the host the model
+already talks to. Add `balance` to `pill.segments`, or turn it on in the **Pills**
+tab, and it asks when it first appears, when you switch models, and after each
+turn, at most once a minute for the same account. **Check again** in the bubble
+asks right away. A failed check keeps the last number.
+
+Codex also sends its windows in the headers of model responses that go over
+HTTP; those update the pill without a request of their own. The Kimi coding plan
+and Codex have no published account API: their endpoints are the ones the Kimi
+and Codex command-line tools read, and could change without notice.
 
 ## Git
 

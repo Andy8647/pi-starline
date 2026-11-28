@@ -21,6 +21,7 @@ Starline makes Pi's fullscreen mode feel like a finished terminal app:
 - A colour palette with `$name` references; the bar is built from `pill.segments`, in your order.
 - One `git` pill: branch, dirty markers and any operation in progress together. Click it for the changed files, ahead/behind and stashes. The list is read-only, because an agent may be running in the same tree.
 - One `context` pill: the percentage, and nothing else. Click it for the window size, tokens used, session in/out totals and the cache rate.
+- An optional `balance` pill: money or quota left on the account the current model bills to (DeepSeek, Moonshot, OpenRouter, the Kimi coding plan, OpenAI Codex). Click it for the breakdown and when each window resets. Off by default, since it sends your key to the provider's account endpoint.
 - Other extensions' statuses from `ctx.ui.setStatus()` as pills, on either side or in the middle.
 - The model pill's icon spins while the agent works, and the pill counts the run's elapsed time; when the run ends the number stays as the total it reached.
 - No git pill on the bar means no `git status`: the refresh only reads the repository when something on the bar shows it.

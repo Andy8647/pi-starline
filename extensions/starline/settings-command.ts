@@ -131,6 +131,7 @@ const pillSegmentLabels: Record<string, string> = {
 	runtime: "Runtime",
 	context: "Context",
 	cost: "Cost",
+	balance: "Balance",
 	sessionDuration: "Session duration",
 	username: "user@host",
 	time: "Time",
