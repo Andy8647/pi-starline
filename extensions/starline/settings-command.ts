@@ -564,6 +564,9 @@ function formatSectionTabs(
 	return `  ${rendered.join(safeThemeFg(theme, "muted", " / "))}`;
 }
 
+/** The fixed part of Pi's key hint under a settings list; the keys around it vary. */
+const PI_HINT_JOINT = " to change · ";
+
 /**
  * Adds the section keys to Pi's own key hint under the list.
  *
@@ -572,8 +575,6 @@ function formatSectionTabs(
  * joint is fixed. The section keys go in right after it, inside Pi's styling, and
  * Pi's keys stay as Pi printed them.
  */
-const PI_HINT_JOINT = " to change · ";
-
 function withSectionFooter(lines: readonly string[]): string[] {
 	const next = [...lines];
 	for (let index = next.length - 1; index >= 0; index -= 1) {
