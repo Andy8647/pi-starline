@@ -66,11 +66,16 @@ function fakeManager(entries: FakeEntry[], leafId: string): Manager {
 		siblings.push(entry);
 		childrenOf.set(entry.parentId, siblings);
 	}
-	const node = (entry: FakeEntry): unknown => ({
-		entry,
-		label: labels.get(entry.id),
-		children: (childrenOf.get(entry.id) ?? []).map(node),
-	});
+	// Built without recursion, like Pi's own `getTree`, so a deep fixture works.
+	type FakeNode = { entry: FakeEntry; label?: string; children: FakeNode[] };
+	const nodes = new Map<string, FakeNode>();
+	for (const entry of entries) {
+		nodes.set(entry.id, { entry, label: labels.get(entry.id), children: [] });
+	}
+	for (const entry of entries) {
+		const parent = entry.parentId ? nodes.get(entry.parentId) : undefined;
+		if (parent) parent.children.push(nodes.get(entry.id) as FakeNode);
+	}
 	return {
 		getLeafId: () => leafId,
 		getEntry: (id: string) => byId.get(id),
@@ -83,7 +88,7 @@ function fakeManager(entries: FakeEntry[], leafId: string): Manager {
 			}
 			return path.reverse();
 		},
-		getTree: () => (childrenOf.get(null) ?? []).map(node),
+		getTree: () => (childrenOf.get(null) ?? []).map((entry) => nodes.get(entry.id)),
 		getLabel: (id: string) => labels.get(id),
 	} as unknown as Manager;
 }
@@ -180,6 +185,41 @@ describe("buildTurnGraph", () => {
 	});
 });
 
+describe("buildTurnGraph on unusual sessions", () => {
+	it("walks a session far deeper than the call stack allows", () => {
+		const entries: FakeEntry[] = [];
+		let parent: string | null = null;
+		// Two turns, with five thousand tool results between them.
+		entries.push(user("u1", "start", parent));
+		parent = "u1";
+		for (let step = 0; step < 5_000; step += 1) {
+			entries.push(custom(`t${step}`, parent));
+			parent = `t${step}`;
+		}
+		entries.push(user("u2", "and then", parent));
+		const graph = graphOf(entries, "u2");
+		expect(graph.roots[0]?.children[0]?.text).toBe("and then");
+		expect(graph.tips).toBe(1);
+	});
+
+	it("keeps a message that is only an image as a turn", () => {
+		const image = {
+			type: "message",
+			id: "u2",
+			parentId: "a1",
+			message: { role: "user", content: [{ type: "image", data: "", mimeType: "image/png" }] },
+		} as FakeEntry;
+		const graph = graphOf([user("u1", "look", null), assistant("a1", "ok", "u1"), image], "u2");
+		expect(graph.roots[0]?.children[0]).toMatchObject({ text: "[image]", here: true });
+	});
+
+	it("still draws the tree when the session is on none of it", () => {
+		const graph = graphOf(branchedSession(), "");
+		expect(graph.tips).toBe(2);
+		expect(plain(renderTurnGraph(graph, 40)).some((row) => row.includes("← here"))).toBe(false);
+	});
+});
+
 describe("treePillText", () => {
 	it("is the icon alone for one straight conversation", () => {
 		const entries = branchedSession().filter((entry) => !entry.id.endsWith("b"));
@@ -272,6 +312,15 @@ describe("renderTurnGraph", () => {
 			"● turn 8",
 			"● turn 9                          ← here",
 		]);
+	});
+
+	it("leaves no reset in a cut row, so dim and the hover fill reach its end", () => {
+		const long = branchedSession().map((entry) =>
+			entry.id === "u2b" ? user("u2b", "很长的中文问题".repeat(20), "c1") : entry,
+		);
+		for (const row of renderTurnGraph(graphOf(long, "a3"), 50)) {
+			expect(row.text).not.toContain("\x1b[0m");
+		}
 	});
 
 	it("keeps every row to the width it was given", () => {

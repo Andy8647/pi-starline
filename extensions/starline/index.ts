@@ -305,14 +305,17 @@ export default function (pi: ExtensionAPI) {
 	};
 
 	const uninstallPrototypePatches = (ctx: ExtensionContext) => {
+		// The tree host wraps `renderWidgetContainer` on top of the dock gap, so it
+		// comes off first: the registry restores Pi's method only when the outermost
+		// wrapper leaves last.
+		cleanupTreeSelectorHost();
+		cleanupTreeSelectorHost = () => {};
 		cleanupPrototypePatches();
 		cleanupPrototypePatches = () => {};
 		cleanupDockGap();
 		cleanupDockGap = () => {};
 		cleanupTranscriptJump();
 		cleanupTranscriptJump = () => {};
-		cleanupTreeSelectorHost();
-		cleanupTreeSelectorHost = () => {};
 		prototypePatchesInstalled = false;
 		rebuildWidgetSlots(ctx);
 	};

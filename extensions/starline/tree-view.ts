@@ -107,6 +107,20 @@ function isUserMessage(entry: SessionEntry): boolean {
 	);
 }
 
+/**
+ * What a user message is drawn as. One that is only an image is still a turn, and
+ * may be a branch, so it gets a placeholder rather than vanishing from the tree.
+ */
+function turnText(entry: SessionEntry): string {
+	const text = entryText(entry);
+	if (text) return text;
+	const content = (entry as { message?: { content?: unknown } }).message?.content;
+	const hasImage =
+		Array.isArray(content) &&
+		content.some((part) => (part as { type?: string } | null)?.type === "image");
+	return hasImage ? "[image]" : "";
+}
+
 function timeOf(entry: SessionEntry): number {
 	const time = Date.parse((entry as { timestamp?: string }).timestamp ?? "");
 	return Number.isNaN(time) ? 0 : time;
@@ -116,22 +130,31 @@ function timeOf(entry: SessionEntry): number {
  * Read the session as a turn graph, or `undefined` when nothing has been said yet.
  */
 export function buildTurnGraph(manager: SessionManager): TurnGraph | undefined {
+	// No leaf is a session moved back before its first message (Pi resets the
+	// leaf for that): the tree is all still there, the session is just on none of it.
 	const leafId = manager.getLeafId();
-	if (!leafId) return undefined;
-	const onPath = new Set(manager.getBranch(leafId).map((entry) => entry.id));
+	const onPath = new Set(leafId ? manager.getBranch(leafId).map((entry) => entry.id) : []);
 
 	const roots: TurnNode[] = [];
+	/** Every turn, in walk order: the passes below are loops, not recursion. */
+	const turns: TurnNode[] = [];
 	/** Leaves under each turn that has no turn below it, by entry. */
 	const leavesOf = new Map<TurnNode, SessionEntry[]>();
 	const depthOf = new Map<TurnNode, number>();
-	/** The deepest turn on the current path: where the session is. */
-	const here: { turn?: TurnNode; depth: number } = { depth: -1 };
+	let here: TurnNode | undefined;
 
-	const walk = (node: SessionNode, owner: TurnNode | undefined, depth: number): void => {
+	// One stack frame per entry would overflow on a long session (a few thousand
+	// tool calls), so the walk keeps its own stack, as Pi's `getTree` does.
+	type Frame = { node: SessionNode; owner: TurnNode | undefined; depth: number };
+	const stack: Frame[] = [...manager.getTree()]
+		.reverse()
+		.map((node) => ({ node, owner: undefined, depth: 0 }));
+	for (let frame = stack.pop(); frame; frame = stack.pop()) {
+		const { node, owner, depth } = frame;
 		const { entry } = node;
 		let next = owner;
 		let nextDepth = depth;
-		const text = isUserMessage(entry) ? entryText(entry) : "";
+		const text = isUserMessage(entry) ? turnText(entry) : "";
 		if (text) {
 			const turn: TurnNode = {
 				entryId: entry.id,
@@ -141,13 +164,11 @@ export function buildTurnGraph(manager: SessionManager): TurnGraph | undefined {
 				children: [],
 			};
 			(owner ? owner.children : roots).push(turn);
+			turns.push(turn);
 			next = turn;
 			nextDepth = depth + 1;
 			depthOf.set(turn, nextDepth);
-			if (turn.onPath && nextDepth > here.depth) {
-				here.turn = turn;
-				here.depth = nextDepth;
-			}
+			if (turn.onPath && nextDepth > (here ? (depthOf.get(here) ?? 0) : 0)) here = turn;
 		}
 		// Labels are on the message or on a reply to it; either names the turn.
 		if (node.label && next) next.label = node.label;
@@ -156,21 +177,31 @@ export function buildTurnGraph(manager: SessionManager): TurnGraph | undefined {
 			leaves.push(entry);
 			leavesOf.set(next, leaves);
 		}
-		for (const child of node.children) walk(child, next, nextDepth);
-	};
-	for (const root of manager.getTree()) walk(root, undefined, 0);
+		for (let index = node.children.length - 1; index >= 0; index -= 1) {
+			stack.push({ node: node.children[index] as SessionNode, owner: next, depth: nextDepth });
+		}
+	}
 	if (roots.length === 0) return undefined;
-	if (here.turn) here.turn.here = true;
+	if (here) here.here = true;
 
+	const byTime = (left: TurnNode, right: TurnNode): number => {
+		const a = manager.getEntry(left.entryId);
+		const b = manager.getEntry(right.entryId);
+		return (a ? timeOf(a) : 0) - (b ? timeOf(b) : 0);
+	};
+	roots.sort(byTime);
 	let tips = 0;
-	const finish = (turn: TurnNode): void => {
-		turn.children.sort((left, right) => {
-			const a = manager.getEntry(left.entryId);
-			const b = manager.getEntry(right.entryId);
-			return (a ? timeOf(a) : 0) - (b ? timeOf(b) : 0);
-		});
-		for (const child of turn.children) finish(child);
-		if (turn.children.length > 0) return;
+	let label: string | undefined;
+	let labelDepth = 0;
+	for (const turn of turns) {
+		turn.children.sort(byTime);
+		// The deepest label on the current path names the branch the session is on.
+		const depth = depthOf.get(turn) ?? 0;
+		if (turn.onPath && turn.label && depth > labelDepth) {
+			label = turn.label;
+			labelDepth = depth;
+		}
+		if (turn.children.length > 0) continue;
 		// Pi appends labels and extension state at the leaf, so one branch can end in
 		// several leaves that are the same conversation. The one the session is on
 		// wins; otherwise the one written last is where the branch got to.
@@ -184,21 +215,10 @@ export function buildTurnGraph(manager: SessionManager): TurnGraph | undefined {
 		tips += 1;
 		turn.tip = {
 			leafId: end?.id ?? turn.entryId,
-			turns: depthOf.get(turn) ?? 1,
+			turns: depth || 1,
 			timestamp: (end as { timestamp?: string } | undefined)?.timestamp,
 		};
-	};
-	for (const root of roots) finish(root);
-
-	let label: string | undefined;
-	const nearest = (turns: TurnNode[]): void => {
-		for (const turn of turns) {
-			if (!turn.onPath) continue;
-			if (turn.label) label = turn.label;
-			nearest(turn.children);
-		}
-	};
-	nearest(roots);
+	}
 
 	return { roots, tips, label };
 }
@@ -276,7 +296,10 @@ function tipMeta(turn: TurnNode, now: number): string {
 function layoutRow(left: string, right: string, width: number, dim: boolean): string {
 	const gap = right ? 2 : 0;
 	const room = Math.max(1, width - visibleWidth(right) - gap);
-	const shown = truncateToWidth(left, room, ELLIPSIS);
+	// pi-tui closes a cut with a full reset, which would end the dim, and the hover
+	// fill the bubble wraps a selected row in, at the ellipsis. The rows are plain
+	// text until styled below, so the resets carry nothing and are dropped.
+	const shown = truncateToWidth(left, room, ELLIPSIS).replaceAll("\x1b[0m", "");
 	const pad = " ".repeat(Math.max(0, width - visibleWidth(shown) - visibleWidth(right)));
 	const body = `${shown}${pad}${right}`;
 	return dim ? `${DIM}${body}${UNDIM}` : body;

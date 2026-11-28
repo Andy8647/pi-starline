@@ -97,9 +97,12 @@ export function installTreeSelectorHost(): () => void {
 function currentGraph(ctx: ExtensionContext): TurnGraph | undefined {
 	const leafId = ctx.sessionManager.getLeafId() ?? undefined;
 	if (leafId === cachedLeafId) return cachedGraph;
+	// Build first, cache after: a build that throws must not leave the previous
+	// leaf's graph filed under this one.
+	const graph = buildTurnGraph(ctx.sessionManager);
 	cachedLeafId = leafId;
-	cachedGraph = buildTurnGraph(ctx.sessionManager);
-	return cachedGraph;
+	cachedGraph = graph;
+	return graph;
 }
 
 /** What the footer shows. Empty means "leave the pill out". */
