@@ -69,10 +69,6 @@ describe("installMouse when another extension owns the mouse layer", () => {
 			hasOverlay: () => false,
 			requestRender() {},
 			flash() {},
-			applySelection() {
-				calls.push("applySelection");
-				return [];
-			},
 		};
 		return { prototype, calls };
 	}
@@ -96,19 +92,6 @@ describe("installMouse when another extension owns the mouse layer", () => {
 		expect(messages).toContain("pi-mouse-events");
 		// Once per process, however many times the install runs.
 		expect(messages.match(/owns Pi's mouse layer/g)).toHaveLength(1);
-	});
-
-	it("still cleans the selection render, which is not mouse input", () => {
-		const { prototype } = makePrototype();
-		const originalApply = prototype.applySelection;
-		vi.spyOn(console, "warn").mockImplementation(() => {});
-
-		withExternalLayer({ version: 2 }, () => {
-			installMouse(prototype, { getConfig: () => defaultConfig });
-		});
-		vi.restoreAllMocks();
-
-		expect(prototype.applySelection).not.toBe(originalApply);
 	});
 
 	it("patches as usual when the key is missing or from another major", () => {

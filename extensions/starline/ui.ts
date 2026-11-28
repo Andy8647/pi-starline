@@ -391,19 +391,6 @@ export function translateEditorMouse<Event extends FrameMouseEvent>(
 	};
 }
 
-/**
- * Pi's own click handling, resolved once at load.
- *
- * `Editor.handleMouse` only exists from pi-tui 1.4. The peer floor is older, so
- * the lookup is a plain property read that stays undefined on those builds rather
- * than a call the type system assumes is there.
- */
-const baseHandleMouse = (
-	CustomEditor.prototype as {
-		handleMouse?: (this: unknown, event: TuiMouseEvent) => TuiMouseEventResult | undefined;
-	}
-).handleMouse;
-
 function readVimStatus(editor: WrappedEditor, uiTheme: Theme): string | undefined {
 	const mode = editor.getMode?.();
 	if (typeof mode !== "string") return undefined;
@@ -608,7 +595,6 @@ export class PolishedEditor extends CustomEditor {
 	 * clicks and focus then come from Pi rather than from a patched press handler.
 	 */
 	override handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
-		if (typeof baseHandleMouse !== "function") return undefined;
 		const config = this.getConfig();
 		const { railWidth } = getEditorChromeWidths(config, this.uiTheme, "\x1b[0m");
 		const translated = translateEditorMouse(event, {
@@ -618,7 +604,7 @@ export class PolishedEditor extends CustomEditor {
 			fillerRows: this.lastFrame?.fillerRows ?? 0,
 		});
 		if (!translated) return undefined;
-		return baseHandleMouse.call(this, translated);
+		return super.handleMouse(translated);
 	}
 
 	setWorkingStatusIndicator(indicator: WorkingIndicator | undefined): void {
