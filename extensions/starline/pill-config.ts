@@ -52,6 +52,7 @@ export const PILL_SEGMENT_VARIABLES: Record<string, string> = {
 	context: "context",
 	tps: "tps",
 	cost: "cost",
+	balance: "balance",
 	sessionDuration: "session_duration",
 	username: "username",
 	time: "time",

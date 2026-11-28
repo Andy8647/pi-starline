@@ -14,6 +14,7 @@
 
 import type { ExtensionContext, SlashCommandInfo } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
+import { showBalanceBubble } from "./balance-pill";
 import { statusCommandName } from "./config";
 import { collectContextBreakdown, contextBubbleContent, probeFor } from "./context-breakdown";
 import { activeContextSnapshot } from "./context-live";
@@ -677,6 +678,9 @@ export const PILL_ACTIONS: Readonly<Partial<Record<string, PillAction>>> = {
 	subagents: showSubagents,
 	thinking: showThinkingLevel,
 	tps: showTps,
+	balance: ({ ctx, pill }) => {
+		showBalanceBubble(ctx, pill);
+	},
 };
 
 /**

@@ -10,6 +10,31 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [Unreleased]
+
+### Added
+
+- **A `balance` pill.** What is left on the account the current model bills to:
+  the balance for DeepSeek, Moonshot and OpenRouter, and the share of each usage
+  window left for the Kimi coding plan and OpenAI Codex. Click it for the
+  breakdown (granted and topped-up money, when each window resets, what changed
+  since the last check). The provider is recognised from the model's base URL,
+  and anything it does not recognise hides the pill rather than showing a `0`.
+  **It is off by default**: reading a balance sends the model's key to the
+  provider's own account endpoint, so add `balance` in the **Pills** tab of
+  `/starline` if you want it. It checks when it first appears, on a model
+  switch, and after each turn, at most once a minute per account.
+- This replaces `@andy8647/pi-balance`. With both installed you get two balance
+  pills; uninstall `pi-balance` and swap `extensionStatus:provider-balance` for
+  `balance` in `pill.segments`.
+
+**Notes**
+
+- DeepSeek was checked against a live account. Moonshot and OpenRouter follow
+  their published APIs. The Kimi coding plan and Codex have no published account
+  API: they follow what the Kimi and Codex command-line tools read, and were not
+  checked against a live account.
+
 ## [0.13.0] - 2026-11-12
 
 One addition: the right end of the editor's top rule is now a published slot, so an
