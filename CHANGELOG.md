@@ -21,6 +21,18 @@ npm.
   `applySelection`. On an older Pi, drag-selecting in Ghostty garbles text again:
   update Pi.
 
+### Fixed
+
+- **`/starline` lost its "switch sections" hint on Pi 1.6 and later.** Pi now
+  builds the key hint under the settings list from your keybindings, in lower
+  case, and Starline only recognised the old wording. The section keys are now
+  added into Pi's own hint, so the confirm and cancel keys it shows are the ones
+  you actually have bound.
+- **The "N characters selected" count stopped updating while a drag
+  auto-scrolled**, on Pi 1.6 and later. Pi no longer redraws the editor while it
+  scrolls a selection, so the count stayed at whatever it was when the pointer
+  left the view. Starline now asks for that redraw while the hint is showing.
+
 ## [0.13.0] - 2026-11-12
 
 One addition: the right end of the editor's top rule is now a published slot, so an

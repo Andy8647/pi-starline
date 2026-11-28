@@ -508,6 +508,29 @@ function installCopying(
 		);
 	}
 
+	// Dragging past the edge of a scroll view grows the selection on a 50ms timer
+	// (`autoScrollSelection`), and since Pi 1.6 each tick asks only for a view
+	// render: the selection is painted over the last frame's component output, so
+	// the editor does not render and the count on its top rule stays where the
+	// drag left the viewport. While the hint is showing, ask for the full render
+	// a tick used to get. Without the method there is nothing to keep up with.
+	if (hint && typeof (prototype as Record<string, unknown>).autoScrollSelection === "function") {
+		cleanups.push(
+			installPrototypePatch(
+				prototype,
+				"autoScrollSelection",
+				"mouse-selection-autoscroll",
+				({ predecessor, receiver, args }) => {
+					const result = Reflect.apply(predecessor, receiver, args);
+					if (activeSelectionHintText() !== null) {
+						(receiver as MouseCapablePrototype).requestRender();
+					}
+					return result;
+				},
+			),
+		);
+	}
+
 	if (!hint && !rangeDelete) {
 		return () => {
 			for (const cleanup of cleanups) cleanup();

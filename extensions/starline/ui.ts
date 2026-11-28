@@ -69,12 +69,12 @@ type WrappedEditor = EditorComponent &
 		setAutocompleteProvider?: (provider: AutocompleteProvider) => void;
 		setPaddingX?: (padding: number) => void;
 		setAutocompleteMaxVisible?: (maxVisible: number) => void;
-		[SPLIT_POLISHED_FRAME]?: (lines: string[]) => PolishedFrameSplit | undefined;
+		[SPLIT_POLISHED_FRAME]?: (lines: readonly string[]) => PolishedFrameSplit | undefined;
 	};
 
 type PolishedFrameOptions = {
 	width: number;
-	baseRendered: string[];
+	baseRendered: readonly string[];
 	autocompleteSource: AutocompleteEditorInternals;
 	uiTheme: Theme;
 	config: PolishedTuiConfig;
@@ -93,10 +93,10 @@ type PolishedFrameOptions = {
 	modeBorder?: (text: string) => string;
 	/** Reports what the frame drew: `handleMouse` bounds clicks by it, a wrapper splits by it. */
 	onFrame?: (frame: Omit<DrawnFrame, "lines">) => void;
-	splitBaseFrame?: (lines: string[]) => PolishedFrameSplit | undefined;
+	splitBaseFrame?: (lines: readonly string[]) => PolishedFrameSplit | undefined;
 };
 
-function clampRenderedLines(lines: string[], width: number): string[] {
+function clampRenderedLines(lines: readonly string[], width: number): string[] {
 	const maxWidth = Math.max(0, width);
 	return lines.map((line) => truncateToWidth(line, maxWidth, ""));
 }
@@ -227,7 +227,7 @@ function unwrapPolishedFrameOnly(
 }
 
 function splitPolishedFrame(
-	lines: string[],
+	lines: readonly string[],
 	config: PolishedTuiConfig,
 	uiTheme: Theme,
 ): PolishedFrameSplit | undefined {
@@ -250,7 +250,7 @@ function splitPolishedFrame(
  */
 function splitDrawnFrame(
 	drawn: DrawnFrame | undefined,
-	lines: string[],
+	lines: readonly string[],
 	config: PolishedTuiConfig,
 	uiTheme: Theme,
 ): PolishedFrameSplit | undefined {
@@ -611,7 +611,7 @@ export class PolishedEditor extends CustomEditor {
 		setWorkingIndicator(indicator);
 	}
 
-	[SPLIT_POLISHED_FRAME](lines: string[]): PolishedFrameSplit | undefined {
+	[SPLIT_POLISHED_FRAME](lines: readonly string[]): PolishedFrameSplit | undefined {
 		return splitDrawnFrame(this.lastFrame, lines, this.getConfig(), this.uiTheme);
 	}
 }
@@ -742,7 +742,7 @@ export class WrappedPolishedEditor implements EditorComponent {
 		setWorkingIndicator(indicator);
 	}
 
-	[SPLIT_POLISHED_FRAME](lines: string[]): PolishedFrameSplit | undefined {
+	[SPLIT_POLISHED_FRAME](lines: readonly string[]): PolishedFrameSplit | undefined {
 		return splitDrawnFrame(this.lastFrame, lines, this.getConfig(), this.uiTheme);
 	}
 
