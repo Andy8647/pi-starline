@@ -480,14 +480,16 @@ subscriptions. Click it for the breakdown and the time each window resets.
 | ---------------- | ------------------------- | ------------------------------------------- |
 | DeepSeek         | `api.deepseek.com`        | Balance per currency, granted and topped up |
 | Moonshot         | `api.moonshot.cn`, `.ai`  | Balance, voucher and cash                   |
-| OpenRouter       | `openrouter.ai`           | Credits left (bought minus used)            |
+| OpenRouter       | `openrouter.ai`           | What is left of the key's credit limit      |
 | Kimi coding plan | `api.kimi.com/coding`     | The 5-hour and weekly windows               |
 | OpenAI Codex     | `chatgpt.com/backend-api` | The 5-hour and weekly windows, and the plan |
 
 The provider is recognised from the model's base URL, so a custom provider
 pointed at one of these hosts counts too, and a proxy in front of one does not.
 Anything else hides the pill, as does an answer it does not recognise: it never
-shows a `0` it did not read.
+shows a `0` it did not read. An OpenRouter key without a credit limit has nothing left to
+count down, so it shows nothing either; account-wide credits need a management
+key, which Pi does not use.
 
 **It is not in the bar by default.** Reading a balance sends the model's API key
 (or sign-in token) to that provider's own account endpoint, the host the model

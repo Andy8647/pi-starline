@@ -14,6 +14,7 @@
  * still how the pill learns them there.
  */
 
+import { createHash } from "node:crypto";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { PillAnchor, PillBubbleLine } from "../../types/pill-api";
 import {
@@ -37,14 +38,20 @@ type Host = {
 type Check = { reading: BalanceReading; at: number };
 
 type State = {
-	/** The account the numbers belong to, as its endpoint URL. */
+	/**
+	 * Who the numbers belong to: the provider, its endpoint and a hash of the
+	 * credential. Two DeepSeek keys share an endpoint and are still two accounts.
+	 */
+	account?: string;
 	source?: BalanceSource;
 	current?: Check;
 	/** The check before `current`, on the same account, for the change since. */
 	previous?: Check;
-	/** When a request last went out, successful or not. */
+	/**
+	 * When a check last started, whether or not it found a provider. Set either way,
+	 * so the render that starts the first check does not start one per frame.
+	 */
 	lastAttempt?: number;
-	inFlight?: Promise<void>;
 };
 
 /** Same account, same question: once a minute is plenty. */
@@ -55,6 +62,12 @@ let host: Host | undefined;
 let state: State = {};
 /** Bumped by `resetBalance`, so a request that outlives its session lands nowhere. */
 let generation = 0;
+let inFlight: Promise<void> | undefined;
+/**
+ * A check asked for while another ran: a model switch mid-request must not be
+ * lost, or the pill keeps the old account's number until the next turn.
+ */
+let pending: { ctx: ExtensionContext; force: boolean } | undefined;
 
 export function setBalanceHost(next: Host | undefined): void {
 	host = next;
@@ -63,18 +76,44 @@ export function setBalanceHost(next: Host | undefined): void {
 /** Forget everything. Session start and shutdown. */
 export function resetBalance(): void {
 	state = {};
+	pending = undefined;
 	generation += 1;
 }
 
-async function sourceFor(
+/**
+ * The credential Pi would send: an API key, or the bearer token an OAuth
+ * provider puts in `Authorization` instead (Kimi's subscription sign-in does).
+ */
+function credentialOf(auth: {
+	apiKey?: string;
+	headers?: Record<string, unknown>;
+}): string | undefined {
+	if (auth.apiKey) return auth.apiKey;
+	for (const [name, value] of Object.entries(auth.headers ?? {})) {
+		if (name.toLowerCase() !== "authorization" || typeof value !== "string") continue;
+		const token = /^Bearer\s+(.+)$/i.exec(value.trim())?.[1];
+		if (token) return token;
+	}
+	return undefined;
+}
+
+async function accountFor(
 	ctx: ExtensionContext,
-): Promise<{ source: BalanceSource; apiKey: string } | undefined> {
+): Promise<{ source: BalanceSource; apiKey: string; account: string } | undefined> {
 	const model = ctx.model;
 	if (!model) return undefined;
+	const source = balanceSourceFor(model.baseUrl);
+	// Nothing to ask an unknown provider, so its credential is not even resolved.
+	if (!source) return undefined;
 	const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
-	if (!auth.ok || !auth.apiKey) return undefined;
-	const source = balanceSourceFor(auth.baseUrl ?? model.baseUrl);
-	return source && { source, apiKey: auth.apiKey };
+	if (!auth.ok) return undefined;
+	// Pi sends the request to `auth.baseUrl` when the credential carries one; the
+	// account endpoint has to be on that same host.
+	const target = auth.baseUrl ? balanceSourceFor(auth.baseUrl) : source;
+	const apiKey = credentialOf(auth);
+	if (!target || !apiKey) return undefined;
+	const hash = createHash("sha256").update(apiKey).digest("hex").slice(0, 16);
+	return { source: target, apiKey, account: `${model.provider}|${target.url}|${hash}` };
 }
 
 /**
@@ -82,50 +121,62 @@ async function sourceFor(
  * once-a-minute limit; a change of account always does.
  */
 export async function refreshBalance(ctx: ExtensionContext, force = false): Promise<void> {
-	if (!host?.isEnabled() || state.inFlight) return;
+	if (!host?.isEnabled()) return;
+	if (inFlight) {
+		pending = { ctx, force: force || (pending?.force ?? false) };
+		return;
+	}
 	const started = generation;
 	const run = (async () => {
-		let resolved: Awaited<ReturnType<typeof sourceFor>>;
+		const now = Date.now();
+		let resolved: Awaited<ReturnType<typeof accountFor>>;
 		try {
-			resolved = await sourceFor(ctx);
+			resolved = await accountFor(ctx);
 		} catch {
 			resolved = undefined;
 		}
 		if (started !== generation) return;
 		if (!resolved) {
-			// Not a provider this knows, or no key: nothing to show.
-			if (state.source) {
-				state = {};
-				host?.requestRender();
-			}
+			// Not a provider this knows, or no credential: nothing to show.
+			const shown = state.source !== undefined;
+			state = { lastAttempt: now };
+			if (shown) host?.requestRender();
 			return;
 		}
-		const { source, apiKey } = resolved;
-		const sameAccount = state.source?.url === source.url;
-		const now = Date.now();
+		const { source, apiKey, account } = resolved;
+		const sameAccount = state.account === account;
 		if (sameAccount && !force && state.lastAttempt && now - state.lastAttempt < MIN_INTERVAL_MS) {
 			return;
 		}
 		if (!sameAccount) {
-			state = { source };
+			state = { account, source };
 			host?.requestRender();
 		}
 		state.lastAttempt = now;
 		const reading = await fetchBalance(source, apiKey);
-		if (started !== generation || state.source?.url !== source.url) return;
+		if (started !== generation || state.account !== account) return;
 		// A failed check keeps the last number: a blip should not empty the pill.
 		if (!reading) return;
 		record(reading, Date.now());
 	})();
-	state.inFlight = run;
+	inFlight = run;
 	try {
 		await run;
 	} finally {
-		if (state.inFlight === run) state.inFlight = undefined;
+		inFlight = undefined;
+		const next = pending;
+		pending = undefined;
+		if (next && started === generation) void refreshBalance(next.ctx, next.force);
 	}
 }
 
 function record(reading: BalanceReading, at: number): void {
+	const last = state.current?.reading;
+	// Codex's headers carry the windows but not the plan; keep the plan the endpoint
+	// reported rather than dropping it from the bubble's title on every turn.
+	if (reading.kind === "quota" && !reading.plan && last?.kind === "quota" && last.plan) {
+		reading = { ...reading, plan: last.plan };
+	}
 	if (state.current) state.previous = state.current;
 	state.current = { reading, at };
 	host?.requestRender();
@@ -146,17 +197,18 @@ export function observeBalanceHeaders(headers: Record<string, string>): void {
 
 // ---- Formatting -----------------------------------------------------------------
 
-const SYMBOLS: Record<string, string> = { CNY: "¥", USD: "$", EUR: "€", GBP: "£", JPY: "¥" };
+const SYMBOLS: Record<string, string> = { CNY: "¥", USD: "$", EUR: "€", GBP: "£" };
 
 function money(amount: number, currency: string): string {
-	const digits = amount.toLocaleString("en-US", {
+	// Below a cent is zero, so a rounding remainder never reads as `-$0.00`.
+	const value = Math.abs(amount) < 0.005 ? 0 : amount;
+	const digits = Math.abs(value).toLocaleString("en-US", {
 		minimumFractionDigits: 2,
 		maximumFractionDigits: 2,
 	});
+	const sign = value < 0 ? "-" : "";
 	const symbol = SYMBOLS[currency];
-	return symbol
-		? `${amount < 0 ? "-" : ""}${symbol}${digits.replace("-", "")}`
-		: `${digits} ${currency}`;
+	return symbol ? `${sign}${symbol}${digits}` : `${sign}${digits} ${currency}`;
 }
 
 /** The amount the pill shows: the first currency with money in it. */
@@ -185,7 +237,7 @@ export function balancePillText(reading: BalanceReading | undefined, icon: strin
 export function balancePillLabel(ctx: ExtensionContext, icon: string): string {
 	// The first render after the pill is added is what starts the first check, so
 	// adding it in `/starline` shows a number without waiting for the next turn.
-	if (!state.lastAttempt && !state.inFlight) void refreshBalance(ctx);
+	if (!state.lastAttempt && !inFlight) void refreshBalance(ctx);
 	return balancePillText(state.current?.reading, icon);
 }
 

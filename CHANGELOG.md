@@ -15,8 +15,9 @@ npm.
 ### Added
 
 - **A `balance` pill.** What is left on the account the current model bills to:
-  the balance for DeepSeek, Moonshot and OpenRouter, and the share of each usage
-  window left for the Kimi coding plan and OpenAI Codex. Click it for the
+  the balance for DeepSeek and Moonshot, what is left of an OpenRouter key's
+  credit limit, and the share of each usage window left for the Kimi coding
+  plan and OpenAI Codex. Click it for the
   breakdown (granted and topped-up money, when each window resets, what changed
   since the last check). The provider is recognised from the model's base URL,
   and anything it does not recognise hides the pill rather than showing a `0`.

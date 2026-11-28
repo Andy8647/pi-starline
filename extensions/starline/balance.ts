@@ -50,7 +50,7 @@ export type BalanceSource = {
 
 type Fetch = (
 	url: string,
-	init: { headers: Record<string, string>; signal?: AbortSignal },
+	init: { headers: Record<string, string>; redirect?: "error"; signal?: AbortSignal },
 ) => Promise<{
 	ok: boolean;
 	status: number;
@@ -58,6 +58,8 @@ type Fetch = (
 }>;
 
 const TIMEOUT_MS = 10_000;
+/** Longer than any usage window these providers have (Kimi's and Codex's are a week). */
+const MAX_RESET_MS = 35 * 86_400_000;
 
 /**
  * Which provider a model bills to, from its base URL. `undefined` for anything
@@ -89,7 +91,8 @@ export function balanceSourceFor(baseUrl: string | undefined): BalanceSource | u
 		return {
 			id: "openrouter",
 			name: "OpenRouter",
-			url: `${url.origin}/api/v1/credits`,
+			// `/credits` answers management keys only; `/key` answers the key in use.
+			url: `${url.origin}/api/v1/key`,
 			currency: "USD",
 		};
 	}
@@ -139,8 +142,10 @@ export async function fetchBalance(
 	}
 	let body: unknown;
 	try {
+		// A redirect would carry the account headers to wherever it points.
 		const response = await doFetch(source.url, {
 			headers,
+			redirect: "error",
 			signal: AbortSignal.timeout(TIMEOUT_MS),
 		});
 		if (!response.ok) return undefined;
@@ -239,24 +244,23 @@ function parseMoonshot(body: unknown, currency: string): BalanceReading | undefi
 	return { kind: "money", amounts: [{ currency, total, ...(parts.length > 0 && { parts }) }] };
 }
 
-/** `{"data":{"total_credits","total_usage"}}`, in US dollars. */
+/**
+ * `{"data":{"limit","usage","limit_remaining",…}}` for the key in use, in US
+ * dollars. A key without a credit limit has nothing left to count down
+ * (`limit_remaining: null`), so there is no balance to show.
+ */
 function parseOpenRouter(body: unknown): BalanceReading | undefined {
 	const data = record(record(body)?.data);
-	const credits = number(data?.total_credits);
-	const usage = number(data?.total_usage);
-	if (credits === undefined || usage === undefined) return undefined;
+	const remaining = number(data?.limit_remaining);
+	if (remaining === undefined) return undefined;
+	const parts: Array<{ label: string; amount: number }> = [];
+	const limit = number(data?.limit);
+	const usage = number(data?.usage);
+	if (limit !== undefined) parts.push({ label: "limit", amount: limit });
+	if (usage !== undefined) parts.push({ label: "used", amount: usage });
 	return {
 		kind: "money",
-		amounts: [
-			{
-				currency: "USD",
-				total: credits - usage,
-				parts: [
-					{ label: "bought", amount: credits },
-					{ label: "used", amount: usage },
-				],
-			},
-		],
+		amounts: [{ currency: "USD", total: remaining, ...(parts.length > 0 && { parts }) }],
 	};
 }
 
@@ -284,7 +288,8 @@ function parseKimiCoding(body: unknown, now: number): BalanceReading | undefined
 	}
 	const weekly = record(root.usage);
 	const weeklyUsed = usedPercent(weekly);
-	if (weeklyUsed !== undefined) {
+	// The plan's weekly allowance, unless `limits` already listed a 7-day window.
+	if (weeklyUsed !== undefined && !windows.some((entry) => entry.label === "7d")) {
 		windows.push(window(7 * 86_400, weeklyUsed, resetTime(weekly), now));
 	}
 	return windows.length > 0 ? { kind: "quota", windows } : undefined;
@@ -360,8 +365,9 @@ function window(
 	return {
 		label: windowLabel(seconds),
 		usedPercent: Math.min(100, Math.max(0, used)),
-		// A reset in the past is stale: the window has rolled over since.
-		...(resetsAt !== undefined && resetsAt > now && { resetsAt }),
+		// A reset in the past is stale: the window has rolled over since. One further
+		// out than any window lasts is a unit mistake, not a date to show.
+		...(resetsAt !== undefined && resetsAt > now && resetsAt - now <= MAX_RESET_MS && { resetsAt }),
 	};
 }
 

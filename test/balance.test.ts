@@ -11,6 +11,7 @@ import {
 } from "../extensions/starline/balance";
 import {
 	balanceBubbleLines,
+	balancePillLabel,
 	balancePillText,
 	observeBalanceHeaders,
 	refreshBalance,
@@ -56,8 +57,8 @@ const MOONSHOT = {
 	status: true,
 };
 
-// OpenRouter's documented `/api/v1/credits`.
-const OPENROUTER = { data: { total_credits: 20, total_usage: 7.25 } };
+// OpenRouter's documented `/api/v1/key`, for a key with a credit limit.
+const OPENROUTER = { data: { label: "pi", limit: 20, usage: 7.25, limit_remaining: 12.75 } };
 
 // The shape kimi-cli's `/usage` reads: numbers arrive as strings too.
 const KIMI = {
@@ -99,9 +100,9 @@ describe("balanceSourceFor", () => {
 			currency: "CNY",
 		});
 		expect(source("https://api.moonshot.ai/v1").currency).toBe("USD");
-		expect(source("https://openrouter.ai/api/v1").url).toBe("https://openrouter.ai/api/v1/credits");
+		expect(source("https://openrouter.ai/api/v1").url).toBe("https://openrouter.ai/api/v1/key");
 		expect(source("https://us.openrouter.ai/api/v1").url).toBe(
-			"https://us.openrouter.ai/api/v1/credits",
+			"https://us.openrouter.ai/api/v1/key",
 		);
 		expect(source("https://api.kimi.com/coding/v1").url).toBe(
 			"https://api.kimi.com/coding/v1/usages",
@@ -158,9 +159,36 @@ describe("parseBalance", () => {
 		});
 	});
 
-	it("reads OpenRouter as credits bought minus credits used", () => {
+	it("reads what is left of the OpenRouter key's credit limit", () => {
 		const reading = parseBalance(source("https://openrouter.ai/api/v1"), OPENROUTER, NOW);
 		expect(reading).toMatchObject({ kind: "money", amounts: [{ currency: "USD", total: 12.75 }] });
+	});
+
+	it("has no OpenRouter balance for a key without a limit", () => {
+		const unlimited = { data: { label: "pi", limit: null, usage: 3, limit_remaining: null } };
+		expect(parseBalance(source("https://openrouter.ai/api/v1"), unlimited, NOW)).toBeUndefined();
+	});
+
+	it("does not add Kimi's weekly allowance twice", () => {
+		const both = {
+			...KIMI,
+			limits: [
+				...KIMI.limits,
+				{ window: { duration: 7, timeUnit: "TIME_UNIT_DAY" }, detail: { limit: 10, used: 1 } },
+			],
+		};
+		const reading = parseBalance(source("https://api.kimi.com/coding/v1"), both, NOW);
+		expect(reading?.kind === "quota" && reading.windows.map((entry) => entry.label)).toEqual([
+			"5h",
+			"7d",
+		]);
+	});
+
+	it("drops a reset time further out than any window lasts", () => {
+		const millis = structuredClone(CODEX);
+		millis.rate_limit.primary_window.reset_at = NOW + 7_200_000;
+		const reading = parseBalance(source("https://chatgpt.com/backend-api"), millis, NOW);
+		expect(reading?.kind === "quota" && reading.windows[0]?.resetsAt).toBeUndefined();
 	});
 
 	it("reads the Kimi coding plan's windows, short ones first, from used or remaining", () => {
@@ -330,6 +358,15 @@ describe("balanceBubbleLines", () => {
 		expect(lines).toEqual(["CNY  ¥100.00  ▼ ¥2.50 since 5m ago", "     granted ¥1.00"]);
 	});
 
+	it("never shows a rounding remainder as minus zero", () => {
+		const lines = balanceBubbleLines(
+			{ reading: { kind: "money", amounts: [{ currency: "USD", total: -0.001 }] }, at: NOW },
+			undefined,
+			NOW,
+		);
+		expect(lines).toEqual(["USD  $0.00"]);
+	});
+
 	it("says nothing about a change when there was none", () => {
 		const lines = balanceBubbleLines(
 			{ reading: money(100), at: NOW },
@@ -354,10 +391,21 @@ describe("refreshBalance", () => {
 	let renders = 0;
 	const fetchMock = vi.fn();
 
-	function ctxFor(baseUrl: string, apiKey = "sk-test"): ExtensionContext {
+	const resolveAuth = vi.fn();
+
+	function ctxFor(
+		baseUrl: string,
+		apiKey = "sk-test",
+		options: { provider?: string; headers?: Record<string, string> } = {},
+	): ExtensionContext {
 		return {
-			model: { provider: "p", id: "m", baseUrl },
-			modelRegistry: { getApiKeyAndHeaders: async () => ({ ok: true, apiKey }) },
+			model: { provider: options.provider ?? "p", id: "m", baseUrl },
+			modelRegistry: {
+				getApiKeyAndHeaders: async () => {
+					resolveAuth();
+					return options.headers ? { ok: true, headers: options.headers } : { ok: true, apiKey };
+				},
+			},
 		} as unknown as ExtensionContext;
 	}
 
@@ -367,6 +415,7 @@ describe("refreshBalance", () => {
 		resetBalance();
 		setBalanceHost({ isEnabled: () => enabled, requestRender: () => (renders += 1) });
 		fetchMock.mockReset();
+		resolveAuth.mockReset();
 		fetchMock.mockImplementation(async () => ({
 			ok: true,
 			status: 200,
@@ -386,9 +435,58 @@ describe("refreshBalance", () => {
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
 
-	it("asks nothing for a provider it does not know", async () => {
+	it("asks nothing for a provider it does not know, and does not even resolve its key", async () => {
 		await refreshBalance(ctxFor("https://api.openai.com/v1"));
 		expect(fetchMock).not.toHaveBeenCalled();
+		expect(resolveAuth).not.toHaveBeenCalled();
+	});
+
+	it("does not start a check on every render once one has run", async () => {
+		// A known provider with no credential: each check resolves auth and stops there.
+		const ctx = ctxFor("https://api.deepseek.com", "");
+		balancePillLabel(ctx, "$");
+		await vi.waitFor(() => expect(resolveAuth).toHaveBeenCalledTimes(1));
+		for (let frame = 0; frame < 5; frame += 1) balancePillLabel(ctx, "$");
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(resolveAuth).toHaveBeenCalledTimes(1);
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it("takes the bearer token from the headers when the sign-in gives no API key", async () => {
+		await refreshBalance(
+			ctxFor("https://api.kimi.com/coding/v1", "", {
+				headers: { Authorization: "Bearer oauth-token" },
+			}),
+		);
+		expect(fetchMock).toHaveBeenCalledWith(
+			"https://api.kimi.com/coding/v1/usages",
+			expect.objectContaining({
+				headers: expect.objectContaining({ Authorization: "Bearer oauth-token" }),
+			}),
+		);
+	});
+
+	it("treats another key on the same endpoint as another account", async () => {
+		await refreshBalance(ctxFor("https://api.deepseek.com", "work-key", { provider: "ds-work" }));
+		await refreshBalance(ctxFor("https://api.deepseek.com", "home-key", { provider: "ds-home" }));
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
+
+	it("does not lose a model switch that arrives while a check is running", async () => {
+		let release: () => void = () => {};
+		fetchMock.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					release = () => resolve({ ok: true, status: 200, json: async () => DEEPSEEK });
+				}),
+		);
+		const first = refreshBalance(ctxFor("https://api.deepseek.com"));
+		await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+		await refreshBalance(ctxFor("https://openrouter.ai/api/v1"));
+		release();
+		await first;
+		await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+		expect(fetchMock.mock.calls[1]?.[0]).toBe("https://openrouter.ai/api/v1/key");
 	});
 
 	it("asks once a minute for the same account, unless forced", async () => {
@@ -406,7 +504,7 @@ describe("refreshBalance", () => {
 		await refreshBalance(ctxFor("https://openrouter.ai/api/v1"));
 		expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
 			"https://api.deepseek.com/user/balance",
-			"https://openrouter.ai/api/v1/credits",
+			"https://openrouter.ai/api/v1/key",
 		]);
 	});
 
