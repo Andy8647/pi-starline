@@ -565,14 +565,25 @@ function formatSectionTabs(
 	return `  ${rendered.join(safeThemeFg(theme, "muted", " / "))}`;
 }
 
-function withSectionFooter(lines: string[], theme: ExtensionContext["ui"]["theme"]): string[] {
+/** The fixed part of Pi's key hint under a settings list; the keys around it vary. */
+const PI_HINT_JOINT = " to change · ";
+
+/**
+ * Adds the section keys to Pi's own key hint under the list.
+ *
+ * Pi builds that hint from the user's keybindings (`<confirm>/space to change ·
+ * <cancel> to cancel`), so the key names can be anything; only the ` to change · `
+ * joint is fixed. The section keys go in right after it, inside Pi's styling, and
+ * Pi's keys stay as Pi printed them.
+ */
+function withSectionFooter(lines: readonly string[]): string[] {
 	const next = [...lines];
 	for (let index = next.length - 1; index >= 0; index -= 1) {
-		if (next[index]?.includes("Enter/Space")) {
-			next[index] = safeThemeFg(
-				theme,
-				"muted",
-				"  Enter/Space to change · Tab/Shift+Tab to switch sections · Esc to close",
+		const line = next[index];
+		if (line?.includes(PI_HINT_JOINT)) {
+			next[index] = line.replace(
+				PI_HINT_JOINT,
+				`${PI_HINT_JOINT}tab/shift+tab to switch sections · `,
 			);
 			break;
 		}
@@ -859,7 +870,7 @@ export function registerStarlineSettingsCommand(pi: ExtensionAPI, deps: Settings
 							truncateToWidth(border, width, ""),
 							truncateToWidth(formatSectionTabs(activeSection, theme), width, ""),
 							truncateToWidth(border, width, ""),
-							...withSectionFooter(settingsList.render(width), theme).map((line) =>
+							...withSectionFooter(settingsList.render(width)).map((line) =>
 								truncateToWidth(line, width, ""),
 							),
 							truncateToWidth(border, width, ""),

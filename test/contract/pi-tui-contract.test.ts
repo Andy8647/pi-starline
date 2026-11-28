@@ -25,8 +25,8 @@ const PATCHED_METHODS = [
 	"copyActiveSelectionToClipboard",
 	// The hover pointer watches where each move lands (mouse/pointer-shape.ts).
 	"handleMouseEvent",
-	// Cursor-marker dedupe during selection (mouse/cursor-marker.ts).
-	"applySelection",
+	// Keeps the selection hint's count current while a drag auto-scrolls.
+	"autoScrollSelection",
 ];
 
 // Read, not patched — the selection itself stays Pi's, and `hasOverlay` is

@@ -69,12 +69,12 @@ type WrappedEditor = EditorComponent &
 		setAutocompleteProvider?: (provider: AutocompleteProvider) => void;
 		setPaddingX?: (padding: number) => void;
 		setAutocompleteMaxVisible?: (maxVisible: number) => void;
-		[SPLIT_POLISHED_FRAME]?: (lines: string[]) => PolishedFrameSplit | undefined;
+		[SPLIT_POLISHED_FRAME]?: (lines: readonly string[]) => PolishedFrameSplit | undefined;
 	};
 
 type PolishedFrameOptions = {
 	width: number;
-	baseRendered: string[];
+	baseRendered: readonly string[];
 	autocompleteSource: AutocompleteEditorInternals;
 	uiTheme: Theme;
 	config: PolishedTuiConfig;
@@ -93,10 +93,10 @@ type PolishedFrameOptions = {
 	modeBorder?: (text: string) => string;
 	/** Reports what the frame drew: `handleMouse` bounds clicks by it, a wrapper splits by it. */
 	onFrame?: (frame: Omit<DrawnFrame, "lines">) => void;
-	splitBaseFrame?: (lines: string[]) => PolishedFrameSplit | undefined;
+	splitBaseFrame?: (lines: readonly string[]) => PolishedFrameSplit | undefined;
 };
 
-function clampRenderedLines(lines: string[], width: number): string[] {
+function clampRenderedLines(lines: readonly string[], width: number): string[] {
 	const maxWidth = Math.max(0, width);
 	return lines.map((line) => truncateToWidth(line, maxWidth, ""));
 }
@@ -227,7 +227,7 @@ function unwrapPolishedFrameOnly(
 }
 
 function splitPolishedFrame(
-	lines: string[],
+	lines: readonly string[],
 	config: PolishedTuiConfig,
 	uiTheme: Theme,
 ): PolishedFrameSplit | undefined {
@@ -250,7 +250,7 @@ function splitPolishedFrame(
  */
 function splitDrawnFrame(
 	drawn: DrawnFrame | undefined,
-	lines: string[],
+	lines: readonly string[],
 	config: PolishedTuiConfig,
 	uiTheme: Theme,
 ): PolishedFrameSplit | undefined {
@@ -390,19 +390,6 @@ export function translateEditorMouse<Event extends FrameMouseEvent>(
 		width,
 	};
 }
-
-/**
- * Pi's own click handling, resolved once at load.
- *
- * `Editor.handleMouse` only exists from pi-tui 1.4. The peer floor is older, so
- * the lookup is a plain property read that stays undefined on those builds rather
- * than a call the type system assumes is there.
- */
-const baseHandleMouse = (
-	CustomEditor.prototype as {
-		handleMouse?: (this: unknown, event: TuiMouseEvent) => TuiMouseEventResult | undefined;
-	}
-).handleMouse;
 
 function readVimStatus(editor: WrappedEditor, uiTheme: Theme): string | undefined {
 	const mode = editor.getMode?.();
@@ -608,7 +595,6 @@ export class PolishedEditor extends CustomEditor {
 	 * clicks and focus then come from Pi rather than from a patched press handler.
 	 */
 	override handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
-		if (typeof baseHandleMouse !== "function") return undefined;
 		const config = this.getConfig();
 		const { railWidth } = getEditorChromeWidths(config, this.uiTheme, "\x1b[0m");
 		const translated = translateEditorMouse(event, {
@@ -618,14 +604,14 @@ export class PolishedEditor extends CustomEditor {
 			fillerRows: this.lastFrame?.fillerRows ?? 0,
 		});
 		if (!translated) return undefined;
-		return baseHandleMouse.call(this, translated);
+		return super.handleMouse(translated);
 	}
 
 	setWorkingStatusIndicator(indicator: WorkingIndicator | undefined): void {
 		setWorkingIndicator(indicator);
 	}
 
-	[SPLIT_POLISHED_FRAME](lines: string[]): PolishedFrameSplit | undefined {
+	[SPLIT_POLISHED_FRAME](lines: readonly string[]): PolishedFrameSplit | undefined {
 		return splitDrawnFrame(this.lastFrame, lines, this.getConfig(), this.uiTheme);
 	}
 }
@@ -756,7 +742,7 @@ export class WrappedPolishedEditor implements EditorComponent {
 		setWorkingIndicator(indicator);
 	}
 
-	[SPLIT_POLISHED_FRAME](lines: string[]): PolishedFrameSplit | undefined {
+	[SPLIT_POLISHED_FRAME](lines: readonly string[]): PolishedFrameSplit | undefined {
 		return splitDrawnFrame(this.lastFrame, lines, this.getConfig(), this.uiTheme);
 	}
 

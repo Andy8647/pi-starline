@@ -790,7 +790,7 @@ describe("Pi docs compliance", () => {
 		const thirdPartyModelRender = function thirdPartyModelRender(
 			this: unknown,
 			width: number,
-		): string[] {
+		): readonly string[] {
 			return modelStarlineWrapper.call(this as never, width);
 		};
 		ModelSelectorComponent.prototype.render = thirdPartyModelRender;
@@ -1965,7 +1965,9 @@ describe("Pi docs compliance", () => {
 		expect(themeLines.join("\n")).toContain("Features");
 		expect(themeLines.join("\n")).toContain("Layout");
 		expect(themeLines.join("\n")).toContain("Extension segments");
-		expect(themeLines.join("\n")).toContain("Tab/Shift+Tab to switch sections");
+		expect(themeLines.join("\n")).toContain(
+			"enter/space to change · tab/shift+tab to switch sections · escape/ctrl+c to cancel",
+		);
 		expect(themeLines.at(-1)).toContain("[borderMuted]────");
 		expect(themeLines.every((line) => visibleWidth(stripTestTags(line)) <= settingsWidth)).toBe(
 			true,

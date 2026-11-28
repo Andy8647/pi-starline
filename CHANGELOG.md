@@ -18,12 +18,34 @@ npm.
   `+2` when the session has other branches. Click it for the session drawn as a
   tree of the messages you sent: a straight conversation is one column, and each
   place you went back and sent something else is a fork, so you can see where
-  each branch parted and how far it got. Long straight stretches fold to `⋮ N turns`. Clicking a turn opens Pi's own `/tree` with that turn selected,
+  each branch parted and how far it got. Long straight stretches fold to
+  `⋮ N turns`. Clicking a turn opens Pi's own `/tree` with that turn selected,
   so going back, previewing and summarizing the branch you leave all work the way
   they do there. A session made with `/fork` says which session it came from,
   and clicking that line opens it. **Copy this branch into a new session** is
   `/clone`. From the keyboard: `/starline tree`, `/starline tree clone` and
   `/starline tree parent`.
+
+### Changed
+
+- **Starline now needs Pi 1.5.1 or newer.** Pi 1.5.1 fixed the cursor-marker leak
+  behind garbled text while drag-selecting in the editor
+  ([earendil-works/pi#9441](https://github.com/earendil-works/pi/pull/9441)), so
+  Starline's own workaround for it is gone, and it no longer wraps Pi's
+  `applySelection`. On an older Pi, drag-selecting in Ghostty garbles text again:
+  update Pi.
+
+### Fixed
+
+- **`/starline` lost its "switch sections" hint on Pi 1.6 and later.** Pi now
+  builds the key hint under the settings list from your keybindings, in lower
+  case, and Starline only recognised the old wording. The section keys are now
+  added into Pi's own hint, so the confirm and cancel keys it shows are the ones
+  you actually have bound.
+- **The "N characters selected" count stopped updating while a drag
+  auto-scrolled**, on Pi 1.6 and later. Pi no longer redraws the editor while it
+  scrolls a selection, so the count stayed at whatever it was when the pointer
+  left the view. Starline now asks for that redraw while the hint is showing.
 
 ## [0.13.0] - 2026-11-12
 
