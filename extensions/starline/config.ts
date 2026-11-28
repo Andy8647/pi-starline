@@ -228,11 +228,15 @@ export type PolishedTuiConfig = {
 		subagents: ColorSpec;
 		cwd: ColorSpec;
 		sessionName: ColorSpec;
+		/** The session-tree pill: on screen once the session has a message. */
+		tree: ColorSpec;
 		gitBranch: ColorSpec;
 		contextNormal: ColorSpec;
 		contextWarning: ColorSpec;
 		contextError: ColorSpec;
 		cost: ColorSpec;
+		/** Money or quota left on the current model's account. */
+		balance: ColorSpec;
 		/** Decode throughput of the latest assistant message. */
 		tps: ColorSpec;
 		/** Throughput well below this session's usual rate. Defaults to `colors.tps` when empty. */
@@ -301,11 +305,13 @@ export const defaultConfig: PolishedTuiConfig = {
 		subagents: "bold green",
 		cwd: "bold cyan",
 		sessionName: "bold green",
+		tree: "bold magenta",
 		gitBranch: "bold purple",
 		contextNormal: "bright-black",
 		contextWarning: "bold yellow",
 		contextError: "bold red",
 		cost: "bold green",
+		balance: "bold yellow",
 		tps: "bright-black",
 		tpsSlow: "yellow",
 		tpsFast: "bold green",
@@ -548,11 +554,13 @@ function normalizeColors(record: Record<string, unknown>): Partial<PolishedTuiCo
 		subagents: colorValue(record, "subagents"),
 		cwd: colorValue(record, "cwd") ?? colorValue(record, "cwdText"),
 		sessionName: colorValue(record, "sessionName"),
+		tree: colorValue(record, "tree"),
 		gitBranch: colorValue(record, "gitBranch") ?? colorValue(record, "git"),
 		contextNormal: colorValue(record, "contextNormal"),
 		contextWarning: colorValue(record, "contextWarning"),
 		contextError: colorValue(record, "contextError"),
 		cost: colorValue(record, "cost"),
+		balance: colorValue(record, "balance"),
 		tps: colorValue(record, "tps"),
 		tpsSlow: colorValue(record, "tpsSlow"),
 		tpsFast: colorValue(record, "tpsFast"),

@@ -25,8 +25,8 @@ const PATCHED_METHODS = [
 	"copyActiveSelectionToClipboard",
 	// The hover pointer watches where each move lands (mouse/pointer-shape.ts).
 	"handleMouseEvent",
-	// Cursor-marker dedupe during selection (mouse/cursor-marker.ts).
-	"applySelection",
+	// Keeps the selection hint's count current while a drag auto-scrolls.
+	"autoScrollSelection",
 ];
 
 // Read, not patched — the selection itself stays Pi's, and `hasOverlay` is
@@ -121,5 +121,12 @@ describe("coding-agent contract", () => {
 
 	it("InteractiveMode exposes renderWidgetContainer as a replaceable method", () => {
 		expectReplaceable(InteractiveMode.prototype, "InteractiveMode", "renderWidgetContainer");
+	});
+
+	// A click in the tree bubble opens Pi's own /tree on the turn (tree-pill.ts).
+	it("InteractiveMode exposes showTreeSelector for the tree bubble", () => {
+		expect(typeof descriptorInChain(InteractiveMode.prototype, "showTreeSelector")?.value).toBe(
+			"function",
+		);
 	});
 });

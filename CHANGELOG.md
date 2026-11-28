@@ -10,6 +10,67 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
+## [0.14.0] - 2026-11-28
+
+Two new pills: the session drawn as a tree of your messages, and what is left on
+the account the current model bills to. Starline now needs Pi 1.5.1 or newer, and
+catches up with Pi 1.6's rendering changes.
+
+### Added
+
+- **A tree pill.** The bar gets `⑂`, plus the label of the branch you are on and
+  `+2` when the session has other branches. Click it for the session drawn as a
+  tree of the messages you sent: a straight conversation is one column, and each
+  place you went back and sent something else is a fork, so you can see where
+  each branch parted and how far it got. Long straight stretches fold to
+  `⋮ N turns`. Clicking a turn opens Pi's own `/tree` with that turn selected,
+  so going back, previewing and summarizing the branch you leave all work the way
+  they do there. A session made with `/fork` says which session it came from,
+  and clicking that line opens it. **Copy this branch into a new session** is
+  `/clone`. From the keyboard: `/starline tree`, `/starline tree clone` and
+  `/starline tree parent`.
+- **A `balance` pill.** What is left on the account the current model bills to:
+  the balance for DeepSeek and Moonshot, what is left of an OpenRouter key's
+  credit limit, and the share of each usage window left for the Kimi coding
+  plan and OpenAI Codex. Click it for the breakdown (granted and topped-up money,
+  when each window resets, what changed since the last check). The provider is recognised from the model's base URL,
+  and anything it does not recognise hides the pill rather than showing a `0`.
+  **It is off by default**: reading a balance sends the model's key to the
+  provider's own account endpoint, so add `balance` in the **Pills** tab of
+  `/starline` if you want it. It checks when it first appears, on a model
+  switch, and after each turn, at most once a minute per account.
+- This replaces `@andy8647/pi-balance`. With both installed you get two balance
+  pills; uninstall `pi-balance` and swap `extensionStatus:provider-balance` for
+  `balance` in `pill.segments`.
+
+### Changed
+
+- **Starline now needs Pi 1.5.1 or newer.** Pi 1.5.1 fixed the cursor-marker leak
+  behind garbled text while drag-selecting in the editor
+  ([earendil-works/pi#9441](https://github.com/earendil-works/pi/pull/9441)), so
+  Starline's own workaround for it is gone, and it no longer wraps Pi's
+  `applySelection`. On an older Pi, drag-selecting in Ghostty garbles text again:
+  update Pi.
+
+### Fixed
+
+- **`/starline` lost its "switch sections" hint on Pi 1.6 and later.** Pi now
+  builds the key hint under the settings list from your keybindings, in lower
+  case, and Starline only recognised the old wording. The section keys are now
+  added into Pi's own hint, so the confirm and cancel keys it shows are the ones
+  you actually have bound.
+- **The "N characters selected" count stopped updating while a drag
+  auto-scrolled**, on Pi 1.6 and later. Pi no longer redraws the editor while it
+  scrolls a selection, so the count stayed at whatever it was when the pointer
+  left the view. Starline now asks for that redraw while the hint is showing.
+
+**Notes**
+
+- DeepSeek was checked against a live account. Moonshot and OpenRouter follow
+  their published APIs. The Kimi coding plan and Codex have no published account
+  API: they follow what the Kimi and Codex command-line tools read, and were not
+  checked against a live account.
+
 ## [0.13.0] - 2026-11-12
 
 One addition: the right end of the editor's top rule is now a published slot, so an

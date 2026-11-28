@@ -21,6 +21,7 @@ Starline makes Pi's fullscreen mode feel like a finished terminal app:
 - A colour palette with `$name` references; the bar is built from `pill.segments`, in your order.
 - One `git` pill: branch, dirty markers and any operation in progress together. Click it for the changed files, ahead/behind and stashes. The list is read-only, because an agent may be running in the same tree.
 - One `context` pill: the percentage, and nothing else. Click it for the window size, tokens used, session in/out totals and the cache rate.
+- An optional `balance` pill: money or quota left on the account the current model bills to (DeepSeek, Moonshot, OpenRouter, the Kimi coding plan, OpenAI Codex). Click it for the breakdown and when each window resets. Off by default, since it sends your key to the provider's account endpoint.
 - Other extensions' statuses from `ctx.ui.setStatus()` as pills, on either side or in the middle.
 - The model pill's icon spins while the agent works, and the pill counts the run's elapsed time; when the run ends the number stays as the total it reached.
 - No git pill on the bar means no `git status`: the refresh only reads the repository when something on the bar shows it.
@@ -32,6 +33,7 @@ Starline makes Pi's fullscreen mode feel like a finished terminal app:
 - **Queue:** an inbox icon and a count while messages wait; click to read them.
 - **Subagents:** with [pi-subagents](https://github.com/nicobailon/pi-subagents), a count of running subagents; click for agent, model, time and tokens, live.
 - **Context:** click for the window split into what fills it — system prompt, tool schemas, MCP tools, memory, skills and the conversation — as a grid with a legend, plus the session's token totals.
+- **Tree:** the branch you are on, and how many others exist; click it for the session drawn as a tree of your messages, where a click opens that turn in `/tree`. `/starline tree` does the same from the keyboard.
 - **Throughput:** the last reply's tokens per second; click for a scatter of every reply's rate against how full the context was, coloured by how fast it ran.
 - **Your extension's pill:** a small published API lets any extension open the same bubble with its own content. See [Clickable pills for other extensions](https://github.com/Andy8647/pi-starline/blob/main/docs/pill-api.md).
 - **Your extension's hint:** the right end of the editor's top rule is another published slot, so an extension can say one thing there without spending a row. See [Hints on the editor's top rule](https://github.com/Andy8647/pi-starline/blob/main/docs/editor-hints.md).
@@ -62,7 +64,7 @@ A session as a whole: the transcript above, the editor frame in the middle, the 
 
 ## Install
 
-Needs **Pi 0.84.4 or newer** (0.85.0 or newer for clickable pills) and a [Nerd Font](https://www.nerdfonts.com/) (or set `icons.mode` to `"ascii"`).
+Needs **Pi 1.5.1 or newer** and a [Nerd Font](https://www.nerdfonts.com/) (or set `icons.mode` to `"ascii"`).
 
 ```bash
 pi install npm:pi-starline

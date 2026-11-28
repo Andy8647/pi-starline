@@ -5,6 +5,7 @@ import {
 	truncateToWidth,
 	visibleWidth,
 } from "@earendil-works/pi-tui";
+import { balancePillLabel } from "./balance-pill";
 import {
 	type ColorSpec,
 	getExtensionStatusColor,
@@ -40,6 +41,7 @@ import { renderStyleForSource } from "./style";
 import { subagentsSegmentText } from "./subagent-fleet";
 import { activeTpsHistory } from "./tps-history";
 import { medianTps, tpsTierFor } from "./tps-tier";
+import { treePillLabel } from "./tree-pill";
 import type { TurnTiming } from "./turn-clock";
 import { modelPillLabel } from "./working-indicator";
 
@@ -55,8 +57,7 @@ const PREVIOUS_PROMPT_LABEL = "⇡";
 const LATEST_MESSAGE_LABEL = "⇣";
 
 /**
- * Pi's component mouse event and result. Pi dispatches to `handleMouse` from
- * pi-tui 0.85.0; on 0.84.x the method is simply never called.
+ * Pi's component mouse event and result, which Pi dispatches to `handleMouse`.
  */
 export type FooterMouseEvent = TuiMouseEvent;
 
@@ -444,6 +445,13 @@ export function installFooter(
 							return cwdLabel;
 						case "session_name":
 							return sessionNameLabel;
+						case "tree":
+							return renderStyleForSource(
+								theme,
+								colorSource,
+								config.colors.tree,
+								treePillLabel(ctx, config.icons.tree),
+							);
 						case "git":
 							return git.label;
 						case "previous_prompt":
@@ -494,6 +502,13 @@ export function installFooter(
 							return renderStyleForSource(theme, colorSource, contextColor, contextDisplay);
 						case "cost":
 							return renderStyleForSource(theme, colorSource, config.colors.cost, costDisplay);
+						case "balance":
+							return renderStyleForSource(
+								theme,
+								colorSource,
+								config.colors.balance,
+								balancePillLabel(ctx, config.icons.balance),
+							);
 						case "tps":
 							return renderStyleForSource(theme, colorSource, tpsColor, tpsDisplay);
 						case "package_version":
@@ -554,6 +569,8 @@ export function installFooter(
 							return config.colors.cwd;
 						case "sessionName":
 							return config.colors.sessionName;
+						case "tree":
+							return config.colors.tree;
 						case "git":
 							return config.colors.gitBranch;
 						case "gitCommit":
@@ -569,6 +586,8 @@ export function installFooter(
 							return contextColor;
 						case "cost":
 							return config.colors.cost;
+						case "balance":
+							return config.colors.balance;
 						case "tps":
 							return tpsColor;
 						case "sessionDuration":

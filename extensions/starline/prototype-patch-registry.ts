@@ -6,11 +6,12 @@ type PrototypePatchAdapter =
 	| "mouse-wheel"
 	| "mouse-selection-event"
 	| "mouse-copy"
-	| "selection-marker-dedupe"
+	| "mouse-selection-autoscroll"
 	| "agent-session-capture-prompt"
 	| "agent-session-capture-usage"
 	| "pending-messages-hide"
 	| "above-editor-gap-hide"
+	| "tree-selector-host"
 	| "scroll-to-end-indicator-hide"
 	| "mouse-pointer-shape";
 

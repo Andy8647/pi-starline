@@ -14,6 +14,7 @@
 
 import type { ExtensionContext, SlashCommandInfo } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
+import { showBalanceBubble } from "./balance-pill";
 import { statusCommandName } from "./config";
 import { collectContextBreakdown, contextBubbleContent, probeFor } from "./context-breakdown";
 import { activeContextSnapshot } from "./context-live";
@@ -42,6 +43,7 @@ import type { ThemeLike } from "./style";
 import { type FleetSnapshot, getActiveSubagentFleet } from "./subagent-fleet";
 import { activeTpsHistory, tpsBubbleContent } from "./tps-history";
 import { jumpToLatestMessage, jumpToPreviousPrompt } from "./transcript-jump";
+import { showTreeBubble } from "./tree-pill";
 
 /** What an action gets: the session, and where the pill is if a click found it. */
 export type PillActionContext = {
@@ -677,6 +679,12 @@ export const PILL_ACTIONS: Readonly<Partial<Record<string, PillAction>>> = {
 	subagents: showSubagents,
 	thinking: showThinkingLevel,
 	tps: showTps,
+	balance: ({ ctx, pill }) => {
+		showBalanceBubble(ctx, pill);
+	},
+	tree: ({ ctx, pill }) => {
+		showTreeBubble(ctx, pill);
+	},
 };
 
 /**
