@@ -42,6 +42,7 @@ import {
 } from "./pill-config";
 import type { SessionLifecycle } from "./session-lifecycle";
 import { EDITOR_BORDER_STYLE, renderChromeBorder, safeThemeFg } from "./style";
+import { parseTreeCommand, runTreeCommand } from "./tree-pill";
 
 const colorSourceValues: ColorSource[] = ["theme", "terminal"];
 const extensionStatusPlacementValues: ExtensionStatusPlacement[] = [
@@ -596,6 +597,16 @@ export function registerStarlineSettingsCommand(pi: ExtensionAPI, deps: Settings
 		getArgumentCompletions: argumentCompletions,
 		handler: async (_args, ctx) => {
 			const args = typeof _args === "string" ? _args : "";
+
+			// Session-tree verbs need a command context (fork / switchSession), so they
+			// are dispatched here and the bubble rows reach them by sending this same
+			// command. A bare `tree` falls through to the pill action below and opens
+			// the bubble instead.
+			const treeCommand = parseTreeCommand(args);
+			if (treeCommand) {
+				await runTreeCommand(ctx, treeCommand.verb);
+				return;
+			}
 
 			const directCommand = parseDirectFeatureCommand(args, deps.getConfig());
 			if (directCommand) {

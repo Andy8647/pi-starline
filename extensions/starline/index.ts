@@ -85,6 +85,7 @@ import {
 import { contextPercentAfter, setTpsHistory, TPS_ENTRY_TYPE, TpsHistory } from "./tps-history";
 import { resetTpsTier } from "./tps-tier";
 import { installTranscriptJump } from "./transcript-jump";
+import { installTreeSelectorHost, resetTreeCache, setTreeHost } from "./tree-pill";
 import { TurnClock } from "./turn-clock";
 import { PolishedEditor, WrappedPolishedEditor } from "./ui";
 import { setWorkingIndicator } from "./working-indicator";
@@ -131,6 +132,15 @@ export default function (pi: ExtensionAPI) {
 	// finds it, whichever order the extensions were loaded in.
 	publishPillApi();
 	publishEditorHintApi();
+	// The tree bubble's rows act by sending `/starline tree …`: only a command
+	// handler gets the context that can clone or switch a session. `prompt()`
+	// resolves extension commands before the model sees them, so this never turns
+	// into a chat message.
+	setTreeHost({
+		sendCommand: (commandText) => {
+			pi.sendUserMessage(commandText, { expandPromptTemplates: true });
+		},
+	});
 	// The context bubble needs the tool schemas and the compaction reserve, and
 	// neither is on the context a pill action gets; hold on to the API instead.
 	setContextApi({
@@ -169,6 +179,7 @@ export default function (pi: ExtensionAPI) {
 	let cleanupQueueRows: (() => void) | undefined;
 	let cleanupDockGap: () => void = () => {};
 	let cleanupTranscriptJump: () => void = () => {};
+	let cleanupTreeSelectorHost: () => void = () => {};
 
 	const refresh = () => {
 		if (sessionLifecycle.isCurrent()) requestFooterRender?.();
@@ -286,12 +297,19 @@ export default function (pi: ExtensionAPI) {
 		// Pi's own `↓ Jump to latest message` block is replaced by the `previousPrompt`
 		// and `latest` pills, so it is not drawn at all. See `transcript-jump.ts`.
 		cleanupTranscriptJump = installTranscriptJump();
+		// A click in the tree bubble opens Pi's own /tree. See `tree-pill.ts`.
+		cleanupTreeSelectorHost = installTreeSelectorHost();
 		prototypePatchesInstalled = true;
 		// Pi filled the slot once at startup, before this patch existed.
 		rebuildWidgetSlots(ctx);
 	};
 
 	const uninstallPrototypePatches = (ctx: ExtensionContext) => {
+		// The tree host wraps `renderWidgetContainer` on top of the dock gap, so it
+		// comes off first: the registry restores Pi's method only when the outermost
+		// wrapper leaves last.
+		cleanupTreeSelectorHost();
+		cleanupTreeSelectorHost = () => {};
 		cleanupPrototypePatches();
 		cleanupPrototypePatches = () => {};
 		cleanupDockGap();
@@ -696,6 +714,7 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("session_start", async (_event, ctx) => {
 		sessionLifecycle.start();
+		resetTreeCache();
 		liveContext.clear();
 		liveTps.clear();
 		turnClock.clear();
@@ -770,6 +789,7 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
+		resetTreeCache();
 		liveContext.clear();
 		liveTps.clear();
 		turnClock.clear();

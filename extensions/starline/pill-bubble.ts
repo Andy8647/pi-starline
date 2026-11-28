@@ -30,12 +30,7 @@ import {
 	visibleWidth,
 	wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
-import type {
-	PillAnchor,
-	PillBubbleContent,
-	PillBubbleHandle,
-	PillBubbleSource,
-} from "../../types/pill-api";
+import type { PillAnchor, PillBubbleContent, PillBubbleHandle } from "../../types/pill-api";
 import { requestPointerShape } from "./mouse/pointer-shape";
 import { contrastTextSgr } from "./pill";
 import { resolveBackgroundSgr, type ThemeLike, toForegroundSgr } from "./style";
@@ -49,6 +44,23 @@ export type {
 	PillBubbleLine,
 	PillBubbleSource,
 } from "../../types/pill-api";
+
+/**
+ * Layout knobs only Starline's own bubbles use. Kept out of the published
+ * `PillBubbleContent`: no other extension has asked for them, and a field in that
+ * file is a promise to every extension that compiles against it.
+ */
+export type StarlineBubbleContent = PillBubbleContent & {
+	/** Columns the bubble may grow to, instead of the usual 64. */
+	maxWidth?: number;
+	/**
+	 * Underline click targets. Off for a body where nearly every row is one: the
+	 * underlines then mark nothing, and the hover fill still shows what a click hits.
+	 */
+	underlineTargets?: boolean;
+};
+
+type StarlineBubbleSource = StarlineBubbleContent | (() => StarlineBubbleContent);
 
 const RESET = "\x1b[0m";
 const BOLD = "\x1b[1m";
@@ -120,7 +132,7 @@ function clamp(value: number, min: number, max: number): number {
  * it is at least wide enough for the opening over that pill.
  */
 export function pillBubbleWidth(
-	content: PillBubbleContent,
+	content: StarlineBubbleContent,
 	terminalWidth: number,
 	anchor?: PillAnchor,
 ): number {
@@ -134,7 +146,7 @@ export function pillBubbleWidth(
 		anchor?.startColumn !== undefined && anchor.endColumn !== undefined
 			? anchor.endColumn - anchor.startColumn + TAB_INSET * 2 + 2
 			: 0;
-	const ceiling = Math.max(8, Math.min(MAX_BUBBLE_WIDTH, terminalWidth - 4));
+	const ceiling = Math.max(8, Math.min(content.maxWidth ?? MAX_BUBBLE_WIDTH, terminalWidth - 4));
 	return Math.min(Math.max(MIN_BUBBLE_WIDTH, longest, pill), ceiling);
 }
 
@@ -197,7 +209,7 @@ export function pillBubblePlacement(
  * targets, refresh and the protocol do not depend on any of it.
  */
 function buildBubble(input: {
-	content: PillBubbleContent;
+	content: StarlineBubbleContent;
 	width: number;
 	background: string;
 	foreground?: string;
@@ -246,7 +258,13 @@ function buildBubble(input: {
 		// pill's colour while it is the selected one.
 		for (const wrapped of wrapTextWithAnsi(text, innerWidth)) {
 			if (isSelected) lines.push(selectedRow(wrapped));
-			else lines.push(row(wrapped, typeof entry === "string" ? "" : UNDERLINE));
+			else
+				lines.push(
+					row(
+						wrapped,
+						typeof entry === "string" || input.content.underlineTargets === false ? "" : UNDERLINE,
+					),
+				);
 		}
 		if (typeof entry !== "string" && lines.length > startLine) {
 			targets.push({ startLine, endLine: lines.length - 1, onSelect: entry.onSelect });
@@ -371,7 +389,7 @@ const ANIMATION_FRAME_MS = 16;
  */
 export function showPillBubble(
 	ctx: ExtensionContext,
-	source: PillBubbleSource,
+	source: StarlineBubbleSource,
 	anchor?: PillAnchor,
 ): PillBubbleHandle {
 	if (!ctx.hasUI) return closedHandle();
@@ -379,7 +397,7 @@ export function showPillBubble(
 	// leaving the first one underneath it.
 	closePillBubble();
 
-	const read = (): PillBubbleContent => (typeof source === "function" ? source() : source);
+	const read = (): StarlineBubbleContent => (typeof source === "function" ? source() : source);
 	const fallbackWidth = process.stdout.columns ?? 80;
 	const terminalWidth = anchor?.terminalWidth ?? fallbackWidth;
 

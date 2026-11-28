@@ -42,6 +42,7 @@ import type { ThemeLike } from "./style";
 import { type FleetSnapshot, getActiveSubagentFleet } from "./subagent-fleet";
 import { activeTpsHistory, tpsBubbleContent } from "./tps-history";
 import { jumpToLatestMessage, jumpToPreviousPrompt } from "./transcript-jump";
+import { showTreeBubble } from "./tree-pill";
 
 /** What an action gets: the session, and where the pill is if a click found it. */
 export type PillActionContext = {
@@ -677,6 +678,9 @@ export const PILL_ACTIONS: Readonly<Partial<Record<string, PillAction>>> = {
 	subagents: showSubagents,
 	thinking: showThinkingLevel,
 	tps: showTps,
+	tree: ({ ctx, pill }) => {
+		showTreeBubble(ctx, pill);
+	},
 };
 
 /**

@@ -12,6 +12,20 @@ npm.
 
 ## [Unreleased]
 
+### Added
+
+- **A tree pill.** The bar gets `⑂`, plus the label of the branch you are on and
+  `+2` when the session has other branches. Click it for the session drawn as a
+  tree of the messages you sent: a straight conversation is one column, and each
+  place you went back and sent something else is a fork, so you can see where
+  each branch parted and how far it got. Long straight stretches fold to
+  `⋮ N turns`. Clicking a turn opens Pi's own `/tree` with that turn selected,
+  so going back, previewing and summarizing the branch you leave all work the way
+  they do there. A session made with `/fork` says which session it came from,
+  and clicking that line opens it. **Copy this branch into a new session** is
+  `/clone`. From the keyboard: `/starline tree`, `/starline tree clone` and
+  `/starline tree parent`.
+
 ### Changed
 
 - **Starline now needs Pi 1.5.1 or newer.** Pi 1.5.1 fixed the cursor-marker leak

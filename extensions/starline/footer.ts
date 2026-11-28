@@ -40,6 +40,7 @@ import { renderStyleForSource } from "./style";
 import { subagentsSegmentText } from "./subagent-fleet";
 import { activeTpsHistory } from "./tps-history";
 import { medianTps, tpsTierFor } from "./tps-tier";
+import { treePillLabel } from "./tree-pill";
 import type { TurnTiming } from "./turn-clock";
 import { modelPillLabel } from "./working-indicator";
 
@@ -443,6 +444,13 @@ export function installFooter(
 							return cwdLabel;
 						case "session_name":
 							return sessionNameLabel;
+						case "tree":
+							return renderStyleForSource(
+								theme,
+								colorSource,
+								config.colors.tree,
+								treePillLabel(ctx, config.icons.tree),
+							);
 						case "git":
 							return git.label;
 						case "previous_prompt":
@@ -553,6 +561,8 @@ export function installFooter(
 							return config.colors.cwd;
 						case "sessionName":
 							return config.colors.sessionName;
+						case "tree":
+							return config.colors.tree;
 						case "git":
 							return config.colors.gitBranch;
 						case "gitCommit":
