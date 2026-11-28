@@ -12,6 +12,15 @@ npm.
 
 ## [Unreleased]
 
+### Changed
+
+- **Starline now needs Pi 1.5.1 or newer.** Pi 1.5.1 fixed the cursor-marker leak
+  behind garbled text while drag-selecting in the editor
+  ([earendil-works/pi#9441](https://github.com/earendil-works/pi/pull/9441)), so
+  Starline's own workaround for it is gone, and it no longer wraps Pi's
+  `applySelection`. On an older Pi, drag-selecting in Ghostty garbles text again:
+  update Pi.
+
 ### Fixed
 
 - **`/starline` lost its "switch sections" hint on Pi 1.6 and later.** Pi now

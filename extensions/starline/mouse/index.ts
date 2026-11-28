@@ -72,7 +72,6 @@ import {
 	type MouseFeature,
 	probeCapabilities,
 } from "./capabilities";
-import { installCursorMarkerDedupe } from "./cursor-marker";
 import {
 	activeEditorViewport,
 	deleteEditorSelection,
@@ -787,8 +786,7 @@ export function installMouse(prototype: object, deps: InstallMouseDeps): () => v
 	// Another extension may already own this prototype. Two layers answering the
 	// same event is worse than either alone — every notch would scroll twice, every
 	// click would move the caret twice, every copy would write the clipboard twice
-	// — so this one stands down and says why. The selection-marker cleanup above is
-	// a render pass, not mouse input, and stays installed.
+	// — so this one stands down and says why.
 	const external = externalMouseLayer();
 	if (external) {
 		if (!hasWarnedAboutExternalLayer) {
@@ -800,11 +798,7 @@ export function installMouse(prototype: object, deps: InstallMouseDeps): () => v
 		// The pointer shape handles no event, it only watches where moves land,
 		// so it cannot double up with another layer and stays on. The bubble's
 		// outside-click dismissal is the same kind of observer.
-		const externalCleanups = [
-			installCursorMarkerDedupe(prototype),
-			installPointerShape(prototype),
-			installPillBubbleDismiss(),
-		];
+		const externalCleanups = [installPointerShape(prototype), installPillBubbleDismiss()];
 		return () => {
 			for (const cleanup of externalCleanups) cleanup?.();
 		};
@@ -847,12 +841,7 @@ export function installMouse(prototype: object, deps: InstallMouseDeps): () => v
 	if (enabled.has("editorWheelScroll")) {
 		cleanups.push(installEditorWheelScroll(typedPrototype, deps));
 	}
-	// Not a feature and not gated on the table above: Pi's cursor marker leaks into
-	// selection slices on every build that paints a selection, and this only removes
-	// the duplicates. See mouse/cursor-marker.ts for the upstream issue.
-	const dedupe = installCursorMarkerDedupe(typedPrototype);
-	if (dedupe) cleanups.push(dedupe);
-	// Not in the capability table either: it is part of the clickable pills, which
+	// Not in the capability table: it is part of the clickable pills, which
 	// need Pi's component mouse events, and a Pi without `handleMouseEvent` has
 	// none — no pills to hover, so nothing to warn about. See mouse/pointer-shape.ts.
 	const pointer = installPointerShape(typedPrototype);

@@ -412,10 +412,9 @@ export default function (pi: ExtensionAPI) {
 	const installMousePatches = () => {
 		uninstallMouse();
 		if (!getCurrentConfig().mouse.enabled) return;
-		// `TuiAltScreen` only ships with pi-tui >= 0.84.0 (the peer range below
-		// already says so). This guard is for environments that bypass peer
-		// resolution: fail with a readable hint instead of a TypeError on
-		// `TuiAltScreen.prototype`.
+		// Every pi-tui the peer range allows ships `TuiAltScreen`. This guard is for
+		// installs that skip peer resolution (`pi install` does): fail with a
+		// readable hint instead of a TypeError on `TuiAltScreen.prototype`.
 		if (!TuiAltScreen) {
 			console.warn(
 				"starline: mouse support needs @earendil-works/pi-tui >= 0.84.0 (" +

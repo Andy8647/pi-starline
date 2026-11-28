@@ -7,7 +7,6 @@ type PrototypePatchAdapter =
 	| "mouse-selection-event"
 	| "mouse-copy"
 	| "mouse-selection-autoscroll"
-	| "selection-marker-dedupe"
 	| "agent-session-capture-prompt"
 	| "agent-session-capture-usage"
 	| "pending-messages-hide"

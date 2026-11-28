@@ -20,7 +20,6 @@ type FakeAltScreen = {
 	hasOverlay(): boolean;
 	routeWheel(): void;
 	handleSelectionMouseEvent(): void;
-	applySelection(): void;
 	autoScrollSelection?(): void;
 	requestRender(): void;
 };
@@ -61,7 +60,6 @@ function makePrototype(): { prototype: FakeAltScreen; calls: string[]; renders: 
 		},
 		routeWheel() {},
 		handleSelectionMouseEvent() {},
-		applySelection() {},
 		requestRender() {
 			renders.push("render");
 		},

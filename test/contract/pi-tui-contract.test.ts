@@ -27,8 +27,6 @@ const PATCHED_METHODS = [
 	"handleMouseEvent",
 	// Keeps the selection hint's count current while a drag auto-scrolls.
 	"autoScrollSelection",
-	// Cursor-marker dedupe during selection (mouse/cursor-marker.ts).
-	"applySelection",
 ];
 
 // Read, not patched — the selection itself stays Pi's, and `hasOverlay` is
