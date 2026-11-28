@@ -10,7 +10,11 @@ notes, so write it for someone reading the releases page, not for someone readin
 the diff. A tag with no section here fails the release before anything reaches
 npm.
 
-## [Unreleased]
+## [0.14.0] - 2026-11-28
+
+Two new pills: the session drawn as a tree of your messages, and what is left on
+the account the current model bills to. Starline now needs Pi 1.5.1 or newer, and
+catches up with Pi 1.6's rendering changes.
 
 ### Added
 
