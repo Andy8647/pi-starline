@@ -55,8 +55,7 @@ const PREVIOUS_PROMPT_LABEL = "⇡";
 const LATEST_MESSAGE_LABEL = "⇣";
 
 /**
- * Pi's component mouse event and result. Pi dispatches to `handleMouse` from
- * pi-tui 0.85.0; on 0.84.x the method is simply never called.
+ * Pi's component mouse event and result, which Pi dispatches to `handleMouse`.
  */
 export type FooterMouseEvent = TuiMouseEvent;
 
